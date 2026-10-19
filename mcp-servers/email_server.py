@@ -348,6 +348,11 @@ def tool_search(args: dict) -> str:
 
 def tool_send(args: dict) -> str:
     acc = _pick(args)
+    if acc.get("readonly", True):
+        raise RuntimeError(
+            f"a conta {acc.get('id')} ({acc.get('user')}) está em modo SOMENTE "
+            "LEITURA — o agente apenas visualiza e-mails. Para liberar o envio "
+            f"rode no terminal: hermes email modo {acc.get('id')} envio")
     if not acc.get("smtp_ok", True):
         raise RuntimeError(f"a conta {acc.get('id')} está em modo somente leitura "
                            "(SMTP não validado no setup)")
@@ -393,10 +398,16 @@ def tool_accounts(_args: dict) -> str:
     if not accs:
         return ("nenhuma conta configurada — rode `hermes email setup` no terminal "
                 "e reinicie o server")
-    linhas = [f"- {a.get('id')} → {a.get('user')} "
-              f"[{'OAuth' if a.get('auth') == 'oauth' else 'senha'}] "
-              f"({'leitura+envio' if a.get('smtp_ok', True) else 'somente leitura'})"
-              for a in accs]
+    linhas = []
+    for a in accs:
+        if a.get("readonly", True):
+            modo = "🔎 somente leitura"
+        elif a.get("smtp_ok", True):
+            modo = "✉ leitura+envio"
+        else:
+            modo = "🔎 leitura (SMTP não validado)"
+        linhas.append(f"- {a.get('id')} → {a.get('user')} "
+                      f"[{'OAuth' if a.get('auth') == 'oauth' else 'senha'}] {modo}")
     return "Contas de e-mail disponíveis (use o id em 'account'):\n" + "\n".join(linhas)
 
 

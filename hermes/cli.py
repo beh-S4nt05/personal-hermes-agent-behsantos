@@ -111,17 +111,73 @@ def cmd_email(args) -> None:
             return
         for a in data["accounts"]:
             ok, detail = _imap_login(a)
-            _p(f"  {'✔' if ok else '✖'} {a.get('user')} [{a.get('id')}] — {detail}")
+            modo = ("🔎 somente leitura" if a.get("readonly", True)
+                    else "✉ leitura+envio")
+            _p(f"  {'✔' if ok else '✖'} {a.get('user')} [{a.get('id')}] — "
+               f"{detail} · {modo}")
+        return
+    if action == "modo":
+        from .emailcfg import set_modo
+        conta = getattr(args, "conta", None)
+        novo = (getattr(args, "novo_modo", None) or "").strip().lower()
+        data = load(cfg)
+        if not conta:
+            for a in data.get("accounts", []):
+                modo = ("🔎 somente leitura" if a.get("readonly", True)
+                        else "✉ leitura+envio")
+                _p(f"  · {a.get('user')} [{a.get('id')}] — {modo}")
+            _p("  uso: hermes email modo <conta> envio|leitura")
+            return
+        if novo not in ("envio", "leitura"):
+            _p("  ✖ informe: hermes email modo <conta> envio|leitura")
+            return
+        try:
+            a = set_modo(cfg, conta, envio=(novo == "envio"))
+        except ValueError as exc:
+            _p(f"  ✖ {exc}")
+            return
+        modo = "🔎 somente leitura (visualização)" if a.get("readonly") \
+            else "✉ leitura+envio"
+        _p(f"  ✔ {a.get('user')} [{a.get('id')}] → {modo}")
         return
     st = status(cfg)
     _p("\n📧 E-mail do Hermes Agent")
     _p(f"  arquivo de credenciais: {st['secrets_file']} "
        f"({'✔ existe, permissão ' + st['mode'] if st['exists'] else '✖ não configurado'})")
     for a in st["accounts"]:
-        envio = "envio ✔" if a["smtp_ok"] else "só leitura"
-        _p(f"  · {a['user']} [{a['id']}] — {a['imap_host']} · {envio}")
+        modo = ("🔎 somente leitura" if a.get("readonly", True)
+                else ("✉ leitura+envio" if a.get("smtp_ok")
+                      else "🔎 leitura (SMTP não validado)"))
+        _p(f"  · {a['user']} [{a['id']}] — {a['imap_host']} · {modo}")
     _p(f"  servidor MCP 'email' no config: "
        f"{'✔' if st['mcp_registered'] else '✖ (rode hermes email setup)'}")
+
+
+def cmd_agenda(args) -> None:
+    """Agenda Google Calendar — somente leitura (MCP agenda_*)."""
+    from . import agendacfg
+
+    cfg = _cfg(args)
+    action = getattr(args, "agenda_action", "status")
+    if action == "oauth":
+        agendacfg.setup_interactive(cfg)
+        return
+    if action == "test":
+        try:
+            _p("\n" + agendacfg.list_events(cfg, dias=1))
+        except RuntimeError as exc:
+            _p(f"  ✖ {exc}")
+        return
+    st = agendacfg.status(cfg)
+    _p("\n🗓 Agenda do Hermes Agent — somente leitura")
+    _p(f"  arquivo de credenciais: {st['secrets_file']} "
+       f"({'✔ existe, permissão ' + st['mode'] if st['exists'] else '✖ não configurado'})")
+    for a in st["accounts"]:
+        _p(f"  · {a['user']} [{a['id']}] — {a['scope']}")
+    _p(f"  servidor MCP 'agenda' no config: "
+       f"{'✔' if st['mcp_registered'] else '✖ (rode hermes agenda oauth)'}")
+    if not st["accounts"]:
+        _p("  para conectar: hermes agenda oauth  (fluxo com seu 2FA, sem senha)")
 
 
 def cmd_doctor(args) -> None:
@@ -363,10 +419,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("email", help="configura contas de e-mail (MCP email_*)")
     p.add_argument("email_action", nargs="?", default="status",
-                   choices=["setup", "oauth", "test", "status"],
+                   choices=["setup", "oauth", "test", "status", "modo"],
                    help="setup = adicionar contas · oauth = Microsoft/Google (2FA) · "
-                        "test = validar logins · status = ver")
+                        "test = validar logins · status = ver · "
+                        "modo = envio|leitura por conta")
+    p.add_argument("conta", nargs="?", default=None,
+                   help="[com 'modo'] id ou e-mail da conta")
+    p.add_argument("novo_modo", nargs="?", default=None,
+                   help="[com 'modo'] 'envio' libera o envio; 'leitura' volta a somente ver")
     p.set_defaults(fn=cmd_email)
+
+    p = sub.add_parser("agenda", help="agenda Google Calendar — somente leitura (MCP agenda_*)")
+    p.add_argument("agenda_action", nargs="?", default="status",
+                   choices=["oauth", "test", "status"],
+                   help="oauth = conectar conta Google (2FA, device code) · "
+                        "test = listar eventos de hoje · status = ver")
+    p.set_defaults(fn=cmd_agenda)
 
     p = sub.add_parser("status", help="status do agente e do Ollama")
     p.set_defaults(fn=cmd_status)

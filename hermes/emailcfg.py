@@ -224,14 +224,20 @@ def probe_account(user: str, password: str) -> tuple[dict | None, str]:
     return None, last_err or "não consegui adivinhar os servidores deste domínio"
 
 
-def add_account(cfg, user: str, password: str, account_id: str | None = None) -> tuple[dict, str]:
-    """Testa, salva (600) e registra a conta; devolve (conta, relatório)."""
+def add_account(cfg, user: str, password: str, account_id: str | None = None,
+                readonly: bool = True) -> tuple[dict, str]:
+    """Testa, salva (600) e registra a conta; devolve (conta, relatório).
+
+    readonly=True (PADRÃO): a conta fica em modo SOMENTE LEITURA — o agente
+    lista/lê/busca e-mails, mas NÃO envia (v3.1.3: por padrão o envio fica
+    desligado até o operador liberar com `hermes email modo <conta> envio`)."""
     acc, report = probe_account(user, password)
     if acc is None:
         hint = auth_hint(user, last_err if (last_err := report) else "")
         raise ValueError((hint + "\nDetalhe técnico: " if hint else "Falha: ") + report)
     acc["id"] = (account_id or user.split("@")[0].replace(".", "_") + "_" +
                  user.rsplit("@", 1)[-1].split(".")[0]).lower()[:24]
+    acc["readonly"] = bool(readonly)
     data = load(cfg)
     data["accounts"] = [a for a in data["accounts"] if a.get("id") != acc["id"]] + [acc]
     if not data.get("default"):
@@ -257,13 +263,13 @@ def register_mcp(cfg) -> None:
     cfg.update({"mcp_servers": servers})
 
 
-def oauth_device_flow(provider: str, client_id: str,
-                      client_secret: str = "", print_fn=print) -> dict:
+def oauth_device_flow(provider: str, client_id: str, client_secret: str = "",
+                      print_fn=print, scopes: str = "") -> dict:
     """Fluxo OAuth 'device code' (padrão usado por TVs/CLIs): mostramos um
     código, você abre o link, entra com o 2FA NORMAL do provedor e autoriza.
     Nada de senha no terminal."""
     p = OAUTH_PROVIDERS[provider]
-    form = {"client_id": client_id, "scope": p["scopes"]}
+    form = {"client_id": client_id, "scope": scopes or p["scopes"]}
     if client_secret:
         form["client_secret"] = client_secret
     req = urllib.request.Request(
@@ -312,7 +318,8 @@ def oauth_device_flow(provider: str, client_id: str,
 
 
 def add_oauth_account(cfg, user: str, provider: str, client_id: str,
-                      client_secret: str = "", print_fn=print) -> tuple[dict, str]:
+                      client_secret: str = "", print_fn=print,
+                      readonly: bool = True) -> tuple[dict, str]:
     """Cria conta via OAuth (device code), valida IMAP/SMTP e salva."""
     p = OAUTH_PROVIDERS[provider]
     tok = oauth_device_flow(provider, client_id, client_secret, print_fn)
@@ -328,7 +335,7 @@ def add_oauth_account(cfg, user: str, provider: str, client_id: str,
         "imap_tls": p["imap_tls"],
         "smtp_host": p["smtp_host"], "smtp_port": p["smtp_port"],
         "smtp_tls": p["smtp_tls"],
-        "smtp_ok": False,
+        "smtp_ok": False, "readonly": bool(readonly),
     }
     ok, detail = _imap_login(acc)
     if not ok:
@@ -347,6 +354,18 @@ def add_oauth_account(cfg, user: str, provider: str, client_id: str,
     return acc, report
 
 
+def set_modo(cfg, conta: str, envio: bool) -> dict:
+    """Alterna o modo da conta: envio=True libera ENVIO (e exige SMTP válido);
+    envio=False volta para SOMENTE LEITURA (visualização)."""
+    data = load(cfg)
+    for a in data.get("accounts", []):
+        if a.get("id") == conta or a.get("user") == conta:
+            a["readonly"] = not bool(envio)
+            save(cfg, data)
+            return a
+    raise ValueError(f"conta '{conta}' não encontrada — veja: hermes email status")
+
+
 def status(cfg) -> dict:
     data = load(cfg)
     return {
@@ -356,7 +375,8 @@ def status(cfg) -> dict:
                 if secrets_path(cfg).exists() else None,
         "accounts": [{"id": a.get("id"), "user": a.get("user"),
                       "auth": a.get("auth", "password"),
-                      "imap_host": a.get("imap_host"), "smtp_ok": a.get("smtp_ok", False)}
+                      "imap_host": a.get("imap_host"), "smtp_ok": a.get("smtp_ok", False),
+                      "readonly": a.get("readonly", True)}
                      for a in data.get("accounts", [])],
         "default": data.get("default"),
         "mcp_registered": any(isinstance(s, dict) and s.get("name") == "email"
@@ -392,9 +412,10 @@ def setup_interactive(cfg) -> None:
         if not password:
             print("  ✖ senha vazia — conta ignorada")
             continue
+        envio = input("  permitir ENVIO por esta conta? (s/N): ").strip().lower() == "s"
         print("  testando servidores…")
         try:
-            acc, report = add_account(cfg, user, password)
+            acc, report = add_account(cfg, user, password, readonly=not envio)
         except ValueError as exc:
             print(f"  ✖ {exc}")
             continue
@@ -404,9 +425,11 @@ def setup_interactive(cfg) -> None:
         print("\n  contas configuradas:")
         for a in st["accounts"]:
             marca = " (padrão)" if a["id"] == st["default"] else ""
-            envio = "envio ✔" if a["smtp_ok"] else "só leitura"
+            envio = ("🔎 somente leitura" if a.get("readonly", True)
+                     else ("✉ leitura+envio" if a.get("smtp_ok") else "🔎 leitura (SMTP não validado)"))
             tipo = "OAuth" if a.get("auth") == "oauth" else "senha"
             print(f"    · {a['user']} [{a['id']}]{marca} — {a['imap_host']} · {tipo} · {envio}")
+        print("  para liberar/bloquear envio: hermes email modo <conta> envio|leitura")
         print(f"\n  servidor MCP 'email' registrado: {'sim' if st['mcp_registered'] else 'NÃO'}")
         print("  reinicie o `hermes server` e peça, por exemplo:")
         print('    "liste meus e-mails não lidos" ou "resuma as últimas 10 mensagens"')
@@ -440,8 +463,10 @@ def _oauth_wizard(cfg) -> None:
     if not user or not client_id:
         print("  ✖ dados incompletos")
         return
+    envio = input("  permitir ENVIO por esta conta? (s/N): ").strip().lower() == "s"
     try:
-        acc, report = add_oauth_account(cfg, user, prov, client_id, client_secret)
+        acc, report = add_oauth_account(cfg, user, prov, client_id, client_secret,
+                                        readonly=not envio)
     except (ValueError, TimeoutError, RuntimeError) as exc:
         print(f"  ✖ {exc}")
         return

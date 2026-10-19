@@ -1,5 +1,34 @@
 # Changelog
 
+## v3.1.3 — 🔎 E-mail somente leitura por padrão · 🗓 Agenda Google · 🌀 guard anti-loop
+
+Diretriz do operador: o agente deve **VISUALIZAR** e-mails e agenda das duas
+contas Google — sem enviar/redigir (por enquanto, o modelo local ainda não
+está pronto para redigir e-mails sozinho).
+
+**E-mail somente leitura POR PADRÃO:** toda conta (nova ou já configurada)
+fica em modo visualização — listar, ler e buscar funcionam; o IMAP usa
+EXAMINE (não marca mensagens como lidas); ENVIAR é recusado com instrução
+clara. Liberação explícita, quando o operador decidir:
+`hermes email modo <conta> envio` (volta com `... leitura`).
+
+**Agenda Google Calendar (MCP `agenda_*`) — somente leitura por construção:**
+escopo OAuth único `calendar.readonly`; o servidor só faz GET na API — não
+existe código que crie, altere ou apague eventos. Ferramentas: `agenda_hoje`,
+`agenda_listar`, `agenda_proximo`, `agenda_contas`. Conexão via device code
+(`hermes agenda oauth`) com o 2FA do provedor — mesmo client_id do e-mail;
+refresh_token no cofre de segredos (600, fora do workspace).
+
+**Guard anti-loop no Claude Code:** quando o modelo local degenera repetindo
+a mesma linha até estourar o limite de tokens (caso real: "Acessar
+Configurações de Contas do Google:" ×30), o Hermes corta a repetição da
+resposta final, avisa na GUI (nota) e registra no log de atividades.
+
+Testes T47–T49: envio recusado → liberado → recusado de novo (cache do
+servidor invalida por mtime); agenda ponta a ponta com API falsa (Bearer,
+GET-only — POST conta como falha, cache de access_token); corte do loop com
+a string real da degeneração. Suíte: **49/49**.
+
 ## v3.1.2 — 📧 e-mail com 2FA/OAuth (XOAUTH2 + device code)
 
 Preocupação do operador: "a maioria dos e-mails tem 2FA — vai bloquear o

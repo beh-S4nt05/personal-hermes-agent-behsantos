@@ -1082,6 +1082,64 @@ class _FakeSmtp(_threading.Thread):
             pass
 
 
+class _FakeCal(_threading.Thread):
+    """API Google Calendar falsa: GET /calendars/primary[/events] com Bearer.
+    Registra cada requisição (método, path, auth) — POST conta como violação
+    do modo somente leitura."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from datetime import datetime as _dt, timedelta as _td
+        outer = self
+        self.gets: list[tuple] = []
+        self.posts = 0
+        hoje = _dt.now().astimezone()
+
+        class H(BaseHTTPRequestHandler):
+            def _send(self, payload):
+                out = json.dumps(payload).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(out)))
+                self.end_headers()
+                self.wfile.write(out)
+
+            def do_GET(self):
+                outer.gets.append((self.command, self.path,
+                                   self.headers.get("Authorization", "")))
+                if self.path.startswith("/calendars/primary/events"):
+                    self._send({"items": [
+                        {"summary": "Reunião do projeto Hermes", "status": "confirmed",
+                         "start": {"dateTime": (hoje.replace(hour=9, minute=0,
+                                             second=0, microsecond=0)).isoformat()},
+                         "end": {"dateTime": (hoje.replace(hour=10, minute=0,
+                                           second=0, microsecond=0)).isoformat()},
+                         "location": "Sala 3", "attendees": [{}, {}, {}]},
+                        {"summary": "Entrega do relatório", "status": "confirmed",
+                         "start": {"date": hoje.date().isoformat()},
+                         "end": {"date": (hoje + _td(days=1)).date().isoformat()}},
+                    ]})
+                elif self.path.startswith("/calendars/primary"):
+                    self._send({"id": "t@gmail.com", "summary": "Agenda de Teste"})
+                else:
+                    self._send({})
+
+            def do_POST(self):
+                outer.posts += 1
+                self.send_response(405)
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+
+        self.httpd = HTTPServer(("127.0.0.1", 0), H)
+        self.port = self.httpd.server_port
+
+    def run(self):
+        self.httpd.serve_forever()
+
+
 class _FakeToken(_threading.Thread):
     """Endpoint OAuth2 de token (refresh_token -> access_token)."""
 
@@ -1128,7 +1186,7 @@ def T40_email_mcp_e2e_imap_smtp_reais():
     smtp = _FakeSmtp()
     smtp.start()
     emailcfg.save(cfg, {"accounts": [{
-        "id": "teste", "user": "t@x.com", "password": "pw",
+        "id": "teste", "user": "t@x.com", "password": "pw", "readonly": False,
         "imap_host": "127.0.0.1", "imap_port": imap.port, "imap_tls": "none",
         "smtp_host": "127.0.0.1", "smtp_port": smtp.port, "smtp_tls": "none",
         "smtp_ok": True}], "default": "teste"})
@@ -1264,6 +1322,7 @@ def T44_email_oauth_xoauth2_e2e():
     tok_srv = _FakeToken(); tok_srv.start()
     emailcfg.save(cfg, {"accounts": [{
         "id": "oauth1", "user": "t@x.com", "auth": "oauth", "provider": "fake",
+        "readonly": False,
         "client_id": "cid", "client_secret": "", "refresh_token": "rtok",
         "oauth_scopes": "mail", "token_endpoint": f"http://127.0.0.1:{tok_srv.port}/token",
         "access_token": None, "token_expires": 0,
@@ -1354,6 +1413,133 @@ def T45_oauth_device_flow_e_token_refresh():
     finally:
         ec.urllib.request.Request = orig_request
         ec.urllib.request.urlopen = orig_urlopen
+
+
+@case
+def T47_email_somente_leitura_padrao():
+    """v3.1.3: conta SEM flag readonly → envio BLOQUEADO por padrão (o agente
+    só visualiza); `hermes email modo ... envio` libera; leitura sempre OK."""
+    from hermes import emailcfg
+    from hermes.mcp_client import get_manager, map_tool_name
+
+    cfg = fresh()
+    imap = _FakeImap(); imap.start()
+    smtp = _FakeSmtp(); smtp.start()
+    emailcfg.save(cfg, {"accounts": [{
+        "id": "sover", "user": "t@x.com", "password": "pw",
+        "imap_host": "127.0.0.1", "imap_port": imap.port, "imap_tls": "none",
+        "smtp_host": "127.0.0.1", "smtp_port": smtp.port, "smtp_tls": "none",
+        "smtp_ok": True}], "default": "sover"})     # SEM readonly → padrão
+    emailcfg.register_mcp(cfg)
+    try:
+        mgr = get_manager(cfg)
+        mgr.start_all()
+        # status reflete o modo padrão
+        st = emailcfg.status(cfg)
+        assert st["accounts"][0]["readonly"] is True
+        # listar/ler funciona (visualização)
+        res = mgr.call(map_tool_name("email", "email_list"), {})
+        assert res["ok"], res["output"][:200]
+        res = mgr.call(map_tool_name("email", "email_accounts"), {})
+        assert res["ok"] and "somente leitura" in res["output"]
+        # enviar é RECUSADO mesmo com SMTP válido
+        res = mgr.call(map_tool_name("email", "email_send"),
+                       {"to": "d@x.com", "subject": "x", "body": "y"})
+        assert not res["ok"], "envio não devia ser permitido no modo leitura"
+        assert "somente leitura" in res["output"].lower()
+        assert "email modo" in res["output"]
+        assert smtp.received == [] and smtp.auth_cmds == []
+        # liberando o envio via set_modo (arquivo muda → cache invalida)
+        emailcfg.set_modo(cfg, "sover", envio=True)
+        res = mgr.call(map_tool_name("email", "email_send"),
+                       {"to": "d@x.com", "subject": "agora sim", "body": "z"})
+        assert res["ok"], res["output"][:200]
+        assert smtp.received, "envio devia ter acontecido após liberar"
+        # volta para somente leitura
+        emailcfg.set_modo(cfg, "t@x.com", envio=False)   # aceita e-mail tb
+        res = mgr.call(map_tool_name("email", "email_send"),
+                       {"to": "d@x.com", "subject": "x", "body": "y"})
+        assert not res["ok"]
+        mgr.stop_all()
+    finally:
+        imap.sock.close(); smtp.sock.close()
+
+
+@case
+def T48_agenda_google_somente_leitura():
+    """MCP agenda: device flow com escopo calendar.readonly, refresh do token,
+    eventos via GET (nunca POST) e cache do access_token entre chamadas."""
+    from hermes import agendacfg, emailcfg
+    from hermes.mcp_client import get_manager, map_tool_name
+
+    cfg = fresh()
+    cal = _FakeCal(); cal.start()
+    tok_srv = _FakeToken(); tok_srv.start()
+    agendacfg.save(cfg, {"accounts": [{
+        "id": "gcal1", "user": "t@gmail.com", "provider": "google",
+        "client_id": "cid", "client_secret": "sec", "refresh_token": "rtok",
+        "oauth_scopes": agendacfg.CAL_SCOPE,
+        "token_endpoint": f"http://127.0.0.1:{tok_srv.port}/token",
+        "access_token": None, "token_expires": 0}], "default": "gcal1"})
+    # API falsa para o subprocesso do MCP (env da entrada de config)
+    os.environ["HERMES_AGENDA_API"] = f"http://127.0.0.1:{cal.port}"
+    try:
+        agendacfg.register_mcp(cfg)
+        mgr = get_manager(cfg)
+        mgr.start_all()
+        nomes = [t["function"]["name"] for t in mgr.openai_tools()]
+        assert map_tool_name("agenda", "agenda_hoje") in nomes, nomes
+        # não existe ferramenta de escrita na agenda
+        assert not [n for n in nomes if "cria" in n or "create" in n
+                    or "apaga" in n or "delete" in n or "move" in n]
+        res = mgr.call(map_tool_name("agenda", "agenda_hoje"), {})
+        assert res["ok"], res["output"][:300]
+        assert "Reunião do projeto Hermes" in res["output"]
+        assert "dia inteiro" in res["output"]          # evento de dia todo
+        assert "Sala 3" in res["output"] and "3 participante" in res["output"]
+        # acesso foi Bearer com token renovado no endpoint falso
+        assert tok_srv.hits >= 1
+        assert cal.gets and all(g[2] == "Bearer TOK123" for g in cal.gets)
+        assert all(g[1].startswith("/calendars/primary") for g in cal.gets)
+        assert cal.posts == 0                            # LEITURA — nunca POST
+        # token em cache: segunda chamada sem novo refresh
+        hits_antes = tok_srv.hits
+        res = mgr.call(map_tool_name("agenda", "agenda_proximo"), {})
+        assert res["ok"] and "Entrega do relatório" in res["output"]
+        assert tok_srv.hits == hits_antes
+        res = mgr.call(map_tool_name("agenda", "agenda_contas"), {})
+        assert res["ok"] and "somente leitura" in res["output"]
+        mgr.stop_all()
+    finally:
+        os.environ.pop("HERMES_AGENDA_API", None)
+        cal.httpd.shutdown(); tok_srv.httpd.shutdown()
+    # escopo é somente leitura por definição
+    assert agendacfg.CAL_SCOPE.endswith("calendar.readonly")
+    st = agendacfg.status(cfg)
+    assert st["accounts"][0]["scope"].endswith("calendar.readonly")
+    assert st["mcp_registered"]
+
+
+@case
+def T49_guard_anti_loop_claude():
+    """Guard anti-loop: a mesma linha repetida em degeneração é cortada da
+    resposta final (caso real: 'Acessar Configurações de Contas do Google:'×N)."""
+    from hermes.claude_agent import _strip_loops
+
+    linha = "Acessar Configurações de Contas do Google:"
+    lixo = "Início do passo a passo.\n" + (linha + "\n") * 30 + "Fim."
+    limpo, cortes = _strip_loops(lixo)
+    assert cortes == 28, cortes
+    assert limpo.count(linha) == 2          # 2 mantidas + nota de corte
+    assert "guard anti-loop" in limpo
+    assert limpo.startswith("Início") and limpo.rstrip().endswith("Fim.")
+    # texto normal é preservado intacto
+    normal = "linha 1\nlinha 2\nlinha 3\n\nparágrafo novo\nlinha 1"
+    texto, cortes2 = _strip_loops(normal)
+    assert cortes2 == 0 and texto == normal
+    # repetições abaixo do limiar não são cortadas
+    ok3, c3 = _strip_loops("x\n" * 3)
+    assert c3 == 0 and ok3.count("x") == 3
 
 
 @case

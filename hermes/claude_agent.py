@@ -113,6 +113,40 @@ def _guard_execute(cfg, commands: list[str], ev) -> str:
     return "\n\n".join(parts)
 
 
+# ── guard anti-loop (v3.1.3) ──────────────────────────────────────────────
+# Modelos pequenos locais às vezes DEGENERAM: repetem a mesma linha dezenas
+# de vezes até estourar o limite de tokens (visto na prática com "Acessar
+# Configurações de Contas do Google:" ×30). O guard corta a repetição na
+# resposta final e registra o evento — o streaming bruto é mantido, mas a
+# mensagem entregue fica limpa.
+_LOOP_THRESHOLD = 4   # ≥4 repetições em sequência = loop
+_LOOP_KEEP = 2        # mantém as 2 primeiras ocorrências + nota
+
+
+def _strip_loops(text: str) -> tuple[str, int]:
+    """Corta runs de linhas idênticas consecutivas → (texto limpo, cortes)."""
+    lines = (text or "").split("\n")
+    out: list[str] = []
+    cortes = 0
+    i = 0
+    while i < len(lines):
+        cur = lines[i].strip()
+        j = i
+        while j < len(lines) and lines[j].strip() == cur:
+            j += 1
+        run = j - i
+        if cur and run >= _LOOP_THRESHOLD:
+            out.extend(lines[i:i + _LOOP_KEEP])
+            out.append(f"[… guard anti-loop do Hermes: a mesma linha repetiu "
+                       f"{run}× e foi cortada aqui …]")
+            cortes += run - _LOOP_KEEP
+            i = j
+        else:
+            out.append(lines[i])
+            i += 1
+    return "\n".join(out), cortes
+
+
 _VERSION_CACHE: dict[str, str] = {}
 
 
@@ -250,7 +284,17 @@ def _run_impl(cfg, message, history, on_event, cancel, _light=None,
         ev({"type": "note", "message": f"Claude Code · {modo} · CLI {ver}"})
 
     def _finish_ok() -> str:
-        texto = final
+        texto, cortadas = _strip_loops(final)
+        if cortadas:
+            ev({"type": "note",
+                "message": f"guard anti-loop: {cortadas} linhas repetidas "
+                           "cortadas da resposta"})
+            try:
+                from . import activity
+                activity.log(cfg, "claude",
+                             f"🌀 guard anti-loop cortou {cortadas} repetições")
+            except Exception:  # noqa: BLE001
+                pass
         if ollama_mode:
             texto += (f"\n\n─\n*🔌 Claude Code · "
                       f"{'modo leve' if use_light else 'modo completo (CLI antiga — atualize com: claude update)'}"

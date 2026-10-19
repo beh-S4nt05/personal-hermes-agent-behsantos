@@ -651,6 +651,7 @@ hermes email setup
 # informe: breno.239941@fmm.org.br + a senha usada no webmail da FMM
 hermes email oauth     # contas Microsoft/Google (2FA via navegador)
 hermes email test      # valida os logins
+hermes email modo <conta> envio   # libera o ENVIO (padrão: somente leitura)
 # reinicie o hermes server
 ```
 
@@ -683,6 +684,21 @@ automaticamente (e o seletor v3.0 injeta só as relevantes à pergunta).
 2. `hermes email oauth` → escolha o provedor, informe e-mail + client_id
    → abre o link, digite o código mostrado, autorize com seu 2FA. Pronto:
    o refresh token fica guardado junto das demais credenciais (600).
+
+**🔎 Somente leitura por padrão (v3.1.3):** toda conta de e-mail fica em
+modo VISUALIZAÇÃO — o agente lista, lê e busca, mas **não envia** (leitura
+via IMAP EXAMINE: nem marca como lida). Quando você decidir liberar:
+`hermes email modo <conta> envio`; para voltar: `hermes email modo <conta>
+leitura`.
+
+**🗓 Agenda (Google Calendar) — somente leitura:** `hermes agenda oauth`
+conecta uma conta Google pelo fluxo device code (seu 2FA, sem senha; o
+mesmo client_id do e-mail serve) com escopo ÚNICO `calendar.readonly`.
+O servidor MCP (`agenda_hoje`, `agenda_listar`, `agenda_proximo`) só faz
+GET na API do Calendar — não existe ferramenta de escrita em lugar nenhum.
+Depois de conectar e reiniciar o server, peça ao agente: *"o que tenho na
+agenda hoje?"*, *"qual meu próximo compromisso?"*. `hermes agenda test`
+lista os eventos de hoje direto no terminal (validação real).
 
 **Onde ficam as senhas/tokens (e por que não vazam):**
 `<data>/secrets/email.json` com permissão 600, fora do workspace do agente.
