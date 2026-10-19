@@ -55,6 +55,14 @@ Contexto da máquina:
 {extra}\
 """
 
+# Guard anti-loop: modelos pequenos às vezes repetem a mesma chamada/fala
+_ANTILOOP_NUDGE = (
+    "ATENÇÃO: você já executou exatamente esta ferramenta com os mesmos "
+    "argumentos e o resultado está no histórico acima. NÃO repita a chamada "
+    "nem repita o texto. Responda AGORA ao usuário, de forma direta e "
+    "completa, usando o resultado que já obteve."
+)
+
 # Plano B caso o modelo/servidor não aceite ferramentas nativas da API:
 FALLBACK_TOOLS_NOTE = """
 Como alternativa às ferramentas nativas, você TAMBÉM pode chamar uma ferramenta \
@@ -206,6 +214,8 @@ class Agent:
         msgs: list[dict] = [{"role": "system", "content": self.system_prompt()}]
         msgs += [m for m in messages if m.get("role") in ("user", "assistant", "tool")]
         final = ""
+        last_sigs: list[tuple[str, str]] = []   # assinaturas do passo anterior
+        nudged = False                           # já avisamos sobre repetição?
 
         for step in range(1, cfg.max_steps + 1):
             if cancel is not None and cancel.is_set():
@@ -319,6 +329,27 @@ class Agent:
                 final = content
                 ev({"type": "done", "message": content})
                 return final
+
+            # ── anti-loop: chamada idêntica à do passo anterior ──
+            sigs = [
+                (str((c.get("function") or {}).get("name", "")),
+                 json.dumps((c.get("function") or {}).get("arguments") or {},
+                            sort_keys=True, ensure_ascii=False))
+                for c in calls
+            ]
+            if sigs and sigs == last_sigs:
+                if nudged:
+                    # insistiu na repetição: encerra entregando o que já tem
+                    final = (content or final or "").strip()
+                    final += ("\n\n*(encerrado pelo anti-loop: a ação já foi executada "
+                              "e o resultado está acima)*")
+                    ev({"type": "done", "message": final})
+                    return final
+                nudged = True
+                msgs.append({"role": "user", "content": _ANTILOOP_NUDGE})
+                continue
+            last_sigs = sigs
+            nudged = False
 
             for call in calls:
                 if cancel is not None and cancel.is_set():

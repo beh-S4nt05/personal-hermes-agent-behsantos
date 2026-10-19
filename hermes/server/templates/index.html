@@ -527,7 +527,7 @@
           <input type="number" id="s-num_predict" min="0" step="64">
           <span class="hint">512–768 deixam as respostas mais rápidas</span></div>
         <div class="field"><button class="b small ghost" onclick="fastMode()">⚡ aplicar modo rápido</button>
-          <span class="hint">512 tokens · contexto 4096 · modelo sempre carregado</span></div>
+          <span class="hint">768 tokens · contexto 4096 · modelo sempre carregado</span></div>
         <div class="field"><label>temperatura</label><input type="number" id="s-temperature" min="0" max="2" step="0.1"></div>
         <div class="field"><label>token de acesso (senha da GUI/API)</label>
           <input type="password" id="s-auth_token" placeholder="(vazio = sem senha)">
@@ -1365,7 +1365,7 @@ async function installSkill(){
 
 /* ═══════════════ ajustes ═══════════════ */
 function fastMode(){
-  $("s-num_predict").value = 512; $("s-num_ctx").value = 4096; $("s-keep_alive").value = "1h";
+  $("s-num_predict").value = 768; $("s-num_ctx").value = 4096; $("s-keep_alive").value = "1h";
   saveSettings();
   toast("⚡ modo rápido aplicado — e use um modelo 3B (ex.: llama3.2:3b) no campo 'modelo' para o maior ganho");
 }

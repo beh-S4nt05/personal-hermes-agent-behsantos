@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.2.7 — guard anti-loop no agente
+
+- Modelos pequenos às vezes repetiam a mesma fala E a mesma chamada de
+  ferramenta em loop, queimando o limite de tokens (saída cortada no meio).
+  Agora: chamada idêntica à do passo anterior **não é re-executada** — o
+  modelo recebe um aviso direto para responder ao usuário; se repetir de
+  novo, o agente encerra e entrega o resultado já obtido.
+- Botão "⚡ modo rápido" agora usa **768 tokens** (512 cortava respostas
+  com ferramentas no meio).
+
 ## v2.2.6 — Claude Code em modo leve (fim do "fora de si")
 
 - Via Ollama, a CLI `claude` agora roda com **`--bare` + diretiva curta em
