@@ -440,7 +440,9 @@ def create_app(cfg: Config) -> Flask:
             if cancel.is_set():
                 return
             if e.get("type") == "token":
-                result["tokens"] += 1
+                # hermes emite por token (conta 1); claude emite por bloco —
+                # estima pelos caracteres para as estatísticas ficarem honestas
+                result["tokens"] += max(1, len(str(e.get("content") or "")) // 4)
             elif e.get("type") == "step":
                 result["steps"] = max(result["steps"], int(e.get("step", 0)))
             q.put(e)

@@ -20,7 +20,7 @@ from .config import Config
 from .mcp_client import get_manager
 from .ollama_client import OllamaError, get_client
 from .skills import SkillLoader
-from .tools import TOOLS, execute_tool, tool_summary
+from .tools import TOOLS, TOOL_NAMES, execute_tool, tool_summary
 
 SYSTEM_PROMPT = """\
 Você é o Hermes, um agente de operação Linux controlável por terminal e por uma \
@@ -39,6 +39,8 @@ Capacidades (ferramentas):
 
 Boas práticas:
 - Sempre INSPECIONE antes de agir (ex.: `df -h`, `free -h`, `ls`, ler arquivos).
+- NUNCA simule ou invente a saída de uma ferramenta: CHAME a ferramenta e
+  aguarde o resultado real (se pediram dados do sistema, use sys_info).
 - Um comando por vez; analise a saída antes do próximo passo.
 - Nunca destrua dados: prefira backups (`cp arquivo arquivo.bak`) antes de alterar.
 - Comandos perigosos (apagar a raiz, formatar, desligar) são bloqueados automaticamente.
@@ -74,6 +76,28 @@ def _json_blocks(text: str) -> list[dict]:
         except json.JSONDecodeError:
             continue
     return blocks
+
+
+def _bare_tool_call(text: str) -> list[dict]:
+    """Detecta chamada de ferramenta em JSON SEM cercas de código.
+
+    Modelos pequenos às vezes respondem com o JSON cru (com ou sem um
+    prefixo de texto curto) em vez de usar a chamada nativa. Retorna [] se
+    não parecer uma chamada de ferramenta.
+    """
+    t = (text or "").strip()
+    m = re.search(r"\{[\s\S]*\}", t)
+    if not m:
+        return []
+    try:
+        obj = json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return []
+    if (isinstance(obj, dict)
+            and {"name", "tool"} & set(obj)
+            and {"arguments", "args"} & set(obj)):
+        return _as_tool_calls(obj)
+    return []
 
 
 def _as_tool_calls(block: dict) -> list[dict]:
@@ -279,6 +303,16 @@ class Agent:
                     parsed = _as_tool_calls(block)
                     if parsed:
                         calls = parsed
+                        break
+            # Fallback 2: modelos pequenos escrevem a chamada como JSON solto
+            # (sem cercas de código) — e às vezes "inventam" os argumentos.
+            # Só executa se o nome for uma ferramenta real; a saída é SEMPRE
+            # a verdadeira (nada de dados fabricados pelo modelo).
+            if not calls:
+                for cand in _bare_tool_call(content):
+                    fname = (cand.get("function") or {}).get("name", "")
+                    if fname in TOOL_NAMES or self.mcp.handles(fname):
+                        calls = [cand]
                         break
 
             if not calls:

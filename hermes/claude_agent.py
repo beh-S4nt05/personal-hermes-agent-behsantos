@@ -141,6 +141,7 @@ def run_claude(cfg, message: str, history: list[dict] | None = None,
     tool_names: dict[str, str] = {}  # tool_use_id -> nome (p/ tool_end)
     final = ""
     t0 = time.time()
+    ev({"type": "step", "step": 1})
 
     def _finish_ok() -> str:
         ev({"type": "done", "message": final})

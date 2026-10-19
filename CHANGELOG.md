@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.2.5 — fim do "JSON solto" (modelos pequenos)
+
+- **Modelo escreveu a chamada de ferramenta como texto e inventou os dados?**
+  Nunca mais: o agente agora intercepta JSON de chamada SEM cercas de código
+  (caso típico de modelos 3B), valida o nome contra as ferramentas reais e
+  EXECUTA a ferramenta de verdade — a resposta sai com os dados reais da
+  máquina, não os alucinados pelo modelo.
+- Prompt reforçado: "NUNCA simule ou invente a saída de uma ferramenta".
+- Agente 🔌 Claude Code agora reporta o passo e as estatísticas contam tokens
+  por bloco (estimativa honesta em vez de "1 token").
+
 ## v2.2.4 — prompt enxuto + indicador de modo real
 
 - **Painel mostra o modo**: "✔ modo real (Ollama)" ou "⚠ MODO DEMO (IA
