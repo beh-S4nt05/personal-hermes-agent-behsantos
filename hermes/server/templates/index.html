@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hermes Agent — Painel de Controle</title>
+<style>
+  :root{
+    --bg:#0b0e14; --bg2:#0e121b; --panel:#121826; --panel2:#161d2e;
+    --border:#1f2a3d; --border2:#2a3650;
+    --txt:#d7e0ee; --dim:#8fa0b8; --faint:#5b6b82;
+    --acc:#7c5cff; --acc2:#9d86ff;
+    --ok:#2bd576; --warn:#ffb454; --err:#ff5470;
+    --mono:ui-monospace,'JetBrains Mono','Fira Code','Cascadia Code',Consolas,'Courier New',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--mono);font-size:14px;line-height:1.55;
+       background-image:radial-gradient(1200px 500px at 80% -10%,rgba(124,92,255,.13),transparent),
+                        radial-gradient(900px 400px at -10% 110%,rgba(43,213,118,.07),transparent)}
+  a{color:var(--acc2)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#232d42;border-radius:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  /* ---------- estrutura ---------- */
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 20px 60px}
+  header{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px 0 18px;border-bottom:1px solid var(--border)}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:.5px}
+  .logo .gem{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:15px;
+             background:linear-gradient(135deg,var(--acc),#4633b8);box-shadow:0 0 18px rgba(124,92,255,.45)}
+  .logo small{color:var(--faint);font-weight:400;font-size:11px;display:block;letter-spacing:0}
+  .pills{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:99px;border:1px solid var(--border);
+        background:var(--panel);font-size:12px;cursor:default}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--faint);flex:none}
+  .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pulse 2s infinite}
+  .dot.off{background:var(--err)}
+  .dot.warn{background:var(--warn)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+  .banner{margin:14px 0 0;padding:10px 14px;border-radius:10px;border:1px dashed #6a56d6;
+          background:rgba(124,92,255,.08);color:#c9bcff;font-size:12.5px}
+  .banner b{color:#a18bff}
+
+  nav{display:flex;gap:6px;margin:18px 0 20px;flex-wrap:wrap}
+  nav button{font-family:inherit;background:transparent;border:1px solid var(--border);color:var(--dim);
+             padding:8px 18px;border-radius:9px;cursor:pointer;font-size:13px;transition:.15s}
+  nav button:hover{color:var(--txt);border-color:var(--acc)}
+  nav button.active{background:linear-gradient(135deg,rgba(124,92,255,.25),rgba(124,92,255,.1));
+                    color:#e6ddff;border-color:var(--acc)}
+  .page{display:none}
+  .page.active{display:block;animation:fade .18s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+  .card{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--border);
+        border-radius:14px;padding:18px}
+  .card h3{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);
+           display:flex;align-items:center;gap:8px;margin-bottom:14px}
+  .card h3 .ic{font-size:15px}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:13px}
+  .kv span:first-child{color:var(--dim)}
+  .kv span:last-child{text-align:right;word-break:break-all}
+  .badge{display:inline-flex;align-items:center;gap:7px;padding:4px 12px;border-radius:8px;font-weight:700;font-size:12px}
+  .badge.on{background:rgba(43,213,118,.13);color:var(--ok);border:1px solid rgba(43,213,118,.35)}
+  .badge.off{background:rgba(255,84,112,.12);color:var(--err);border:1px solid rgba(255,84,112,.35)}
+  .badge.warn{background:rgba(255,180,84,.12);color:var(--warn);border:1px solid rgba(255,180,84,.35)}
+
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  button.b{font-family:inherit;border-radius:9px;border:1px solid var(--border);background:var(--panel2);
+           color:var(--txt);padding:9px 16px;font-size:13px;cursor:pointer;transition:.15s;display:inline-flex;gap:7px;align-items:center}
+  button.b:hover:not(:disabled){border-color:var(--acc);transform:translateY(-1px)}
+  button.b:disabled{opacity:.45;cursor:not-allowed}
+  button.b.primary{background:linear-gradient(135deg,var(--acc),#5b3fd4);border-color:transparent;font-weight:700}
+  button.b.danger{background:rgba(255,84,112,.12);border-color:rgba(255,84,112,.4);color:#ff8298}
+  button.b.ghost{background:transparent}
+  button.b.small{padding:5px 11px;font-size:12px}
+  .toast{position:fixed;right:18px;bottom:18px;max-width:420px;background:var(--panel2);border:1px solid var(--acc);
+         border-radius:11px;padding:12px 16px;font-size:13px;box-shadow:0 10px 40px rgba(0,0,0,.5);
+         opacity:0;transform:translateY(8px);transition:.25s;z-index:50}
+  .toast.show{opacity:1;transform:none}
+  .toast.err{border-color:var(--err)}
+
+  /* ---------- log ---------- */
+  .logbox{background:#080b11;border:1px solid var(--border);border-radius:12px;padding:12px;
+          font-size:12.5px;height:420px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#9fb0c8}
+  .logbox .t{color:var(--faint)}
+  .logbox .hl{color:#c9bcff}
+
+  /* ---------- chat ---------- */
+  .chatwrap{display:flex;flex-direction:column;height:calc(100vh - 230px);min-height:480px}
+  #chatlog{flex:1;overflow-y:auto;padding:6px 4px 16px;display:flex;flex-direction:column;gap:14px}
+  .msg{max-width:88%;padding:12px 15px;border-radius:13px;font-size:13.5px;word-wrap:break-word}
+  .msg.user{align-self:flex-end;background:linear-gradient(135deg,#5236e0,#6b4df0);border-bottom-right-radius:4px;color:#fff}
+  .msg.bot{align-self:flex-start;background:var(--panel);border:1px solid var(--border);border-bottom-left-radius:4px}
+  .msg.bot.waiting{color:var(--faint);font-style:italic}
+  .msg pre{background:#080b11;border:1px solid var(--border);border-radius:8px;padding:10px;
+           overflow:auto;margin:8px 0;font-size:12px;color:#b9e3c3}
+  .msg code{background:#080b11;border:1px solid var(--border);padding:1px 5px;border-radius:5px;font-size:12px;color:#e3b9ff}
+  .msg pre code{border:none;padding:0;color:inherit}
+  .tool{align-self:flex-start;max-width:88%;border:1px solid #2c3a55;border-left:3px solid var(--acc);
+        background:#0d1220;border-radius:10px;font-size:12.5px;overflow:hidden}
+  .tool summary{cursor:pointer;padding:8px 12px;color:#c9bcff;list-style:none;display:flex;gap:8px;align-items:center}
+  .tool summary::before{content:'▸';color:var(--faint);transition:.15s}
+  .tool[open] summary::before{transform:rotate(90deg)}
+  .tool .args{color:var(--faint);font-size:11.5px;margin-left:auto;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tool .status{font-size:10.5px;padding:2px 7px;border-radius:5px;flex:none}
+  .tool .status.run{background:rgba(255,180,84,.15);color:var(--warn)}
+  .tool .status.ok{background:rgba(43,213,118,.15);color:var(--ok)}
+  .tool .status.err{background:rgba(255,84,112,.15);color:var(--err)}
+  .tool .out{padding:0 12px 10px;white-space:pre-wrap;word-break:break-word;color:#9fb0c8;font-size:12px;
+             border-top:1px dashed #223048;padding-top:8px;margin:0 12px 10px;max-height:260px;overflow:auto}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0}
+  .chip{border:1px dashed var(--border);background:transparent;color:var(--dim);border-radius:99px;
+        padding:6px 13px;font-size:12px;cursor:pointer;font-family:inherit;transition:.15s}
+  .chip:hover{color:#c9bcff;border-color:var(--acc)}
+  .chatrow{display:flex;gap:10px;margin-top:12px}
+  #chatin{flex:1;background:#0a0e17;border:1px solid var(--border);border-radius:11px;color:var(--txt);
+          padding:12px 15px;font-family:inherit;font-size:13.5px;resize:none;min-height:48px;max-height:160px}
+  #chatin:focus{outline:none;border-color:var(--acc)}
+  .cursor{display:inline-block;width:8px;height:15px;background:var(--acc2);vertical-align:-2px;
+          animation:pulse 1s infinite;border-radius:2px;margin-left:2px}
+
+  /* ---------- tarefas ---------- */
+  .task{border:1px solid var(--border);border-radius:11px;background:var(--panel);padding:12px 15px;margin-bottom:10px}
+  .task .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .task .id{color:var(--faint);font-size:11.5px}
+  .task .input{flex:1;min-width:200px}
+  .task details{margin-top:8px}
+  .task summary{cursor:pointer;color:var(--dim);font-size:12px}
+  .task pre{margin-top:8px;background:#080b11;border:1px solid var(--border);border-radius:8px;
+            padding:10px;font-size:12px;white-space:pre-wrap;max-height:300px;overflow:auto;color:#b9e3c3}
+  .st{font-size:10.5px;padding:2px 8px;border-radius:5px;font-weight:700}
+  .st.pend{background:rgba(255,180,84,.15);color:var(--warn)}
+  .st.ok{background:rgba(43,213,118,.15);color:var(--ok)}
+  .st.err{background:rgba(255,84,112,.15);color:var(--err)}
+
+  /* ---------- ajustes ---------- */
+  form.set{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field.full{grid-column:1/-1}
+  label{font-size:12px;color:var(--dim)}
+  input[type=text],input[type=number],input[type=password],textarea,select{
+      background:#0a0e17;border:1px solid var(--border);border-radius:9px;color:var(--txt);
+      padding:9px 12px;font-family:inherit;font-size:13px}
+  input:focus,textarea:focus{outline:none;border-color:var(--acc)}
+  textarea{min-height:90px;resize:vertical}
+  .check{display:flex;align-items:center;gap:10px;padding:9px 0}
+  .check input{width:17px;height:17px;accent-color:var(--acc)}
+  .hint{font-size:11.5px;color:var(--faint)}
+  footer{margin-top:34px;color:var(--faint);font-size:11.5px;text-align:center;border-top:1px solid var(--border);padding-top:14px}
+  .tokenbar{display:none;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .tokenbar.show{display:flex}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo"><span class="gem">◈</span>
+      <span>HERMES AGENT<small id="ver">agente linux · ollama</small></span>
+    </div>
+    <div class="pills">
+      <span class="pill"><span class="dot" id="dot-agent"></span>agente <b id="pill-agent">…</b></span>
+      <span class="pill"><span class="dot" id="dot-ollama"></span>ollama <b id="pill-ollama">…</b></span>
+      <span class="pill" id="pill-model">…</span>
+    </div>
+  </header>
+
+  <div class="banner" id="mockbanner" style="display:none">
+    ⚡ <b>Modo demonstração</b> — o Ollama está simulado (nenhum modelo real carregado).
+    As respostas são geradas localmente, mas o loop de ferramentas (comandos, arquivos, diagnóstico) é real.
+    No seu servidor, rode <b>./install.sh</b> para ativar o Ollama + modelo Hermes de verdade.
+  </div>
+
+  <div class="banner" id="securebanner" style="display:none;border-color:#8a4444;background:rgba(255,84,112,.07);color:#ffb3c0">
+    🔓 <b>Sem senha e exposto fora de localhost</b> — qualquer um na rede controla esta máquina.
+    Defina um token em Ajustes → “token de acesso” (ou inicie com <b>--token</b>).
+  </div>
+
+  <div class="tokenbar" id="tokenbar">
+    🔒 Esta GUI está protegida por token:
+    <input type="password" id="tokenin" placeholder="cole o token de acesso" style="flex:1;min-width:200px">
+    <button class="b small primary" onclick="saveToken()">desbloquear</button>
+  </div>
+
+  <nav>
+    <button data-page="painel" class="active">▤ Painel</button>
+    <button data-page="chat">◈ Chat</button>
+    <button data-page="tarefas">☑ Tarefas</button>
+    <button data-page="ollama">🧠 Ollama</button>
+    <button data-page="skills">✦ Skills</button>
+    <button data-page="ajustes">⚙ Ajustes</button>
+  </nav>
+
+  <!-- ══════════════════════ PAINEL ══════════════════════ -->
+  <section class="page active" id="page-painel">
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">🤖</span> Agente (daemon)</h3>
+        <div class="kv"><span>estado</span><span id="ag-state">…</span></div>
+        <div class="kv"><span>pid</span><span id="ag-pid">—</span></div>
+        <div class="kv"><span>atividade</span><span id="ag-act">—</span></div>
+        <div class="kv"><span>ligado há</span><span id="ag-up">—</span></div>
+        <div class="kv"><span>tarefa atual</span><span id="ag-task">—</span></div>
+        <div class="btnrow">
+          <button class="b primary"   id="btn-ag-start"  onclick="agentAction('start')">▶ Ligar</button>
+          <button class="b danger"    id="btn-ag-stop"   onclick="agentAction('stop')">■ Desligar</button>
+          <button class="b ghost"     id="btn-ag-restart" onclick="agentAction('restart')">⟳ Reiniciar</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">🧠</span> Servidor Ollama</h3>
+        <div class="kv"><span>estado</span><span id="ol-state">…</span></div>
+        <div class="kv"><span>versão</span><span id="ol-ver">—</span></div>
+        <div class="kv"><span>gerenciado por</span><span id="ol-by">—</span></div>
+        <div class="kv"><span>modelos</span><span id="ol-models">—</span></div>
+        <div class="btnrow">
+          <button class="b primary" id="btn-ol-start" onclick="ollamaAction('start')">▶ Ligar</button>
+          <button class="b danger"  id="btn-ol-stop"  onclick="ollamaAction('stop')">■ Desligar</button>
+        </div>
+        <div class="hint" id="ol-hint" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">🔌</span> Servidores MCP <span class="hint" style="margin-left:auto">conectores externos</span></h3>
+        <div id="mcp-list" class="hint">—</div>
+        <div class="btnrow">
+          <button class="b small primary" id="btn-mcp-start" onclick="mcpStart()">▶ ativar</button>
+          <button class="b small ghost" onclick="mcpStart(true)">⟳ reiniciar</button>
+        </div>
+        <div class="hint" style="margin-top:10px">Configure em <b>mcp_servers</b> no config.yaml —
+          ex.: Figma (<b>npx figma-developer-mcp</b>), GitHub, PostgreSQL…</div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">🖥</span> Instância</h3>
+        <div class="kv"><span>modelo</span><span id="sys-model">—</span></div>
+        <div class="kv"><span>workspace</span><span id="sys-dir">—</span></div>
+        <div class="kv"><span>sandbox</span><span id="sys-sandbox">—</span></div>
+        <div class="kv"><span>máx. passos</span><span id="sys-steps">—</span></div>
+        <div class="kv"><span>timeout cmd</span><span id="sys-timeout">—</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">📡</span> Log ao vivo
+        <span style="margin-left:auto;display:flex;gap:8px">
+          <button class="b small ghost" id="btn-logpause" onclick="togglePause()">⏸ pausar</button>
+          <button class="b small ghost" onclick="clearLog()">🗑 limpar</button>
+        </span>
+      </h3>
+      <div class="logbox" id="logbox">conectando ao stream…</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ CHAT ══════════════════════ -->
+  <section class="page" id="page-chat">
+    <div class="chatwrap">
+      <div id="chatlog"></div>
+      <div class="chips">
+        <button class="chip" onclick="suggest(this)">Crie um design de app de tarefas no Figma</button>
+        <button class="chip" onclick="suggest(this)">Mostre informações do sistema</button>
+        <button class="chip" onclick="suggest(this)">Liste os arquivos do workspace</button>
+        <button class="chip" onclick="suggest(this)">Crie um arquivo relatorio.txt com um resumo da máquina</button>
+      </div>
+      <div class="chatrow">
+        <textarea id="chatin" rows="1" placeholder="fale com o Hermes…  (Enter envia · Shift+Enter quebra linha)"></textarea>
+        <button class="b primary" id="btn-send" onclick="sendChat()">enviar ➤</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ TAREFAS ══════════════════════ -->
+  <section class="page" id="page-tarefas">
+    <div class="card">
+      <h3><span class="ic">☑</span> Fila de tarefas do agente</h3>
+      <div class="chatrow" style="margin-top:0">
+        <input type="text" id="taskin" placeholder="ex.: verifique uso de disco e sugira limpeza"
+               style="flex:1" onkeydown="if(event.key==='Enter')addTask()">
+        <button class="b primary" onclick="addTask()">+ enfileirar</button>
+        <button class="b ghost" onclick="clearTasks()">🗑 limpar histórico</button>
+      </div>
+      <div class="hint" style="margin-top:8px">As tarefas ficam na fila e o agente executa em sequência assim que estiver ligado.</div>
+      <div id="tasklist" style="margin-top:16px"></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ OLLAMA ══════════════════════ -->
+  <section class="page" id="page-ollama">
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">🧠</span> Servidor Ollama <span class="hint" style="margin-left:auto" id="olp-badge"></span></h3>
+        <div class="kv"><span>estado</span><span id="olp-state">…</span></div>
+        <div class="kv"><span>versão</span><span id="olp-ver">—</span></div>
+        <div class="kv"><span>pid</span><span id="olp-pid">—</span></div>
+        <div class="kv"><span>ligado há</span><span id="olp-up">—</span></div>
+        <div class="kv"><span>memória (RSS)</span><span id="olp-mem">—</span></div>
+        <div class="kv"><span>gerenciado por</span><span id="olp-by">—</span></div>
+        <div class="kv"><span>inicia com o sistema</span><span id="olp-boot">—</span></div>
+        <div class="btnrow">
+          <button class="b primary" id="olp-start" onclick="ollamaAction2('start')">▶ Ligar</button>
+          <button class="b danger" id="olp-stop" onclick="ollamaAction2('stop')">■ Desligar</button>
+          <button class="b ghost" onclick="ollamaAction2('restart')">⟳ Reiniciar</button>
+          <button class="b small ghost" id="olp-bootbtn" onclick="toggleBoot()">⚙ iniciar com o sistema</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">🔗</span> Conexão</h3>
+        <div class="field"><label>endereço da API do Ollama</label>
+          <input type="text" id="olp-url" placeholder="http://127.0.0.1:11434"></div>
+        <div class="check" style="margin-top:8px">
+          <input type="checkbox" id="olp-auto">
+          <label for="olp-auto" style="color:var(--txt)">ligar o Ollama automaticamente quando o agente precisar</label>
+        </div>
+        <div class="btnrow">
+          <button class="b" onclick="saveOllamaConn()">💾 salvar</button>
+          <button class="b primary" id="olp-testbtn" onclick="testConnection()">🔍 testar conexão</button>
+        </div>
+        <div id="olp-test" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">📦</span> Modelos <span class="hint" style="margin-left:auto" id="olp-loaded"></span></h3>
+        <div class="chatrow" style="margin-top:0">
+          <input type="text" id="olp-pullin" placeholder="baixar modelo (ex.: hermes3:3b)" style="flex:1"
+                 onkeydown="if(event.key==='Enter')pullModel()">
+          <button class="b primary" id="olp-pullbtn" onclick="pullModel()">⬇ baixar</button>
+        </div>
+        <div id="olp-progress" style="display:none;margin-top:10px">
+          <div style="background:#0a0e17;border-radius:6px;overflow:hidden;border:1px solid var(--border)">
+            <div id="olp-bar" style="height:10px;width:0%;background:linear-gradient(90deg,var(--acc),#4633b8);transition:width .3s"></div>
+          </div>
+          <div class="hint" id="olp-status"></div>
+        </div>
+        <div id="olp-models" style="margin-top:12px">carregando…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ SKILLS ══════════════════════ -->
+  <section class="page" id="page-skills">
+    <div class="card">
+      <h3><span class="ic">⬇</span> Instalar skill do GitHub</h3>
+      <div class="chatrow" style="margin-top:0">
+        <input type="text" id="skill-repo" placeholder="owner/repo  ou  https://github.com/owner/repo" style="flex:1" onkeydown="if(event.key==='Enter')installSkill()">
+        <input type="text" id="skill-sub" placeholder="subpasta (opcional)" style="max-width:230px">
+        <button class="b primary" onclick="installSkill()">⬇ instalar</button>
+      </div>
+      <div class="hint" style="margin-top:8px">Qualquer repo com pastas contendo <b>SKILL.md</b>.
+        Ex.: <b>anthropics/skills</b> (subpasta <b>skills/pdf</b>, <b>skills/docx</b>…)</div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">✦</span> Skills instaladas <span id="skill-count" class="hint" style="margin-left:auto"></span></h3>
+      <div id="skill-list">carregando…</div>
+    </div>
+    <div class="card" style="margin-top:16px;display:none" id="skill-view-card">
+      <h3><span class="ic">📄</span> <span id="skill-view-name"></span>
+        <button class="b small ghost" style="margin-left:auto" onclick="closeSkillView()">✕ fechar</button></h3>
+      <pre id="skill-view" style="background:#080b11;border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12px;max-height:420px;overflow:auto;white-space:pre-wrap"></pre>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ AJUSTES ══════════════════════ -->
+  <section class="page" id="page-ajustes">
+    <div class="card">
+      <h3><span class="ic">⚙</span> Configuração <span class="hint" id="cfgpath" style="margin-left:auto"></span></h3>
+      <form class="set" onsubmit="return false">
+        <div class="field">
+          <label>modelo (tag do Ollama)</label>
+          <input type="text" id="s-model" list="modellist" placeholder="hermes3:8b">
+          <datalist id="modellist"></datalist>
+          <span class="hint">hermes3:3b (leve) · hermes3:8b (equilibrado) · hermes3:70b (servidor)</span>
+        </div>
+        <div class="field"><label>máx. passos do agente</label><input type="number" id="s-max_steps" min="1" max="64"></div>
+        <div class="field"><label>contexto (num_ctx)</label><input type="number" id="s-num_ctx" min="2048" step="1024"></div>
+        <div class="field"><label>timeout de comando (s)</label><input type="number" id="s-cmd_timeout" min="5" max="600"></div>
+        <div class="field"><label>temperatura</label><input type="number" id="s-temperature" min="0" max="2" step="0.1"></div>
+        <div class="field"><label>token de acesso (senha da GUI/API)</label>
+          <input type="password" id="s-auth_token" placeholder="(vazio = sem senha)">
+          <span class="hint">obrigatório se a GUI escutar em 0.0.0.0</span></div>
+        <div class="field full"><label>instruções extras do sistema</label>
+          <textarea id="s-system_prompt_extra" placeholder="ex.: Esta máquina é um servidor de arquivos; prefira soluções não destrutivas…"></textarea></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-sandbox"><label for="s-sandbox" style="color:var(--txt)">sandbox de arquivos (restringe ao workspace)</label></div></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-confirm_dangerous"><label for="s-confirm_dangerous" style="color:var(--txt)">confirmar comandos arriscados no terminal</label></div></div>
+        <div class="field full" style="margin-top:6px">
+          <button class="b primary" onclick="saveSettings()">💾 salvar configuração</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <footer>hermes-agent <span id="footver"></span> · agente Linux local · Ollama + Hermes ·
+    GUI de ligar/desligar · mantenha o acesso protegido por token</footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ═══════════════ utilidades ═══════════════ */
+const $ = (id) => document.getElementById(id);
+const state = { status:null, paused:false, es:null, sending:false, history:[], token:"", page:"painel" };
+
+function store(k, v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){ return null; } }
+function toast(msg, err){
+  const t = $("toast"); t.textContent = msg; t.classList.toggle("err", !!err); t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("show"), 3800);
+}
+async function api(path, opts={}){
+  const o = Object.assign({headers:{}}, opts);
+  o.headers["Content-Type"] = "application/json";
+  if (state.token) o.headers["X-Hermes-Token"] = state.token;
+  const r = await fetch(path, o);
+  if (r.status === 401){ $("tokenbar").classList.add("show"); throw new Error("token necessário"); }
+  return r;
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function fmtUp(s){ s=s||0; const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=Math.floor(s%60);
+  return (h?h+"h ":"")+m+"m "+x+"s"; }
+function miniMD(text){
+  let out = "", parts = String(text).split(/```(\w*)\n?([\s\S]*?)```/g);
+  for (let i=0;i<parts.length;i+=3){
+    out += "<p>" + esc(parts[i]||"")
+      .replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>")
+      .replace(/`([^`]+)`/g,"<code>$1</code>")
+      .replace(/\n{2,}/g,"</p><p>")
+      .replace(/\n/g,"<br>") + "</p>";
+    if (parts[i+2] !== undefined) out += "<pre><code>"+esc(parts[i+2])+"</code></pre>";
+  }
+  return out;
+}
+
+/* ═══════════════ navegação ═══════════════ */
+document.querySelectorAll("nav button").forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active"); $("page-"+b.dataset.page).classList.add("active");
+    state.page = b.dataset.page;
+    if (state.page==="chat") $("chatin").focus();
+    if (state.page==="tarefas") loadTasks();
+    if (state.page==="ollama") loadOllamaPage();
+    if (state.page==="skills") loadSkills();
+    if (state.page==="ajustes") loadSettings();
+  };
+});
+
+/* ═══════════════ status ═══════════════ */
+async function refresh(){
+  try{
+    const r = await api("/api/status"); const s = await r.json(); state.status = s;
+    $("ver").textContent = "v"+s.version+" · agente linux · ollama";
+    $("footver").textContent = "v"+s.version;
+    $("mockbanner").style.display = s.mock ? "" : "none";
+    const isLocal = /^(127\.|localhost|\[::1\])/.test(location.hostname);
+    $("securebanner").style.display = (!s.auth && !isLocal) ? "" : "none";
+
+    const ag = s.agent, ol = s.ollama;
+    $("pill-agent").textContent = ag.running ? "LIGADO":"DESLIGADO";
+    $("dot-agent").className = "dot "+(ag.running?"on":"off");
+    $("pill-ollama").textContent = !ol.installed ? "NÃO INSTALADO" : (ol.running ? "LIGADO":"DESLIGADO");
+    $("dot-ollama").className = "dot "+(ol.running?"on":(ol.installed?"off":"warn"));
+    $("pill-model").textContent = "◈ "+s.config.model;
+
+    $("ag-state").innerHTML = ag.running
+      ? '<span class="badge on">● LIGADO</span>'+(ag.stale?' <span class="st pend">sem heartbeat</span>':"")
+      : '<span class="badge off">● DESLIGADO</span>';
+    $("ag-pid").textContent = ag.pid || "—";
+    $("ag-act").textContent = ag.running ? (ag.status||"—") : "—";
+    $("ag-up").textContent = ag.running ? fmtUp(ag.uptime_s) : "—";
+    $("ag-task").textContent = ag.task ? ag.task : "—";
+
+    $("ol-state").innerHTML = !ol.installed
+      ? '<span class="badge warn">⚠ NÃO INSTALADO</span>'
+      : (ol.running ? '<span class="badge on">● LIGADO</span>' : '<span class="badge off">● DESLIGADO</span>');
+    $("ol-ver").textContent = ol.version || "—";
+    $("ol-by").textContent = ol.managed_by || "—";
+    $("ol-models").textContent = (ol.models||[]).join(", ") || "—";
+    $("ol-hint").innerHTML = !ol.installed
+      ? "Instale com: <b>curl -fsSL https://ollama.com/install.sh | sh</b> e depois <b>ollama pull "+esc(s.config.model)+"</b>"
+      : (ol.running && !(ol.models||[]).length ? "Nenhum modelo baixado — rode <b>ollama pull "+esc(s.config.model)+"</b>" : "");
+
+    $("btn-ag-start").disabled = ag.running;
+    $("btn-ag-stop").disabled = !ag.running;
+    $("btn-ol-start").disabled = ol.running || !ol.installed;
+    $("btn-ol-stop").disabled = !ol.running;
+
+    // cartão MCP
+    const mcp = s.mcp || [];
+    const mcpEl = $("mcp-list");
+    if (!mcp.length){
+      mcpEl.innerHTML = '<span class="hint">nenhum servidor configurado — adicione <b>mcp_servers</b> no config.yaml</span>';
+    } else {
+      mcpEl.innerHTML = mcp.map(m=>{
+        const cls = m.state==="ativo" ? "on" : (m.state==="erro" ? "off" : "");
+        const err = m.error ? `<div class="hint" style="color:var(--err)">${esc(m.error.slice(0,110))}</div>` : "";
+        return `<div class="kv"><span>${esc(m.name)} <span class="dot ${cls}"></span></span>`+
+               `<span>${esc(m.state)}${m.tools.length?` · ${m.tools.length} ferramentas`:""}</span></div>${err}`;
+      }).join("");
+    }
+    const mcpActive = mcp.some(m=>m.state==="ativo");
+    $("btn-mcp-start").textContent = mcpActive ? "● ativo" : "▶ ativar";
+    $("btn-mcp-start").disabled = mcpActive;
+
+    $("sys-model").textContent = s.config.model;
+    $("sys-dir").textContent = s.data_dir + "/workspace";
+    $("sys-sandbox").textContent = s.config.sandbox ? "ativo" : "desativado";
+    $("sys-steps").textContent = s.config.max_steps;
+    $("sys-timeout").textContent = s.config.cmd_timeout + "s";
+  }catch(e){
+    // sem conexão com a API — sinaliza no topo em vez de falhar em silêncio
+    if (e.message === "token necessário") return;
+    ["agent","ollama"].forEach(k=>{
+      $("pill-"+k).textContent = "sem conexão";
+      $("dot-"+k).className = "dot warn";
+    });
+  }
+}
+setInterval(refresh, 4000); refresh();
+
+/* ═══════════════ ações on/off ═══════════════ */
+async function agentAction(a){
+  const r = await api("/api/agent/"+a, {method:"POST"});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); refresh();
+}
+async function ollamaAction(a){
+  const r = await api("/api/ollama/"+a, {method:"POST"});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); refresh();
+}
+
+/* ═══════════════ log ao vivo (SSE) ═══════════════ */
+function startLog(){
+  if (state.es) state.es.close();
+  const url = "/api/logs/stream" + (state.token ? "?token="+encodeURIComponent(state.token) : "");
+  state.es = new EventSource(url);
+  const box = $("logbox"); let first = true;
+  state.es.onopen = ()=>{ if (first){ box.textContent=""; first=false; } };
+  state.es.onmessage = (ev)=>{
+    if (state.paused) return;
+    try{
+      const d = JSON.parse(ev.data).line || "";
+      const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+      const span = document.createElement("span");
+      span.textContent = d + "\n";
+      if (/tarefa|===|BLOQUEADO/.test(d)) span.className = "hl";
+      box.appendChild(span);
+      if (box.childElementCount > 1500) box.removeChild(box.firstChild);
+      if (atEnd) box.scrollTop = box.scrollHeight;
+    }catch(e){}
+  };
+  state.es.onerror = ()=>{
+    if (box.childElementCount === 0) box.textContent = "⚠ conexão do log caiu — reconectando…";
+  };
+}
+function togglePause(){
+  state.paused = !state.paused;
+  $("btn-logpause").textContent = state.paused ? "▶ continuar" : "⏸ pausar";
+}
+async function clearLog(){ await api("/api/logs/clear",{method:"POST"}); $("logbox").textContent=""; }
+
+/* ═══════════════ chat ═══════════════ */
+function bubble(role, html, cls){
+  const d = document.createElement("div");
+  d.className = "msg "+role+(cls?" "+cls:"");
+  if (html !== null) d.innerHTML = html;
+  $("chatlog").appendChild(d); scrollChat(); return d;
+}
+function scrollChat(){ const l=$("chatlog"); l.scrollTop = l.scrollHeight; }
+function suggest(btn){ $("chatin").value = btn.textContent.trim(); sendChat(); }
+
+function toolBlock(name, args){
+  const d = document.createElement("details");
+  d.className = "tool"; d.open = true;
+  const sum = document.createElement("summary");
+  const argStr = Object.entries(args||{}).map(([k,v])=>k+"="+(typeof v==="string"?v:JSON.stringify(v))).join(" ");
+  sum.innerHTML = "🔧 "+esc(name)+' <span class="args">'+esc(argStr).slice(0,140)+'</span><span class="status run">rodando…</span>';
+  d.appendChild(sum);
+  $("chatlog").appendChild(d); scrollChat(); return d;
+}
+function textDiv(turn){
+  const d = document.createElement("div");
+  d.className = "msg bot raw"; d.style.whiteSpace = "pre-wrap";
+  $("chatlog").appendChild(d); scrollChat(); return d;
+}
+
+async function sendChat(){
+  const input = $("chatin"), text = input.value.trim();
+  if (!text || state.sending) return;
+  input.value = ""; autoGrow(input);
+  bubble("user", esc(text), "");
+  state.history.push({role:"user", content:text});
+  state.sending = true; $("btn-send").disabled = true;
+
+  let holder = null, cursors = [];
+  const turns = { texts: [], tools: [], cur: null };
+
+  try{
+    const r = await api("/api/chat", {method:"POST", body: JSON.stringify({message:text, history: state.history.slice(0,-1)})});
+    const reader = r.body.getReader(); const dec = new TextDecoder();
+    let buf = "", finalMsg = "", errorMsg = "";
+    while (true){
+      const {done, value} = await reader.read(); if (done) break;
+      buf += dec.decode(value, {stream:true});
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0){
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl+1);
+        if (!line) continue;
+        let ev; try{ ev = JSON.parse(line); }catch(e){ continue; }
+        handleEvent(ev, turns, cursors);
+        if (ev.type === "done") finalMsg = ev.message;
+        if (ev.type === "error") errorMsg = ev.message;
+      }
+    }
+    cursors.forEach(c=>c.remove());
+    // renderiza markdown em cada segmento de texto
+    turns.texts.forEach(t=>{ if (t && t.textContent.trim()) t.innerHTML = miniMD(t.textContent); });
+    if (errorMsg && !finalMsg) bubble("bot", "⚠ "+esc(errorMsg), "waiting");
+    state.history.push({role:"assistant", content: finalMsg || errorMsg || ""});
+  }catch(e){
+    cursors.forEach(c=>c.remove());
+    bubble("bot", "⚠ falha de conexão: "+esc(e.message), "waiting");
+  }
+  state.sending = false; $("btn-send").disabled = false; scrollChat();
+}
+function handleEvent(ev, turns, cursors){
+  if (ev.type === "token"){
+    if (!turns.cur){
+      const d = document.createElement("div");
+      d.className = "msg bot"; d.style.whiteSpace = "pre-wrap";
+      const c = document.createElement("span"); c.className = "cursor";
+      d.appendChild(c); d._cursor = c; cursors.push(c);
+      turns.cur = d; turns.texts.push(d);
+      $("chatlog").appendChild(d);
+    }
+    turns.cur.insertBefore(document.createTextNode(ev.content), turns.cur._cursor);
+    scrollChat();
+  } else if (ev.type === "tool_start"){
+    turns.cur = null;
+    turns.tools.push(toolBlock(ev.name, ev.args));
+  } else if (ev.type === "tool_end"){
+    const t = turns.tools[turns.tools.length-1];
+    if (t){
+      const st = t.querySelector(".status");
+      if (st){ st.textContent = ev.ok ? "ok" : "erro"; st.className = "status "+(ev.ok?"ok":"err"); }
+      const out = document.createElement("div"); out.className = "out"; out.textContent = ev.output || "";
+      t.appendChild(out);
+      if (ev.ok) setTimeout(()=>{ t.open = false; }, 1200);
+    }
+  }
+}
+
+/* ═══════════════ tarefas ═══════════════ */
+async function loadTasks(){
+  try{
+    const r = await api("/api/tasks"); const d = await r.json();
+    const el = $("tasklist");
+    if (!d.pending.length && !d.done.length){
+      el.innerHTML = '<div class="hint">fila vazia — enfileire uma tarefa acima.</div>'; return;
+    }
+    let html = "";
+    d.pending.forEach(t=>{
+      html += '<div class="task"><div class="top"><span class="st pend">⏳ pendente</span>'+
+              '<span class="input">'+esc(t.input)+'</span><span class="id">'+esc(t.id)+'</span></div></div>';
+    });
+    d.done.forEach(t=>{
+      const tools = (t.tools||[]).map(x=>"🔧 "+esc(x.name)).join(" · ");
+      html += '<div class="task"><div class="top"><span class="st '+esc(t.status)+'">'+(t.status==="ok"?"✔ ok":"✖ erro")+'</span>'+
+              '<span class="input">'+esc(t.input)+'</span><span class="id">'+esc(t.id)+' · '+esc(t.duration_s)+'s</span></div>'+
+              (tools?'<div class="hint">'+tools+'</div>':"")+
+              '<details><summary>ver saída completa</summary><pre>'+esc(t.output||"")+'</pre></details></div>';
+    });
+    el.innerHTML = html;
+  }catch(e){}
+}
+async function addTask(){
+  const inp = $("taskin"), text = inp.value.trim();
+  if (!text) return;
+  inp.value = "";
+  const r = await api("/api/tasks", {method:"POST", body: JSON.stringify({input:text})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast(j.msg || j.ok && "tarefa enfileirada", !j.ok);
+  loadTasks();
+}
+async function clearTasks(){
+  await api("/api/tasks/clear", {method:"POST"}); loadTasks();
+}
+setInterval(()=>{ if (state.page==="tarefas") loadTasks(); }, 5000);
+
+/* ═══════════════ página Ollama ═══════════════ */
+async function loadOllamaPage(){
+  try{
+    const [rs, rset] = await Promise.all([api("/api/status").then(r=>r.json()),
+                                          api("/api/settings").then(r=>r.json())]);
+    const ol = rs.ollama, set = rset.settings || {};
+    $("olp-state").innerHTML = !ol.installed ? '<span class="badge warn">⚠ NÃO INSTALADO</span>'
+      : (ol.running ? '<span class="badge on">● LIGADO</span>' : '<span class="badge off">● DESLIGADO</span>');
+    $("olp-badge").textContent = rs.mock ? "simulado" : "";
+    $("olp-ver").textContent = ol.version || "—";
+    $("olp-pid").textContent = ol.pid || "—";
+    $("olp-up").textContent = ol.running ? fmtUp(ol.uptime_s) : "—";
+    $("olp-mem").textContent = ol.mem_mb ? ol.mem_mb + " MB" : "—";
+    $("olp-by").textContent = ol.managed_by || "—";
+    $("olp-boot").textContent = ol.boot_enabled ? "sim (systemd)" : "não";
+    $("olp-start").disabled = ol.running || !ol.installed;
+    $("olp-stop").disabled = !ol.running;
+    $("olp-url").value = set.ollama_url || "http://127.0.0.1:11434";
+    $("olp-auto").checked = !!set.auto_start_ollama;
+  }catch(e){}
+  loadModels();
+}
+async function ollamaAction2(a){
+  const r = await api("/api/ollama/"+a, {method:"POST"});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  loadOllamaPage(); refresh();
+}
+async function saveOllamaConn(){
+  const body = {ollama_url: $("olp-url").value.trim(), auto_start_ollama: $("olp-auto").checked};
+  const r = await api("/api/settings", {method:"POST", body: JSON.stringify(body)});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+}
+async function testConnection(){
+  const box = $("olp-test");
+  $("olp-testbtn").disabled = true;
+  box.innerHTML = '<div class="hint">verificando…</div>';
+  try{
+    const r = await api("/api/ollama/test", {method:"POST"});
+    const d = await r.json();
+    box.innerHTML = d.steps.map(s=>{
+      const cor = s.ok ? "var(--ok)" : "var(--err)";
+      const ico = s.ok ? "✔" : "✖";
+      return `<div class="kv"><span style="color:${cor};font-weight:700">${ico} ${esc(s.name)}</span>`+
+             `<span class="hint" style="max-width:62%;text-align:right">${esc(s.detail)}</span></div>`;
+    }).join("") + (d.ok ? '<div class="kv"><span style="color:var(--ok);font-weight:700">✔ conexão validada</span></div>'
+                            : '<div class="kv"><span style="color:var(--err);font-weight:700">✖ corrija os pontos acima</span></div>');
+  }catch(e){ box.innerHTML = '<div class="hint" style="color:var(--err)">falha: '+esc(e.message)+'</div>'; }
+  $("olp-testbtn").disabled = false;
+}
+async function loadModels(){
+  try{
+    const r = await api("/api/ollama/models"); const d = await r.json();
+    const loaded = (d.loaded||[]);
+    $("olp-loaded").textContent = loaded.length ? loaded.map(l=>l.name).join(", ")+" em memória" : "";
+    const el = $("olp-models");
+    if (!d.models.length){
+      el.innerHTML = '<div class="hint">nenhum modelo instalado — baixe um acima (ex.: hermes3:8b)</div>'; return;
+    }
+    el.innerHTML = d.models.map(m=>`
+      <div class="task"><div class="top">
+        <span class="st ${m.current?"ok":"pend"}">${m.current?"em uso":"instalado"}</span>
+        <span class="input"><b>${esc(m.name)}</b> <span class="hint">· ${m.size_gb} GB · ${esc(m.modified)}</span></span>
+        <span class="btnrow" style="margin:0">
+          ${m.current?"":`<button class="b small" onclick="useModel('${esc(m.name)}')">usar</button>`}
+          <button class="b small danger" onclick="delModel('${esc(m.name)}')">🗑</button>
+        </span>
+      </div></div>`).join("");
+  }catch(e){}
+}
+async function useModel(name){
+  const r = await api("/api/settings", {method:"POST", body: JSON.stringify({model: name})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ modelo atual: "+name : "✖ "+j.msg), !j.ok);
+  loadModels(); refresh();
+}
+async function delModel(name){
+  if (!confirm("remover o modelo "+name+" do disco?")) return;
+  const r = await api("/api/ollama/delete", {method:"POST", body: JSON.stringify({model: name})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); loadModels();
+}
+async function toggleBoot(){
+  let on = false;
+  try{ const s = await api("/api/status").then(x=>x.json()); on = !!s.ollama.boot_enabled; }catch(e){}
+  const rr = await api("/api/ollama/boot", {method:"POST", body: JSON.stringify({enable: !on})});
+  const j = await rr.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); loadOllamaPage();
+}
+async function pullModel(){
+  const name = $("olp-pullin").value.trim();
+  if (!name){ toast("informe o nome do modelo (ex.: hermes3:3b)", true); return; }
+  $("olp-pullbtn").disabled = true;
+  $("olp-progress").style.display = "";
+  $("olp-bar").style.width = "0%";
+  $("olp-status").textContent = "iniciando…";
+  try{
+    const r = await api("/api/ollama/pull", {method:"POST", body: JSON.stringify({model: name})});
+    const reader = r.body.getReader(); const dec = new TextDecoder();
+    let buf = "";
+    while (true){
+      const {done, value} = await reader.read(); if (done) break;
+      buf += dec.decode(value, {stream:true});
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0){
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl+1);
+        if (!line) continue;
+        let ev; try{ ev = JSON.parse(line); }catch(e){ continue; }
+        if (ev.type === "progress"){
+          if (ev.pct != null) $("olp-bar").style.width = ev.pct+"%";
+          $("olp-status").textContent = ev.status + (ev.pct != null ? " — "+ev.pct+"%" : "");
+        } else if (ev.type === "done"){
+          $("olp-bar").style.width = "100%"; $("olp-status").textContent = "✔ "+ev.msg;
+          toast("✔ "+ev.msg); $("olp-pullin").value = ""; loadModels(); refresh();
+        } else if (ev.type === "error"){
+          $("olp-status").textContent = "✖ "+ev.msg; toast(ev.msg, true);
+        }
+      }
+    }
+  }catch(e){ $("olp-status").textContent = "✖ falha: "+e.message; }
+  $("olp-pullbtn").disabled = false;
+}
+
+/* ═══════════════ MCP ═══════════════ */
+async function mcpStart(restart){
+  const r = await api(restart ? "/api/mcp/restart" : "/api/mcp/start", {method:"POST"});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); refresh();
+}
+
+/* ═══════════════ skills ═══════════════ */
+let SKILLS = [];
+async function loadSkills(){
+  try{
+    const r = await api("/api/skills"); const d = await r.json();
+    SKILLS = d.skills || [];
+    $("skill-count").textContent = SKILLS.length + " instalada(s)";
+    const el = $("skill-list");
+    if (!SKILLS.length){
+      el.innerHTML = '<div class="hint">nenhuma skill — instale do GitHub acima.</div>'; return;
+    }
+    el.innerHTML = SKILLS.map((s,i)=>`
+      <div class="task">
+        <div class="top">
+          <span class="st ${s.enabled?"ok":"err"}">${s.enabled?"habilitada":"desabilitada"}</span>
+          <span class="input"><b>${esc(s.name)}</b> <span class="hint">· ${esc(s.source)}</span><br>
+            <span class="hint">${esc(s.description).slice(0,220)}</span></span>
+        </div>
+        <div class="btnrow">
+          <button class="b small ghost" onclick="viewSkill(${i})">📄 ver SKILL.md</button>
+          <button class="b small" onclick="toggleSkill(${i})">${s.enabled?"⛔ desabilitar":"✅ habilitar"}</button>
+        </div>
+      </div>`).join("");
+  }catch(e){}
+}
+async function viewSkill(i){
+  const s = SKILLS[i]; if (!s) return;
+  const r = await api("/api/skills/content?path="+encodeURIComponent(s.skill_md));
+  const d = await r.json();
+  $("skill-view-name").textContent = s.name;
+  $("skill-view").textContent = d.ok ? d.content : ("ERRO: "+d.msg);
+  $("skill-view-card").style.display = "";
+  $("skill-view-card").scrollIntoView({behavior:"smooth"});
+}
+function closeSkillView(){ $("skill-view-card").style.display = "none"; }
+async function toggleSkill(i){
+  const s = SKILLS[i]; if (!s) return;
+  const r = await api("/api/skills/toggle", {method:"POST",
+    body: JSON.stringify({name: s.name, enabled: !s.enabled})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); loadSkills();
+}
+async function installSkill(){
+  const repo = $("skill-repo").value.trim(), sub = $("skill-sub").value.trim();
+  if (!repo){ toast("informe owner/repo ou a URL", true); return; }
+  toast("baixando skills…");
+  const r = await api("/api/skills/install", {method:"POST",
+    body: JSON.stringify({repo, subpath: sub})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  if (j.ok){ $("skill-repo").value = ""; $("skill-sub").value = ""; }
+  loadSkills();
+}
+
+/* ═══════════════ ajustes ═══════════════ */
+async function loadSettings(){
+  try{
+    const r = await api("/api/settings"); const d = await r.json();
+    const s = d.settings;
+    $("cfgpath").textContent = d.path;
+    $("s-model").value = s.model; $("s-max_steps").value = s.max_steps;
+    $("s-num_ctx").value = s.num_ctx; $("s-cmd_timeout").value = s.cmd_timeout;
+    $("s-temperature").value = s.temperature; $("s-system_prompt_extra").value = s.system_prompt_extra;
+    $("s-auth_token").value = s.auth_token || "";
+    $("s-sandbox").checked = !!s.sandbox; $("s-confirm_dangerous").checked = !!s.confirm_dangerous;
+    const dl = $("modellist"); dl.innerHTML = "";
+    ((state.status&&state.status.ollama.models)||[]).forEach(m=>{
+      const o = document.createElement("option"); o.value = m; dl.appendChild(o);
+    });
+  }catch(e){}
+}
+async function saveSettings(){
+  const body = {
+    model: $("s-model").value.trim() || "hermes3:8b",
+    max_steps: +$("s-max_steps").value, num_ctx: +$("s-num_ctx").value,
+    cmd_timeout: +$("s-cmd_timeout").value, temperature: +$("s-temperature").value,
+    system_prompt_extra: $("s-system_prompt_extra").value,
+    auth_token: $("s-auth_token").value,
+    sandbox: $("s-sandbox").checked, confirm_dangerous: $("s-confirm_dangerous").checked,
+  };
+  const r = await api("/api/settings", {method:"POST", body: JSON.stringify(body)});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  if (j.ok && body.auth_token){ state.token = body.auth_token; store("hermes_token", body.auth_token); }
+  refresh();
+}
+
+/* ═══════════════ token ═══════════════ */
+function saveToken(){
+  state.token = $("tokenin").value.trim();
+  store("hermes_token", state.token);
+  $("tokenbar").classList.remove("show");
+  startLog(); refresh(); toast("token aplicado");
+}
+
+/* ═══════════════ input ═══════════════ */
+function autoGrow(el){ el.style.height="auto"; el.style.height=Math.min(el.scrollHeight,160)+"px"; }
+$("chatin").addEventListener("input", e=>autoGrow(e.target));
+$("chatin").addEventListener("keydown", e=>{
+  if (e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendChat(); }
+});
+
+/* ═══════════════ boot ═══════════════ */
+state.token = store("hermes_token") || "";
+if (state.token) $("tokenin").value = state.token;
+startLog();
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+# ============================================================
+#  Configuração do Hermes Agent
+#  Local padrão: ~/.hermes/config.yaml (criado ao salvar na GUI)
+# ============================================================
+
+# --- Ollama ---
+ollama_url: http://127.0.0.1:11434   # endereço da API do Ollama
+model: hermes3:8b                    # modelo padrão (hermes3:3b é mais leve)
+num_ctx: 8192                        # tamanho de contexto
+temperature: 0.4                     # criatividade (0 = determinístico)
+
+# --- GUI web (hermes server) ---
+host: 127.0.0.1                      # use 0.0.0.0 para acessar de outros aparelhos
+port: 8080
+auth_token: ""                       # SENHA! obrigatória se host=0.0.0.0
+
+# --- Agente ---
+max_steps: 8                         # máx. de ciclos modelo->ferramenta por tarefa
+cmd_timeout: 60                      # timeout (s) de cada comando shell
+sandbox: true                        # restringe arquivos ao workspace
+confirm_dangerous: true              # confirma comandos arriscados no terminal
+system_prompt_extra: ""              # instruções extras para o agente
+
+# --- Conectores MCP ---
+# Cada entrada vira ferramentas mcp_<nome>_<ferramenta> para o agente.
+mcp_timeout: 120                     # timeout (s) de inicialização/chamadas
+mcp_servers:
+  # Figma via API REST (criar/ler designs) — gere um token em
+  # figma.com → Settings → Personal access tokens
+  - name: figma
+    command: npx
+    args: ["-y", "figma-developer-mcp", "--figma-api-key=SEU-TOKEN", "--stdio"]
+  # Figma Dev Mode (app desktop com MCP local habilitado):
+  # - name: figma-devmode
+  #   url: http://127.0.0.1:3845/mcp
+  # Servidor de demonstração incluído no projeto (sem token, para testes):
+  - name: figma-demo
+    command: python3
+    args: ["mcp-servers/figma_demo_server.py"]
+    env:
+      HERMES_WORKDIR: ~/.hermes/workspace
+
+# --- Skills ---
+skills_disabled: []                  # nomes desabilitados pela GUI

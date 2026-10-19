@@ -1,0 +1,321 @@
+"""CLI do Hermes Agent.
+
+Principais comandos:
+  hermes chat                      chat interativo no terminal
+  hermes run "tarefa"              executa uma tarefa única
+  hermes daemon                    roda o daemon em primeiro plano
+  hermes server                    sobe a GUI web (ligar/desligar, chat, fila)
+  hermes status                    status do agente e do Ollama
+  hermes agent start|stop|restart  controla o daemon
+  hermes ollama start|stop|status  controla o servidor Ollama
+  hermes ollama pull [modelo]      baixa modelo
+  hermes tasks                     lista fila de tarefas/resultados
+  hermes config show|set           vê/altera configuração
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+from . import VERSION
+from .config import DEFAULTS, Config
+
+
+# ------------------------------------------------------------------ helpers
+
+def _cfg(args) -> Config:
+    import os
+
+    if getattr(args, "data_dir", None):
+        os.environ["HERMES_DATA_DIR"] = args.data_dir
+    if getattr(args, "mock", False):
+        os.environ["HERMES_MOCK"] = "1"
+    return Config()
+
+
+def _p(text: str = "") -> None:
+    print(text)
+
+
+def _ok(msg: str) -> None:
+    print(f"✔ {msg}")
+
+
+def _fail(msg: str) -> None:
+    print(f"✖ {msg}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+# ------------------------------------------------------------------ comandos
+
+def cmd_status(args) -> None:
+    from .manager import DaemonManager, OllamaManager
+
+    cfg = _cfg(args)
+    agent = DaemonManager(cfg).status()
+    ollama = OllamaManager(cfg).status()
+
+    _p(f"\n◈ Hermes Agent v{VERSION}{'  [MODO DEMONSTRAÇÃO — Ollama simulado]' if cfg.mock else ''}")
+    _p(f"  dados      : {cfg.data_dir}")
+    _p(f"  modelo     : {cfg.model}")
+    _p("  ── agente " + "─" * 40)
+    if agent["running"]:
+        up = agent.get("uptime_s") or 0
+        _p(f"  estado     : 🟢 LIGADO (pid {agent['pid']}, {agent['status']}, há {int(up // 60)}min{int(up % 60)}s)")
+    else:
+        _p("  estado     : 🔴 DESLIGADO")
+    _p("  ── ollama " + "─" * 40)
+    if not ollama["installed"]:
+        _p("  estado     : ⚠ NÃO INSTALADO  (rodar ./install.sh ou curl -fsSL https://ollama.com/install.sh | sh)")
+    elif ollama["running"]:
+        models = ", ".join(ollama["models"]) or "nenhum modelo baixado"
+        _p(f"  estado     : 🟢 LIGADO  (v{ollama['version']}, {ollama['managed_by']})")
+        _p(f"  modelos    : {models}")
+    else:
+        _p("  estado     : 🔴 DESLIGADO  (ligue com: hermes ollama start)")
+    _p()
+
+
+def cmd_agent(args) -> None:
+    from .manager import DaemonManager
+
+    cfg = _cfg(args)
+    mgr = DaemonManager(cfg)
+    if args.action == "status":
+        st = mgr.status()
+        _p(json.dumps(st, ensure_ascii=False, indent=2))
+        return
+    result = getattr(mgr, args.action)()
+    (_ok if result["ok"] else _fail)(result["msg"])
+
+
+def cmd_doctor(args) -> None:
+    """Diagnóstico completo: config -> Ollama (com geração real) -> agente."""
+    from .manager import DaemonManager, OllamaManager
+
+    cfg = _cfg(args)
+    _p("\n◈ Hermes Doctor — diagnóstico da conexão Ollama ↔ Python")
+    _p("─" * 58)
+    _p(f"  config      : {cfg.path}")
+    _p(f"  endereço    : {cfg.ollama_url}")
+    _p(f"  modelo      : {cfg.model}")
+
+    _p("─" * 58)
+    mgr = OllamaManager(cfg)
+    diag = mgr.diagnose(deep=True)
+    for s in diag["steps"]:
+        mark = "✔" if s["ok"] else "✖"
+        _p(f"  {mark} {s['name']:<20} {s['detail']}")
+
+    _p("─" * 58)
+    ag = DaemonManager(cfg).status()
+    if ag["running"]:
+        _p(f"  ✔ agente            LIGADO (pid {ag['pid']}, {ag['status']})")
+    else:
+        _p("  • agente            desligado (ligue com: hermes agent start)")
+
+    _p("─" * 58)
+    if diag["ok"]:
+        _p("  ✅ TUDO OK — conexão validada, pode trabalhar.\n")
+    else:
+        _p("  ❌ corrija os itens ✖ acima. Comandos úteis:")
+        _p("     sudo systemctl start ollama      # ligar o serviço")
+        _p("     ollama pull hermes3:8b           # baixar o modelo")
+        _p("     hermes config set model hermes3:8b  # corrigir o modelo")
+        _p("")
+
+
+def cmd_ollama(args) -> None:
+    from .manager import OllamaManager
+
+    cfg = _cfg(args)
+    mgr = OllamaManager(cfg)
+    if args.action == "status":
+        _p(json.dumps(mgr.status(), ensure_ascii=False, indent=2))
+    elif args.action == "test":
+        cmd_doctor(args)
+        return
+    elif args.action in ("start", "stop"):
+        result = getattr(mgr, args.action)()
+        (_ok if result["ok"] else _fail)(result["msg"])
+    elif args.action == "pull":
+        from .ollama_client import OllamaError
+
+        model = args.model or cfg.model
+        client = mgr.client
+        print(f"baixando {model} (pode demorar)…")
+        try:
+
+            def progress(data: dict) -> None:
+                status = data.get("status", "")
+                total, done = data.get("total"), data.get("completed")
+                if total and done is not None:
+                    pct = done / total * 100
+                    sys.stdout.write(f"\r  {status:<28} {pct:5.1f}%")
+                else:
+                    sys.stdout.write(f"\r  {status:<35}")
+                sys.stdout.flush()
+
+            client.pull(model, progress)
+            _p()
+            _ok(f"modelo {model} disponível")
+        except OllamaError as exc:
+            _p()
+            _fail(str(exc))
+    elif args.action == "install":
+        _fail("use o instalador do projeto: ./install.sh")
+
+
+def cmd_run(args) -> None:
+    from .agent import Agent
+
+    cfg = _cfg(args)
+    agent = Agent(cfg)
+    task = " ".join(args.task).strip()
+
+    def on_event(event: dict) -> None:
+        if event["type"] == "tool_start":
+            args_str = " ".join(f"{k}={v!r}" for k, v in (event.get("args") or {}).items())
+            print(f"\033[2m  🔧 {event['name']}({args_str})\033[0m")
+
+    print(f"◈ tarefa: {task}\n")
+    final = agent.run([{"role": "user", "content": task}], on_event=on_event)
+    print("\n" + "─" * 60)
+    print(final)
+    print("─" * 60)
+
+
+def cmd_chat(args) -> None:
+    from .tui import run_chat
+
+    run_chat(_cfg(args))
+
+
+def cmd_daemon(args) -> None:
+    from .daemon import run_daemon
+
+    run_daemon(_cfg(args))
+
+
+def cmd_server(args) -> None:
+    from .server.app import serve
+
+    cfg = _cfg(args)
+    cfg.ensure_dirs()
+    if args.token:
+        cfg.auth_token = args.token
+    serve(cfg, host=args.host or cfg.host, port=args.port or cfg.port)
+
+
+def cmd_tasks(args) -> None:
+    from .daemon import list_tasks
+
+    cfg = _cfg(args)
+    data = list_tasks(cfg)
+    _p(f"\n◈ fila de tarefas — {len(data['pending'])} pendente(s), {len(data['done'])} concluída(s)")
+    for t in data["pending"]:
+        _p(f"  ⏳ {t.get('id')}  {t.get('input', '')[:70]}")
+    for t in data["done"]:
+        mark = "✔" if t.get("status") == "ok" else "✖"
+        dur = t.get("duration_s", "?")
+        _p(f"  {mark} {t.get('id')}  [{dur}s]  {t.get('input', '')[:70]}")
+    _p()
+
+
+def cmd_config(args) -> None:
+    cfg = _cfg(args)
+    if args.action == "show":
+        _p(f"# configuração ativa ({cfg.path})")
+        _p(json.dumps(cfg.as_dict(), ensure_ascii=False, indent=2))
+    elif args.action == "set":
+        if len(args.kv) != 2 or args.kv[0] not in DEFAULTS:
+            _fail(f"use: hermes config set <chave> <valor>  — chaves: {', '.join(DEFAULTS)}")
+        cfg.update({args.kv[0]: args.kv[1]})
+        _ok(f"{args.kv[0]} = {getattr(cfg, args.kv[0])!r} salvo em {cfg.path}")
+    elif args.action == "edit":
+        import os
+        import subprocess
+
+        subprocess.run([os.environ.get("EDITOR", "nano"), str(cfg.path)])
+
+
+def cmd_models(args) -> None:
+    from .manager import OllamaManager
+
+    ollama = OllamaManager(_cfg(args)).status()
+    if ollama["running"]:
+        _p("\nmodelos locais no Ollama:")
+        for m in ollama["models"]:
+            mark = " ◀ atual" if m == _cfg(args).model else ""
+            _p(f"  • {m}{mark}")
+        _p("\ntroque com: hermes config set model <nome>")
+    else:
+        _fail("Ollama desligado — ligue com: hermes ollama start")
+
+
+# ------------------------------------------------------------------ parser
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="hermes",
+        description="◈ Hermes Agent — agente Linux local com Ollama + GUI web",
+    )
+    parser.add_argument("--version", action="version", version=f"hermes-agent {VERSION}")
+    parser.add_argument("--data-dir", help="diretório de dados (padrão: ~/.hermes)")
+    parser.add_argument("--mock", action="store_true", help="força modo demonstração (Ollama simulado)")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("chat", help="chat interativo no terminal")
+    p.set_defaults(fn=cmd_chat)
+
+    p = sub.add_parser("doctor", help="diagnostica a conexão Ollama↔Python (com geração de teste)")
+    p.set_defaults(fn=cmd_doctor)
+
+    p = sub.add_parser("status", help="status do agente e do Ollama")
+    p.set_defaults(fn=cmd_status)
+
+    p = sub.add_parser("run", help="executa uma tarefa única")
+    p.add_argument("task", nargs="+", help="descrição da tarefa")
+    p.set_defaults(fn=cmd_run)
+
+    p = sub.add_parser("daemon", help="roda o daemon em primeiro plano")
+    p.set_defaults(fn=cmd_daemon)
+
+    p = sub.add_parser("server", help="sobe a GUI web de controle")
+    p.add_argument("--host", help="endereço de escuta (padrão: 127.0.0.1)")
+    p.add_argument("--port", type=int, help="porta (padrão: 8080)")
+    p.add_argument("--token", help="senha de acesso exigida na GUI/API")
+    p.set_defaults(fn=cmd_server)
+
+    p = sub.add_parser("agent", help="controla o agente (ligar/desligar)")
+    p.add_argument("action", choices=["start", "stop", "restart", "status"])
+    p.set_defaults(fn=cmd_agent)
+
+    p = sub.add_parser("ollama", help="controla o servidor Ollama")
+    p.add_argument("action", choices=["status", "start", "stop", "test", "pull", "install"])
+    p.add_argument("model", nargs="?", help="modelo para 'pull' (padrão: o da configuração)")
+    p.set_defaults(fn=cmd_ollama)
+
+    p = sub.add_parser("tasks", help="lista tarefas da fila e resultados")
+    p.set_defaults(fn=cmd_tasks)
+
+    p = sub.add_parser("config", help="configuração")
+    p.add_argument("action", choices=["show", "set", "edit"])
+    p.add_argument("kv", nargs="*", help="para 'set': chave valor")
+    p.set_defaults(fn=cmd_config)
+
+    p = sub.add_parser("models", help="lista modelos locais do Ollama")
+    p.set_defaults(fn=cmd_models)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if getattr(args, "fn", None) is None:
+        parser.print_help()
+        return
+    args.fn(args)
