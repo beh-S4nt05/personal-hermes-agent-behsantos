@@ -1792,25 +1792,65 @@ async function testConnection(){
   }catch(e){ box.innerHTML = '<div class="hint" style="color:var(--err)">falha: '+esc(e.message)+'</div>'; }
   $("olp-testbtn").disabled = false;
 }
+const ROLE_INFO = {
+  chat:  {k:"model",             ic:"💬", nome:"chat"},
+  orchestrator: {k:"orchestrator_model", ic:"🎯", nome:"orquestrador"},
+  reviewer:     {k:"reviewer_model",     ic:"🔍", nome:"revisor"},
+  executor:     {k:"executor_model",     ic:"⚡", nome:"executor"},
+};
 async function loadModels(){
   try{
     const r = await api("/api/ollama/models"); const d = await r.json();
     const loaded = (d.loaded||[]);
-    $("olp-loaded").textContent = loaded.length ? loaded.map(l=>l.name).join(", ")+" em memória" : "";
+    const roles = d.roles || {};
+    $("olp-loaded").textContent =
+      (d.models.length ? d.models.length + " instalado(s) · " : "") +
+      (loaded.length ? loaded.map(l=>l.name).join(", ")+" em memória" : "");
     const el = $("olp-models");
-    if (!d.models.length){
-      el.innerHTML = '<div class="hint">nenhum modelo instalado — baixe um acima (ex.: hermes3:8b)</div>'; return;
+    let html = "";
+    if (d.server_off){
+      html += '<div class="hint" style="color:var(--warn);margin-bottom:8px">⚠ servidor Ollama desligado — ' +
+        (d.models.length
+          ? 'mostrando a última lista conhecida ('+esc(d.cached_at||"?")+')'
+          : 'ligue o servidor para listar (a lista fica em cache para a próxima)') + '</div>';
     }
-    el.innerHTML = d.models.map(m=>`
+    if (!d.models.length){
+      html += '<div class="hint">nenhum modelo listado — baixe um acima (ex.: hermes3:8b)' +
+        (d.server_off ? ' ou ligue o servidor' : '') + '</div>';
+      el.innerHTML = html; return;
+    }
+    el.innerHTML = html + d.models.map(m=>{
+      const meus = Object.keys(ROLE_INFO).filter(r=>roles[r]===m.name);
+      const claude = roles.claude===m.name ? ' <span class="tag">🔌 claude</span>' : "";
+      const chips = meus.map(r=>'<span class="tag trig">'+ROLE_INFO[r].ic+" "+ROLE_INFO[r].nome+"</span>").join(" ") + claude;
+      const btns = Object.keys(ROLE_INFO).map(r=>{
+        const ativo = roles[r]===m.name;
+        return '<button class="b small '+(ativo?"primary":"ghost")+'" title="definir como '+ROLE_INFO[r].nome+
+               '" onclick="assignRole(''+esc(m.name)+'',''+r+'')">'+ROLE_INFO[r].ic+'</button>';
+      }).join("");
+      return `
       <div class="task"><div class="top">
         <span class="st ${m.current?"ok":"pend"}">${m.current?"em uso":"instalado"}</span>
-        <span class="input"><b>${esc(m.name)}</b> <span class="hint">· ${m.size_gb} GB · ${esc(m.modified)}</span></span>
+        <span class="input"><b>${esc(m.name)}</b> <span class="hint">· ${m.size_gb} GB · ${esc(m.modified)}</span>
+          ${chips?('<div style="margin-top:4px">'+chips+'</div>'):""}</span>
         <span class="btnrow" style="margin:0">
-          ${m.current?"":`<button class="b small" onclick="useModel('${esc(m.name)}')">usar</button>`}
-          <button class="b small danger" onclick="delModel('${esc(m.name)}')">🗑</button>
+          ${btns}
+          <button class="b small danger" title="remover do disco" onclick="delModel('${esc(m.name)}')">🗑</button>
         </span>
-      </div></div>`).join("");
+      </div></div>`;}).join("");
   }catch(e){}
+}
+async function assignRole(name, role){
+  // clica no papel que o modelo já exerce → limpa (volta ao padrão)
+  const r = await api("/api/ollama/models"); const d = await r.json().catch(()=>({roles:{}}));
+  const atual = (d.roles||{})[role];
+  const body = {}; body[ROLE_INFO[role].k] = (atual===name ? "" : name);
+  const rr = await api("/api/settings", {method:"POST", body: JSON.stringify(body)});
+  const j = await rr.json().catch(()=>({msg:"sem resposta"}));
+  toast(j.ok ? (body[ROLE_INFO[role].k]
+      ? ROLE_INFO[role].ic+" "+name+" → papel "+ROLE_INFO[role].nome
+      : "papel "+ROLE_INFO[role].nome+" voltou ao padrão") : "✖ "+j.msg, !j.ok);
+  loadModels(); refresh();
 }
 async function useModel(name){
   const r = await api("/api/settings", {method:"POST", body: JSON.stringify({model: name})});

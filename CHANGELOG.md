@@ -1,5 +1,26 @@
 # Changelog
 
+## v3.9.0 — 🧠 aba Ollama: todos os modelos instalados + papel de cada um
+
+Pedido do operador: ver TODOS os modelos instalados nativamente na aba
+Ollama. A lista já existia, mas tinha dois furos — corrigidos e ampliados:
+
+**1. Servidor desligado ≠ "nenhum modelo":** antes, com o Ollama parado,
+a aba mostrava "nenhum modelo instalado" (mentira — estavam no disco).
+Agora a última listagem boa fica em cache (data/ollama_models_cache.json)
+e é exibida com aviso "⚠ servidor desligado — última lista conhecida
+(hh:mm)".
+
+**2. Papel de cada modelo, visível e atribuível na hora:** cada modelo
+mostra chips com os papéis que exerce (💬 chat · 🎯 orquestrador · 🔍
+revisor · ⚡ executor · 🔌 claude) e botões para atribuir cada papel com
+UM clique — clicar de novo no papel ativo volta ao padrão. A lista vem
+ordenada (modelo em uso primeiro) e mostra tamanho + data de cada um.
+
+Teste T75: cache com servidor desligado (vazio → cache → papéis via
+settings), reflexo dos 4 papéis na resposta e botões na GUI.
+Suíte: **75/75**.
+
 ## v3.8.0 — ✦ catálogo de 18 skills curadas · 🔍 4º papel de modelo · 🧪 bateria E2E/integração/performance/estresse
 
 **✦ Catálogo de skills curado (do material de pesquisa do operador):**

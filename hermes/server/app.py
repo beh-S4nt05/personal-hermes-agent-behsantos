@@ -408,6 +408,28 @@ self.addEventListener("fetch", (e) => {
     @app.get("/api/ollama/models")
     @protected
     def ollama_models():
+        """TODOS os modelos instalados + qual papel cada um exerce.
+        v3.9: com o servidor desligado, devolve a ÚLTIMA lista conhecida
+        (cache em data/ollama_models_cache.json) em vez de lista vazia."""
+        roles = {
+            "chat": str(cfg.model),
+            "orchestrator": str(getattr(cfg, "orchestrator_model", "") or ""),
+            "reviewer": str(getattr(cfg, "reviewer_model", "") or ""),
+            "executor": str(getattr(cfg, "executor_model", "") or ""),
+            "claude": str(getattr(cfg, "claude_model", "") or ""),
+        }
+        cache_p = cfg.data_dir / "ollama_models_cache.json"
+
+        def _carregar_cache():
+            try:
+                c = json.loads(cache_p.read_text(encoding="utf-8"))
+                return {"models": c.get("models", []), "loaded": [],
+                        "roles": roles, "server_off": True,
+                        "cached_at": c.get("ts", "")}
+            except Exception:  # noqa: BLE001
+                return {"models": [], "loaded": [], "roles": roles,
+                        "server_off": True, "cached_at": ""}
+
         if cfg.mock:
             return jsonify({
                 "models": [
@@ -416,19 +438,29 @@ self.addEventListener("fetch", (e) => {
                     {"name": "hermes3:3b", "size_gb": 2.0, "modified": "—",
                      "current": cfg.model == "hermes3:3b"},
                 ],
-                "loaded": [],
-                "simulated": True,
+                "loaded": [], "simulated": True, "roles": roles,
+                "server_off": False,
             })
         client = OllamaManager(cfg).client
-        models = [
-            {
+        detalhes = client.model_details()
+        if not detalhes:
+            # servidor desligado ou sem resposta: cache da última listagem
+            return jsonify(_carregar_cache())
+        models = sorted(
+            [{
                 "name": m.get("name", "?"),
                 "size_gb": round((m.get("size") or 0) / 1e9, 1),
                 "modified": str(m.get("modified_at", ""))[:10],
                 "current": m.get("name") == cfg.model,
-            }
-            for m in client.model_details()
-        ]
+            } for m in detalhes],
+            key=lambda m: (not m["current"], m["name"].lower()))
+        try:  # guarda a lista boa para o próximo "servidor desligado"
+            cache_p.parent.mkdir(parents=True, exist_ok=True)
+            cache_p.write_text(json.dumps(
+                {"ts": time.strftime("%d/%m %H:%M"), "models": models},
+                ensure_ascii=False), encoding="utf-8")
+        except OSError:
+            pass
         loaded = [
             {
                 "name": m.get("name", "?"),
@@ -437,7 +469,8 @@ self.addEventListener("fetch", (e) => {
             }
             for m in client.ps()
         ]
-        return jsonify({"models": models, "loaded": loaded})
+        return jsonify({"models": models, "loaded": loaded, "roles": roles,
+                        "server_off": False, "cached_at": ""})
 
     @app.post("/api/ollama/pull")
     @protected

@@ -1550,6 +1550,45 @@ def _esperar(evs, pred, seg=25):
 
 
 @case
+def T75_aba_ollama_modelos_e_papeis():
+    """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
+    cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista
+    conhecida (cache) em vez de 'nenhum modelo'."""
+    cfg = fresh()
+    c = _app(cfg)
+    # modo real sem servidor: vazio + server_off (não 'nenhum instalado')
+    cfg.mock = False
+    d = c.get("/api/ollama/models").get_json()
+    assert d["server_off"] is True and d["models"] == []
+    assert d["roles"]["chat"] == cfg.model
+    # com cache: a lista conhecida volta, marcada como cache
+    cache = [{"name": "qwen3:8b", "size_gb": 5.2, "modified": "2026-10-01",
+              "current": False},
+             {"name": "qwen3-coder:8b", "size_gb": 5.0, "modified": "2026-09-20",
+              "current": False}]
+    (cfg.data_dir / "ollama_models_cache.json").write_text(
+        json.dumps({"ts": "19/10 03:00", "models": cache}), encoding="utf-8")
+    d = c.get("/api/ollama/models").get_json()
+    assert d["server_off"] is True and d["cached_at"] == "19/10 03:00"
+    assert [m["name"] for m in d["models"]] == ["qwen3:8b", "qwen3-coder:8b"]
+    # papéis refletem as settings (inclusive após atribuição via API)
+    assert c.post("/api/settings", json={"orchestrator_model": "qwen3:8b",
+                                         "executor_model": "qwen3-coder:8b"}).get_json()["ok"]
+    d = c.get("/api/ollama/models").get_json()
+    assert d["roles"]["orchestrator"] == "qwen3:8b"
+    assert d["roles"]["executor"] == "qwen3-coder:8b"
+    assert d["roles"]["reviewer"] == ""            # herda (vazio) do orquestrador
+    # modo demo segue listando (simulado) com papéis
+    cfg.mock = True
+    d = c.get("/api/ollama/models").get_json()
+    assert d["simulated"] and d["models"] and "roles" in d
+    # GUI: botões de papel e atribuição presentes
+    html = c.get("/").get_data(as_text=True)
+    assert "assignRole" in html and "ROLE_INFO" in html
+    assert "orchestrator_model" in html and "⚡" in html
+
+
+@case
 def T63_e2e_jornada_completa():
     """E2E: sessão nova → conversa → task com skill → selo → tudo persistido
     (conversa, task, goal por sessão) — a jornada real do operador."""

@@ -703,6 +703,12 @@ com opção de ✏️ editar o plano — e pausam de novo na entrega, onde o
 resultado pode ser editado antes de você receber. Tasks de leitura
 (listar, verificar, resumir) seguem direto. Desligável em Ajustes.
 
+**🧠 Aba Ollama (v3.9.0):** lista TODOS os modelos instalados (tamanho,
+data, ordenados com o em uso primeiro) com o PAPEL de cada um em chips —
+💬 chat · 🎯 orquestrador · 🔍 revisor · ⚡ executor. Atribua papéis com um
+clique nos botões (clicar de novo limpa). Com o servidor desligado, a
+aba mostra a última lista conhecida (cache) em vez de "nenhum modelo".
+
 **✦ Catálogo de skills (v3.8.0 — 18 ativas):** pesquisa-web ·
 resumo-inbox · app-prototyping · figma-design · ui-design-system ·
 **codigo-minimalista** (Ponytail) · **debug-sistematico** ·
