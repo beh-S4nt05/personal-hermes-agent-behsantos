@@ -384,3 +384,17 @@ hermes config set model hermes3:3b
 ---
 
 Feito com ◈ · [Ollama](https://ollama.com) · [Hermes 3 — Nous Research](https://ollama.com/library/hermes3) · Flask
+
+## 🗺 Versões e branches de fase
+
+O projeto evolui em fases — cada uma tem uma branch com o código do marco:
+
+| Branch | Fase |
+|---|---|
+| `v1.x` | 🖥 O agente de terminal (v1.1.0 → v1.5.0) |
+| `v2.x` | 🌐 GUI web + Claude Code (v2.0.0 → v2.2.8) |
+| `v3.0.x` | 🏗 A plataforma: auditoria, backups, skills (v3.0.x) |
+| `v3.1.x` | 📧 E-mail (OAuth 2FA) + agenda somente leitura (v3.1.x) |
+| `main` | 📱 GUI responsiva + PWA (v3.2.x →) |
+
+Detalhe versão a versão: [`docs/HISTORICO-DE-VERSOES.md`](docs/HISTORICO-DE-VERSOES.md) · tags de todas as releases na aba **Tags**.
