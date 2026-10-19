@@ -48,17 +48,35 @@ def _claude_env(cfg) -> dict:
     return env
 
 
+# Diretiva curta que substitui o prompt gigante do Claude Code no modo local
+# (medido: prompt padrão 5.780 chars -> ~300 com --bare + isto).
+CLAUDE_LIGHT_PROMPT = (
+    "Você é um agente rodando LOCALMENTE via Ollama. Responda em português "
+    "do Brasil. Seja direto: faça exatamente o que foi pedido usando poucas "
+    "ferramentas (Bash, Read, Write, Edit), execute de verdade e responda "
+    "com o resultado REAL — nunca invente dados nem gere exemplos/template."
+)
+
+
 def _claude_cmd(exe: str, cfg, prompt: str) -> list[str]:
     """Linha de comando do Claude Code (modo headless, stream JSON).
 
-    Via Ollama, o modelo padrão do Claude Code (claude-opus-*, da nuvem)
-    NÃO existe localmente — sem claude_model definido, usamos o mesmo
-    modelo do agente Hermes (que está instalado).
+    Via Ollama (modelos locais pequenos) usamos o MODO LEVE: --bare (prompt
+    mínimo em vez dos ~5,8k chars padrão que fazem modelos 7B delirar),
+    diretiva curta em PT, ferramentas essenciais liberadas e limite de
+    turnos. Sem claude_model definido, usamos o modelo do agente Hermes.
     """
     cmd = [exe, "-p", prompt, "--output-format", "stream-json", "--verbose"]
     model = str(getattr(cfg, "claude_model", "") or "").strip()
-    if not model and getattr(cfg, "claude_use_ollama", True):
-        model = str(getattr(cfg, "model", "") or "").strip()
+    if getattr(cfg, "claude_use_ollama", True):
+        if not model:
+            model = str(getattr(cfg, "model", "") or "").strip()
+        cmd += [
+            "--bare",                        # pula o prompt/agentes internos
+            "--max-turns", "4",              # sem viagens infinitas
+            "--append-system-prompt", CLAUDE_LIGHT_PROMPT,
+            "--allowedTools", "Bash", "Read", "Write", "Edit", "Glob", "Grep",
+        ]
     if model:
         cmd += ["--model", model]
     return cmd

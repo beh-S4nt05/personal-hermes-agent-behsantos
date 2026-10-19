@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.2.6 — Claude Code em modo leve (fim do "fora de si")
+
+- Via Ollama, a CLI `claude` agora roda com **`--bare` + diretiva curta em
+  português + ferramentas essenciais (Bash/Read/Write/Edit/Glob/Grep) +
+  limite de 4 turnos**. Medido com a CLI real: o prompt de sistema enviado ao
+  modelo cai de **5.780 para ~500 caracteres (11× menor)** — era isso que
+  fazia modelos 7B–8B delirarem com "templates de workflow".
+- Validação: E2E completo contra a CLI real (v2.1.301) com API Anthropic
+  simulada — eventos step/token/done e resposta final extraídos corretamente.
+- Recomendação mantida: `qwen2.5-coder:7b` no campo "modelo do Claude Code".
+
 ## v2.2.5 — fim do "JSON solto" (modelos pequenos)
 
 - **Modelo escreveu a chamada de ferramenta como texto e inventou os dados?**

@@ -176,6 +176,15 @@ Ollama** do agente Hermes: as variáveis (`ANTHROPIC_BASE_URL`,
 automaticamente em cada execução — **não é preciso exportar nada** no
 terminal onde o `hermes server` roda.
 
+**Modo leve (automático via Ollama)** — o prompt interno padrão do Claude
+Code tem ~5,8 mil caracteres e faz modelos locais 7B–8B delirarem (respostas
+com "templates" sem sentido). Por isso, via Ollama o Hermes lança a CLI em
+modo leve: `--bare` (prompt mínimo) + diretiva curta em português + ferramentas
+essenciais liberadas (Bash, Read, Write, Edit, Glob, Grep) + máximo de 4
+turnos. Medido: o prompt enviado ao modelo cai de 5.780 para ~500 caracteres
+(11× menor). Observação de segurança: os comandos Bash do Claude Code seguem
+as permissões DELE (a denylist do Hermes não se aplica a esse agente).
+
 Ajustes opcionais (aba ⚙ Ajustes ou `config.yaml`):
 
 | Chave | Padrão | Efeito |
@@ -562,7 +571,7 @@ agendamentos, configuração).
 | Modelo não encontrado | `ollama pull <modelo>` ou aba Ollama → Models |
 | Resposta lenta na 1ª msg | modelo carregando na memória (normal; aguarde o `ping`) |
 | Modelo respondeu com um JSON em vez de executar a ferramenta (ou "dados" errados) | corrigido na v2.2.5: o agente intercepta o JSON solto e executa a ferramenta REAL; se persistir, troque para um modelo melhor com ferramentas (`qwen2.5:3b`, `hermes3:8b`) — `llama3.2:3b` é rápido mas confunde o formato |
-| Claude Code gerando respostas sem sentido (templates, códigos soltos) | modelo local pequeno demais para o prompt do Claude Code — use `qwen2.5-coder:7b` (limite da faixa) ou prefira o agente Hermes para tarefas do sistema; o ideal do Claude Code (qwen3-coder:30b+) precisa de mais RAM |
+| Claude Code gerando respostas sem sentido (templates, códigos soltos) | v2.2.6: o modo leve (--bare, prompt 11× menor) é automático via Ollama; use um modelo coder no campo do Claude Code (`qwen2.5-coder:7b` é o teto da faixa ≤7B) e prefira o agente ◈ Hermes para tarefas do sistema — com 10 GB de RAM o Claude Code fica limitado |
 | **>100s para coisas simples** | modelo grande na CPU: rode `ollama ps` DURANTE uma resposta (PROCESSOR `100% CPU` → troque para um 3B); veja o tok/s no badge do chat (< 5 tok/s = pesado); confira `nvidia-smi` (GPU disponível/VRAM) e `free -h` (swap?) |
 | Claude Code "não encontrado" | instale com `curl -fsSL https://claude.ai/install.sh \| bash` (ou npm) e reinicie o `hermes server` |
 | Claude Code vazio/erro | já aponta para o Ollama por padrão; confira o `claude_model` (use um modelo instalado) ou, se usa a API real, desative `claude_use_ollama` |
