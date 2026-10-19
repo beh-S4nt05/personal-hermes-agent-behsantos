@@ -632,7 +632,15 @@ function renderSession(session){
   $("chatlog").innerHTML = "";
   (session.messages||[]).forEach(m=>{
     if (m.role === "user") bubble("user", esc(m.content), "");
-    else if (m.content) bubble("bot", miniMD(m.content), "");
+    else if (m.content){
+      const b = bubble("bot", miniMD(m.content), "");
+      if (m.dur != null){
+        const t = document.createElement("div");
+        t.className = "hint"; t.style.margin = "-8px 0 10px";
+        t.textContent = "⏱ " + m.dur + "s";
+        b.after(t);
+      }
+    }
   });
   scrollChat();
 }
@@ -700,8 +708,15 @@ async function sendChat(){
   $("chatlog").appendChild(load); scrollChat();
 
   const cursors = [];
-  const turns = { texts: [], tools: [], cur: null, loading: load };
+  const turns = { texts: [], tools: [], cur: null, loading: load, stats: null };
   let finalMsg = "", errorMsg = "", aborted = false;
+
+  // cronômetro ao vivo no "A trabalhar…"
+  const t0 = performance.now();
+  const tick = setInterval(()=>{
+    if (turns.loading)
+      turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar… <span class="hint">(' + ((performance.now()-t0)/1000).toFixed(0) + 's)</span>';
+  }, 1000);
 
   try{
     state.abort = new AbortController();
@@ -727,8 +742,19 @@ async function sendChat(){
     else { errorMsg = "falha de conexão: "+e.message; }
   }
   cursors.forEach(c=>c.remove());
+  clearInterval(tick);
   if (turns.loading){ turns.loading.remove(); turns.loading = null; }
   turns.texts.forEach(t=>{ if (t && t.textContent.trim()) t.innerHTML = miniMD(t.textContent); });
+  // badge com o tempo de geração (do servidor; fallback: cronômetro do navegador)
+  const lastText = [...turns.texts].reverse().find(t=>t && t.textContent.trim());
+  if (lastText){
+    const dur = turns.stats ? turns.stats.duration_s : ((performance.now()-t0)/1000).toFixed(1);
+    const extra = turns.stats ? " · " + turns.stats.tokens + " tokens · " + turns.stats.steps + " passo(s)" : "";
+    const badge = document.createElement("div");
+    badge.className = "hint"; badge.style.margin = "-8px 0 10px";
+    badge.textContent = "⏱ " + dur + "s" + extra;
+    lastText.after(badge);
+  }
   if (errorMsg && !finalMsg) bubble("bot", "⚠ "+esc(errorMsg), "waiting");
   if (aborted) bubble("bot", "⏹ geração interrompida — texto parcial preservado", "waiting");
   const said = turns.texts.some(t=>t && t.textContent.trim());
@@ -740,6 +766,7 @@ async function sendChat(){
 function stopChat(){ if (state.abort) state.abort.abort(); }
 function handleEvent(ev, turns, cursors){
   if (ev.type === "session"){ state.sessionId = ev.id; return; }  // sessão persistida
+  if (ev.type === "stats"){ turns.stats = ev; return; }           // tempo/tokens da resposta
   if (ev.type === "ping") return;  // keepalive do servidor enquanto a IA pensa
   if (ev.type === "step"){
     if (turns.loading)

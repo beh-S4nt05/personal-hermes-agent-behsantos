@@ -428,14 +428,25 @@ def create_app(cfg: Config) -> Flask:
 
         q: "queue.Queue[dict | None]" = queue.Queue()
         cancel = threading.Event()
-        result = {"final": ""}
+        result = {"final": "", "duration_s": None, "tokens": 0, "steps": 0}
+
+        def collect(e: dict) -> None:
+            """Publica eventos na fila e coleta estatísticas da geração."""
+            if cancel.is_set():
+                return
+            if e.get("type") == "token":
+                result["tokens"] += 1
+            elif e.get("type") == "step":
+                result["steps"] = max(result["steps"], int(e.get("step", 0)))
+            q.put(e)
 
         def worker():
             """A 'promise' da geração: roda em thread e publica eventos na fila."""
+            t0 = time.time()
             try:
                 result["final"] = agent.run(
                     clean_history + [{"role": "user", "content": message}],
-                    on_event=lambda e: None if cancel.is_set() else q.put(e),
+                    on_event=collect,
                     cancel=cancel,
                 )
             except Exception as exc:  # noqa: BLE001
@@ -443,6 +454,15 @@ def create_app(cfg: Config) -> Flask:
                     q.put({"type": "error",
                            "message": f"falha interna: {exc.__class__.__name__}: {exc}"})
             finally:
+                result["duration_s"] = round(time.time() - t0, 1)
+                # estatísticas da resposta (tempo, tokens, passos) para a GUI
+                if not cancel.is_set():
+                    q.put({
+                        "type": "stats",
+                        "duration_s": result["duration_s"],
+                        "tokens": result["tokens"],
+                        "steps": result["steps"],
+                    })
                 q.put(None)
 
         def generate():
@@ -472,10 +492,11 @@ def create_app(cfg: Config) -> Flask:
                 raise
             finally:
                 cancel.set()  # nunca deixa thread órfã gerando sozinha
-                # persiste a resposta (mesmo parcial) na sessão
+                # persiste a resposta (mesmo parcial) na sessão, com o tempo
                 try:
                     if result["final"]:
-                        store.append(session_id, "assistant", result["final"])
+                        store.append(session_id, "assistant", result["final"],
+                                     dur=result["duration_s"])
                 except OSError:
                     pass
 

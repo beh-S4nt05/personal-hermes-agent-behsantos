@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.3.1 — tempo de geração da resposta
+
+- **⏱ badge de tempo** sob cada resposta: `⏱ 4.2s · 87 tokens · 2 passo(s)`
+  (medido no servidor; fallback com cronômetro do navegador).
+- **Cronômetro ao vivo** no "A trabalhar… (7s)" enquanto a IA gera.
+- O tempo fica **gravado na conversa** — conversas reabertas do histórico
+  mostram o tempo de cada resposta.
+
 ## v1.3.0 — memória de conversas (histórico + zerar + restauração)
 
 - **Conversas persistidas em sessões** (`conversations/sessions/`): toda troca

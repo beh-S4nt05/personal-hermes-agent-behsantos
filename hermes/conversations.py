@@ -65,12 +65,15 @@ class ConversationStore:
             pass
         return None
 
-    def append(self, session_id: str, role: str, content: str) -> dict | None:
+    def append(self, session_id: str, role: str, content: str, dur: float | None = None) -> dict | None:
         """Adiciona uma mensagem à sessão (cria o arquivo se preciso)."""
         session = self.load(session_id)
         if session is None:
             return None
-        session["messages"].append({"role": role, "content": content or ""})
+        msg: dict = {"role": role, "content": content or ""}
+        if dur is not None:
+            msg["dur"] = dur  # tempo de geração (s) — exibido no histórico
+        session["messages"].append(msg)
         if not session["title"] and role == "user":
             session["title"] = (content or "").strip().splitlines()[0][:70] or "conversa"
         self.save(session)
