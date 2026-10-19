@@ -108,6 +108,7 @@ class OllamaClient:
         tools: list[dict] | None = None,
         options: dict | None = None,
         cancel=None,
+        keep_alive: str | int | None = None,
     ) -> Iterator[dict]:
         """Gera chunks no formato da API /api/chat (stream=true).
 
@@ -120,6 +121,8 @@ class OllamaClient:
             payload["tools"] = tools
         if options:
             payload["options"] = options
+        if keep_alive is not None:
+            payload["keep_alive"] = keep_alive  # ex.: "30m" evita descarregar
 
         r = None
         for attempt in range(3):
@@ -232,7 +235,8 @@ class MockOllamaClient:
         return ["hermes3:8b", "hermes3:3b"]
 
     # ------------------------------------------------------------- chat
-    def chat_stream(self, model, messages, tools=None, options=None, cancel=None):
+    def chat_stream(self, model, messages, tools=None, options=None, cancel=None,
+                    keep_alive=None):
         msg = self._fake_message(messages, tools)
         if msg.get("tool_calls"):
             yield {"message": msg, "done": True, "done_reason": "stop"}

@@ -373,6 +373,35 @@ quando precisar).
 
 CLI: `hermes models` (listar), `hermes ollama start|stop|status|test|pull <modelo>`, `hermes doctor` (diagnóstico).
 
+### ⚡ Deixando as respostas mais rápidas (sem trocar de modelo)
+
+1. **keep_alive** (⚙ Ajustes → "manter modelo carregado", padrão `30m`): sem
+   isso o Ollama descarrega o modelo ~5 min após o uso e a próxima mensagem
+   paga o carregamento de novo (vários segundos). Use `1h` ou `-1` (sempre)
+   se sobrar RAM — agora todo pedido do agente já envia esse valor.
+2. **num_predict** (⚙ Ajustes, `0` = sem limite): `512`–`768` tokens deixam as
+   respostas mais concisas e chegam bem antes.
+3. **Modelo certo para cada tarefa**: um 3B (`llama3.2:3b`, `hermes3:3b`,
+   `qwen2.5:3b` ≈ 2 GB) responde em cerca de metade do tempo de um 8B, com
+   qualidade suficiente para o dia a dia; deixe o 8B para tarefas difíceis.
+   Evite modelos "pensantes" (`deepseek-r1`) quando velocidade importa — a
+   cadeia de raciocínio multiplica o tempo de geração.
+4. **num_ctx menor**: `4096` em vez de `8192` acelera o pré-processamento do
+   prompt (se os prompts do agente couberem).
+5. **GPU**: com GPU NVIDIA o Ollama usa automaticamente — confira com
+   `ollama ps` durante uma geração (coluna *PROCESSOR*: `100% GPU`). Um 3B
+   inteiro na VRAM responde quase instantaneamente; `nvidia-smi` mostra a
+   VRAM disponível.
+6. **Aceleração extra do serviço** (opcional):
+
+   ```bash
+   sudo systemctl edit ollama
+   #    [Service]
+   #    Environment="OLLAMA_FLASH_ATTENTION=1"
+   #    Environment="OLLAMA_KV_CACHE_TYPE=q8_0"
+   sudo systemctl restart ollama
+   ```
+
 ## 12. API REST (referência completa)
 
 Autenticação: se `auth_token` estiver definido, envie header
@@ -458,6 +487,8 @@ ambiente: `HERMES_DATA_DIR` (pasta de dados) e `HERMES_MOCK=1` (demo).
 | `host` / `port` | 127.0.0.1 / 8080 | onde a GUI escuta |
 | `auth_token` | vazio | senha da GUI (use se abrir para a rede) |
 | `max_steps` | 8 | ciclos modelo→ferramenta por tarefa |
+| `keep_alive` | 30m | mantém o modelo na RAM entre mensagens (anti cold-start) |
+| `num_predict` | 0 | máx. tokens por resposta (0 = sem limite; 512–768 = mais rápido) |
 | `cmd_timeout` | 60 | teto (s) por comando shell |
 | `sandbox` | true | arquivos restritos ao workspace |
 | `confirm_dangerous` | true | confirmação no terminal p/ comandos arriscados |

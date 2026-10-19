@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 APP_NAME = "hermes-agent"
-VERSION = "2.2.0"
+VERSION = "2.2.1"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
@@ -39,6 +39,8 @@ DEFAULTS = {
     "auth_token": "",            # vazio = sem senha (use apenas em localhost!)
     # Agente
     "max_steps": 8,              # máx. de ciclos modelo -> ferramenta por tarefa
+    "num_predict": 0,            # máx. tokens por resposta (0 = sem limite)
+    "keep_alive": "30m",         # mantém o modelo na RAM entre mensagens (evita cold start)
     "cmd_timeout": 60,           # timeout (s) de cada comando shell
     "sandbox": True,             # restringe leitura/escrita de arquivos ao workspace
     "confirm_dangerous": True,   # pede confirmação no terminal para comandos arriscados
@@ -50,10 +52,10 @@ DEFAULTS = {
     "skills_disabled": [],       # nomes de skills desabilitadas pela GUI
 }
 
-_INT_KEYS = {"max_steps", "cmd_timeout", "port", "num_ctx"}
+_INT_KEYS = {"max_steps", "cmd_timeout", "port", "num_ctx", "num_predict"}
 _FLOAT_KEYS = {"temperature"}
 _BOOL_KEYS = {"sandbox", "confirm_dangerous", "auto_start_ollama", "claude_use_ollama", "web_access", "stt_autosend"}
-_STR_KEYS = {"ollama_url", "model", "host", "auth_token", "system_prompt_extra", "claude_model", "stt_model", "stt_language"}
+_STR_KEYS = {"ollama_url", "model", "host", "auth_token", "system_prompt_extra", "claude_model", "stt_model", "stt_language", "keep_alive"}
 
 
 def _env_flag(name: str) -> bool:

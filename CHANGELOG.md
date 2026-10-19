@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.2.1 — respostas mais rápidas (keep_alive + num_predict)
+
+- **keep_alive** (padrão `30m`): todo pedido ao Ollama agora pede para manter
+  o modelo carregado — acabou o "primeiro token demorado" depois de uma
+  pausa. Ajustável em ⚙ Ajustes (`1h`, `-1` = sempre).
+- **num_predict** (padrão `0` = sem limite): limite opcional de tokens por
+  resposta (512–768 = respostas mais rápidas e diretas), também em Ajustes.
+- docs.md ganhou a seção **"⚡ Deixando as respostas mais rápidas"** com as 6
+  alavancas (modelo 3B no dia a dia, num_ctx, GPU, flash attention etc.).
+
 ## v2.2.0 — ditado por voz (🎤 Whisper local)
 
 - **Botão 🎤 no chat**: grave sua voz pelo microfone e o **Whisper local**

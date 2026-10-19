@@ -203,12 +203,19 @@ class Agent:
             calls: list[dict] = []
             cancelled = False
             try:
+                gen_options = {"num_ctx": cfg.num_ctx,
+                               "temperature": cfg.temperature}
+                # respostas mais rápidas: limite de tokens (0 = sem limite)
+                num_predict = int(getattr(cfg, "num_predict", 0) or 0)
+                if num_predict > 0:
+                    gen_options["num_predict"] = num_predict
                 for chunk in self.client.chat_stream(
                     cfg.model,
                     msgs,
                     tools=tools,
-                    options={"num_ctx": cfg.num_ctx, "temperature": cfg.temperature},
+                    options=gen_options,
                     cancel=cancel,
+                    keep_alive=getattr(cfg, "keep_alive", "30m"),
                 ):
                     m = chunk.get("message") or {}
                     token = m.get("content") or ""

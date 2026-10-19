@@ -950,7 +950,7 @@ def create_app(cfg: Config) -> Flask:
         allowed = {"model", "system_prompt_extra", "max_steps", "num_ctx",
                    "cmd_timeout", "sandbox", "confirm_dangerous", "temperature", "auth_token",
                    "ollama_url", "auto_start_ollama", "claude_use_ollama", "claude_model", "web_access",
-                   "stt_model", "stt_language", "stt_autosend"}
+                   "stt_model", "stt_language", "stt_autosend", "keep_alive", "num_predict"}
         changes = {k: v for k, v in payload.items() if k in allowed}
         if not changes:
             return jsonify({"ok": False, "msg": "nada para alterar"}), 400
@@ -968,6 +968,12 @@ def create_app(cfg: Config) -> Flask:
                 return jsonify({"ok": False,
                                 "msg": "endereço inválido — use http://host:porta"}), 400
             changes["ollama_url"] = url
+        if "keep_alive" in changes:
+            ka = str(changes["keep_alive"]).strip() or "30m"
+            if not re.fullmatch(r"-1|\d+(ms|s|m|h)?", ka):
+                return jsonify({"ok": False,
+                                "msg": "keep_alive inválido — use: 30m, 1h, 10s, -1 (sempre) ou segundos"}), 400
+            changes["keep_alive"] = ka
         if "stt_model" in changes:
             from ..stt import STT_MODELS
             if str(changes["stt_model"]) not in STT_MODELS:

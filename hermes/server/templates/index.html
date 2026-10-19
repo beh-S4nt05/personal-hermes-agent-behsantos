@@ -520,6 +520,12 @@
         <div class="field"><label>máx. passos do agente</label><input type="number" id="s-max_steps" min="1" max="64"></div>
         <div class="field"><label>contexto (num_ctx)</label><input type="number" id="s-num_ctx" min="2048" step="1024"></div>
         <div class="field"><label>timeout de comando (s)</label><input type="number" id="s-cmd_timeout" min="5" max="600"></div>
+        <div class="field"><label>⚡ manter modelo carregado (keep_alive)</label>
+          <input type="text" id="s-keep_alive" placeholder="30m">
+          <span class="hint">evita recarregar o modelo a cada pausa · 30m, 1h ou -1 (sempre)</span></div>
+        <div class="field"><label>⚡ máx. tokens por resposta (0 = sem limite)</label>
+          <input type="number" id="s-num_predict" min="0" step="64">
+          <span class="hint">512–768 deixam as respostas mais rápidas</span></div>
         <div class="field"><label>temperatura</label><input type="number" id="s-temperature" min="0" max="2" step="0.1"></div>
         <div class="field"><label>token de acesso (senha da GUI/API)</label>
           <input type="password" id="s-auth_token" placeholder="(vazio = sem senha)">
@@ -1368,6 +1374,7 @@ async function loadSettings(){
     $("s-web_access").checked = !!s.web_access;
     $("s-stt_model").value = s.stt_model || "base"; $("s-stt_language").value = s.stt_language || "pt";
     $("s-stt_autosend").checked = !!s.stt_autosend; window.STT_AUTOSEND = !!s.stt_autosend;
+    $("s-keep_alive").value = s.keep_alive || "30m"; $("s-num_predict").value = s.num_predict ?? 0;
     const dl = $("modellist"); dl.innerHTML = "";
     ((state.status&&state.status.ollama.models)||[]).forEach(m=>{
       const o = document.createElement("option"); o.value = m; dl.appendChild(o);
@@ -1386,6 +1393,7 @@ async function saveSettings(){
     web_access: $("s-web_access").checked,
     stt_model: $("s-stt_model").value, stt_language: $("s-stt_language").value.trim(),
     stt_autosend: $("s-stt_autosend").checked,
+    keep_alive: $("s-keep_alive").value.trim() || "30m", num_predict: +$("s-num_predict").value || 0,
   };
   const r = await api("/api/settings", {method:"POST", body: JSON.stringify(body)});
   const j = await r.json().catch(()=>({msg:"sem resposta"}));
