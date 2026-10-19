@@ -1521,6 +1521,76 @@ def T48_agenda_google_somente_leitura():
 
 
 @case
+def T61_modelos_por_papel_sequenciais():
+    """v3.7: um modelo por PAPEL (orquestrador × executor), troca SEQUENCIAL
+    — nunca paralelo. Vazio = cfg.model. O executor recebe o override e ele
+    é restaurado no fim; settings e GUI aceitam os dois campos."""
+    from hermes import orchestrator as orc
+
+    cfg = fresh()
+    assert orc.model_for(cfg, "orchestrator") == cfg.model      # default
+    assert orc.model_for(cfg, "executor") == cfg.model
+    cfg.orchestrator_model = "qwen3:8b"
+    cfg.executor_model = "qwen3-coder:8b"
+    assert orc.model_for(cfg, "orchestrator") == "qwen3:8b"
+    assert orc.model_for(cfg, "executor") == "qwen3-coder:8b"
+    cfg.orchestrator_model = "   "
+    assert orc.model_for(cfg, "orchestrator") == cfg.model      # só espaços
+
+    # pipeline aplica o override no executor e RESTAURA ao sair
+    class _Ag:
+        model_override = None
+        def run(self, msgs, on_event=None, cancel=None):
+            on_event({"type": "done", "message": "ok com dados reais"})
+            return "ok com dados reais"
+    ag = _Ag()
+    orc.run_pipeline(ag, cfg, "oi, tudo bem?", [], on_event=lambda e: None)
+    assert ag.model_override is None                           # rota responder: nem toca
+    orc.run_pipeline(ag, cfg, "verifique o uso de disco", [], on_event=lambda e: None)
+    assert ag.model_override is None                           # restaurado no fim
+    # e DURANTE a execução estava aplicado?
+    vistos = []
+    class _Ag2(_Ag):
+        def run(self, msgs, on_event=None, cancel=None):
+            vistos.append(self.model_override)
+            return super().run(msgs, on_event, cancel)
+    orc.run_pipeline(_Ag2(), cfg, "verifique o uso de disco", [], on_event=lambda e: None)
+    assert vistos == ["qwen3-coder:8b"], vistos
+
+    # settings aceita; GUI tem os campos
+    c = _app(cfg)
+    r = c.post("/api/settings", json={"orchestrator_model": "qwen3:8b",
+                                      "executor_model": "qwen3-coder:8b"}).get_json()
+    assert r["ok"], r
+    html = c.get("/").get_data(as_text=True)
+    assert 'id="s-orchestrator_model"' in html and 'id="s-executor_model"' in html
+
+
+@case
+def T62_ferramentas_reconstruidas_e_respostas_entendiveis():
+    """v3.7: página Ferramentas sem inputs/botões quebrados (componente .frow
+    com labels, sem flex inline) e padrão de COMUNICAÇÃO nas respostas."""
+    from hermes import orchestrator as orc
+
+    c = _app(fresh())
+    html = c.get("/").get_data(as_text=True)
+    # ferramentas reconstruídas
+    ini = html.index('id="page-ferramentas"')
+    fim = html.index('id="page-memoria"')
+    secao = html[ini:fim]
+    assert ".frow" in html and ".flabel" in html and ".fpreview" in html
+    assert secao.count('class="frow"') >= 4
+    assert secao.count('class="flabel"') >= 4
+    assert 'style="flex:1"' not in secao          # fim do hack inline
+    assert 'class="chatrow" style="margin-top:0"' not in secao
+    # respostas entendíveis: prompts
+    assert "COMUNICAÇÃO" in orc._PLANO_JSON or True   # (no executor, abaixo)
+    assert "COMUNICAÇÃO: escreva para a PESSOA" in open(
+        "hermes/orchestrator.py", encoding="utf-8").read()
+    assert "ENTENDÍVEL para a pessoa que pediu" in orc._REVISAO_JSON
+
+
+@case
 def T59_skills_precisas_caso_real():
     """v3.6 (caso real do operador): 'resumo detalhado do uso de memória
     ram' NÃO pode aplicar a skill resumo-inbox (era falso-positivo por

@@ -330,7 +330,7 @@ class Agent:
                 if num_predict > 0:
                     gen_options["num_predict"] = num_predict
                 for chunk in self.client.chat_stream(
-                    cfg.model,
+                    getattr(self, "model_override", None) or cfg.model,
                     msgs,
                     tools=tools,
                     options=gen_options,

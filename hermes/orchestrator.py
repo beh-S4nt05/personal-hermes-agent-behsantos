@@ -69,7 +69,8 @@ _PLANO_JSON = (
     "(ex.: 'executar free -h', 'ps aux --sort=-%mem | head -15') — nunca "
     "'verificar X' sem dizer como;\n"
     "- critérios VERIFICÁVEIS na resposta (ex.: 'a saída real do comando "
-    "aparece', 'o caminho do arquivo criado aparece');\n"
+    "aparece', 'o caminho do arquivo criado aparece', 'a resposta explica "
+    "o que os dados significam');\n"
     "Exemplos:\n"
     '"me conta uma piada" → {"rota":"responder"}\n'
     '"como funciona o DNS?" → {"rota":"responder"}\n'
@@ -99,7 +100,9 @@ _REVISAO_JSON = (
     "arquivo/e-mail/agenda), ou só conversa e promessas?\n"
     "3. PROIBIÇÕES — pediu ao usuário para executar/verificar algo? (falha "
     "grave) · inventou dados? · ficou no 'vou fazer'?\n"
-    "4. ENTREGA — claro, direto, em português, com o resultado visível?\n"
+    "4. ENTREGA — claro, direto, em português, com o resultado visível e "
+    "ENTENDÍVEL para a pessoa que pediu (explica o que os dados significam, "
+    "não só cola saída crua)?\n"
     "DISCIPLINA DO VETERANO: julgue APENAS pelo OBJETIVO e pelos CRITÉRIOS "
     "dados — NÃO invente critérios novos nem exija o que não foi pedido; "
     "perguntas de cortesia no fim da resposta ('precisa de algo mais?') NÃO "
@@ -123,6 +126,14 @@ def tasks_path(cfg) -> Path:
     return cfg.data_dir / "orchestrator_tasks.jsonl"
 
 
+def model_for(cfg, role: str) -> str:
+    """Modelo de um PAPEL (orquestrador/executor). Vazio = cfg.model.
+    Um modelo por vez: o pipeline é SEQUENCIAL — o Ollama carrega cada
+    modelo sob demanda (swap de alguns segundos), nunca dois em paralelo
+    (RAM/VRAM não permite em máquina local)."""
+    return str(getattr(cfg, f"{role}_model", "") or "").strip() or str(cfg.model)
+
+
 def _fast(cfg, system: str, user: str, ntok: int = 200,
           stage: str = "chamada") -> str:
     """Chamada rápida e curta ao modelo (orquestrador/revisor). Nunca lança;
@@ -134,7 +145,7 @@ def _fast(cfg, system: str, user: str, ntok: int = 200,
         client = get_client(cfg)
         out = []
         for chunk in client.chat_stream(
-                cfg.model,
+                model_for(cfg, "orchestrator"),
                 [{"role": "system", "content": system},
                  {"role": "user", "content": user[:1800]}],
                 options={"num_predict": ntok, "temperature": 0}):
@@ -458,7 +469,6 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     TRACE.clear()
     goal_txt = (f"\n[🎯 OBJETIVO DA SESSÃO definido pelo operador: {goal}]"
                 if goal else "")
-
     plano = plan(cfg, message, history)
     ev({"type": "brain", "stage": "🎯 orquestrador",
         "data": {"decisao": plano, "chamadas": list(TRACE)}})
@@ -501,7 +511,11 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
         pt += ("\nPadrão de qualidade: complete a tarefa até o fim na "
                "PRIMEIRA tentativa; a resposta deve trazer a EVIDÊNCIA real "
                "(saídas de comandos, conteúdos lidos) e nunca pedir ao "
-               "usuário para executar ou verificar algo.")
+               "usuário para executar ou verificar algo.\n"
+               "COMUNICAÇÃO: escreva para a PESSOA que pediu — explique o "
+               "que os dados SIGNIFICAM em português claro (ex.: 'a memória "
+               "está 41% em uso, sobra 9 GB — saudável'), sem jargão e sem "
+               "colar saída crua sem explicação.")
         return pt + goal_txt + skills_txt
 
     # ── 🔒 portão 1: aprovação do PLANO (só tarefas de criação) ──
@@ -552,13 +566,30 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
             return
         ev(e)
 
+    def _run_executor(msgs: list[dict]) -> str:
+        """Roda o executor com o MODELO DO PAPEL (v3.7) — aplica o override
+        e SEMPRE restaura (try/finally), em qualquer saída."""
+        aplicou = False
+        try:
+            _exec_model = model_for(cfg, "executor")
+            if _exec_model != str(cfg.model):
+                agent.model_override = _exec_model   # type: ignore[attr-defined]
+                aplicou = True
+            return agent.run(msgs, on_event=_ev_exec, cancel=cancel)
+        finally:
+            if aplicou:
+                try:
+                    agent.model_override = None      # type: ignore[attr-defined]
+                except Exception:  # noqa: BLE001
+                    pass
+
     def _ciclo(msgs: list[dict], max_t: int) -> tuple[str, str, str, int]:
         resultado, verd, prob, tent = "", "ok", "", 0
         for tentativa in range(1, max_t + 1):
             if _cancelado():
                 break
             tent = tentativa
-            resultado = agent.run(msgs, on_event=_ev_exec, cancel=cancel)
+            resultado = _run_executor(msgs)
             if _cancelado():
                 break
             ver = review(cfg, objetivo, criterios, resultado)

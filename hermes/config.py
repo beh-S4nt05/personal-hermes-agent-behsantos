@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 APP_NAME = "hermes-agent"
-VERSION = "3.6.0"
+VERSION = "3.7.0"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
@@ -35,6 +35,8 @@ DEFAULTS = {
     "orchestrator_on": True,        # 🎯 conversa → plano → task → revisão
     "reviewer_on": True,            # 🔍 revisar o resultado antes de entregar
     "creation_approval": True,      # 🔒 criação exige aprovação do operador
+    "orchestrator_model": "",       # 🎯 modelo do orquestrador/revisor (vazio = cfg.model)
+    "executor_model": "",           # ⚡ modelo do executor (vazio = cfg.model)
     "claude_model": "",            # modelo p/ o Claude Code (vazio = padrão dele)
     # Servidor web (GUI)
     "host": "127.0.0.1",

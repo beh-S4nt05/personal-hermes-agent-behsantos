@@ -703,6 +703,15 @@ com opção de ✏️ editar o plano — e pausam de novo na entrega, onde o
 resultado pode ser editado antes de você receber. Tasks de leitura
 (listar, verificar, resumir) seguem direto. Desligável em Ajustes.
 
+**🎭 Modelos por papel (v3.7.0):** em Ajustes, defina um modelo para o
+🎯 orquestrador/revisor (raciocínio — ex.: `qwen3:8b`, `gemma3:12b`) e
+outro para o ⚡ executor (ferramentas — ex.: `qwen3-coder:8b`,
+`llama3.1:8b`). Vazio = o modelo padrão. **Por que não em paralelo:**
+as etapas do pipeline dependem umas das outras (planejar → executar →
+revisar) e dois modelos 8B juntos não cabem em RAM/VRAM local — a troca
+sequencial do Ollama custa só alguns segundos e dá o mesmo resultado.
+Instale com `ollama pull qwen3:8b` etc. e aponte nos Ajustes.
+
 **🛠 Lições da bateria real (v3.6.0):** revisor ancorado nos critérios
 (não inventa motivo para reprovar), skills só casam por termos
 distintivos (fim do falso-positivo "resumo-inbox" em pedido de RAM),

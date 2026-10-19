@@ -1260,6 +1260,7 @@ self.addEventListener("fetch", (e) => {
                    "ollama_url", "auto_start_ollama", "claude_use_ollama", "claude_model", "web_access",
                    "stt_model", "stt_language", "stt_autosend", "keep_alive", "num_predict",
                    "orchestrator_on", "reviewer_on", "creation_approval",
+                   "orchestrator_model", "executor_model",
                    "max_tool_calls", "backups_keep", "mcp_autorestart", "tool_selector",
                    "memory_top_k"}
         changes = {k: v for k, v in payload.items() if k in allowed}

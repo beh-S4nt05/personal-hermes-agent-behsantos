@@ -267,6 +267,16 @@
   .sysnote{align-self:center;text-align:center;color:var(--dim);font-size:11.5px;
     border:1px dashed var(--border2);border-radius:99px;padding:4px 14px;
     margin:4px 0;max-width:94%;word-break:break-word}
+  /* ═══════════════ v3.7 — formulários das ferramentas (fim do quebrado) ═══ */
+  .frow{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-top:8px}
+  .frow input,.frow select{flex:1 1 220px;min-width:0;width:auto}
+  .frow .b{flex:0 0 auto}
+  .flabel{display:block;font-size:11.5px;color:var(--dim);margin:12px 0 0}
+  .fpreview{background:#05070c;border:1px solid var(--border);border-radius:10px;
+    padding:12px;font-size:12px;max-height:300px;overflow:auto;white-space:pre-wrap;
+    margin-top:12px;display:none}
+  .fpreview.show{display:block}
+
   /* ═══ v3.4 — comandos, aprovação, por baixo dos panos ═══ */
   .syscmd{align-self:stretch;border:1px solid var(--border2);border-radius:12px;
     background:linear-gradient(180deg,var(--panel),var(--bg2));padding:12px 14px;
@@ -681,23 +691,28 @@
     <div class="grid">
       <div class="card">
         <h3><span class="ic">⌨</span> Terminal rápido <span class="hint" style="margin-left:auto">mesma segurança do agente</span></h3>
-        <div class="chatrow" style="margin-top:0">
-          <input type="text" id="tool-cmd" placeholder="ex.: df -h · free -h · ls -la" style="flex:1" onkeydown="if(event.key==='Enter')toolRun()">
+        <label class="flabel" for="tool-cmd">comando</label>
+        <div class="frow">
+          <input type="text" id="tool-cmd" placeholder="ex.: df -h · free -h · ls -la" onkeydown="if(event.key==='Enter')toolRun()">
           <button class="b primary" onclick="toolRun()">▶ executar</button>
+        </div>
+        <div class="factions" style="margin-top:8px">
           <button class="b ghost" onclick="toolSysInfo()">🖥 info do sistema</button>
         </div>
-        <pre id="tool-out" style="display:none;background:#05070c;border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;max-height:300px;overflow:auto;white-space:pre-wrap;margin-top:12px"></pre>
+        <pre id="tool-out" class="fpreview"></pre>
       </div>
       <div class="card">
         <h3><span class="ic">🗂</span> Arquivos do workspace</h3>
-        <div class="chatrow" style="margin-top:0">
-          <input type="text" id="tool-path" placeholder="caminho (ex.: . ou notas.txt)" style="flex:1" onkeydown="if(event.key==='Enter')toolList()">
+        <label class="flabel" for="tool-path">caminho</label>
+        <div class="frow">
+          <input type="text" id="tool-path" placeholder="ex.: . ou notas.txt" onkeydown="if(event.key==='Enter')toolList()">
           <button class="b" onclick="toolList()">📂 listar</button>
           <button class="b ghost" onclick="toolRead()">📄 ler</button>
         </div>
         <div id="tool-files" style="margin-top:10px"></div>
-        <textarea id="tool-filecontent" placeholder="conteúdo do arquivo — clique em 📄 ler para abrir, edite e use 💾 gravar" style="width:100%;margin-top:10px"></textarea>
-        <div class="btnrow" style="margin-top:8px">
+        <label class="flabel" for="tool-filecontent">conteúdo (edite e grave)</label>
+        <textarea id="tool-filecontent" rows="8" placeholder="clique em 📄 ler para abrir o arquivo aqui, edite e use 💾 gravar"></textarea>
+        <div class="factions">
           <button class="b primary" onclick="toolWrite()">💾 gravar arquivo</button>
           <span class="hint" id="tool-filemsg"></span>
         </div>
@@ -705,16 +720,18 @@
 
       <div class="card">
         <h3><span class="ic">🌐</span> Web <span class="hint" style="margin-left:auto">busca + leitura de páginas</span></h3>
-        <div class="chatrow" style="margin-top:0">
-          <input type="text" id="web-q" placeholder="pesquisar — ex.: previsão do tempo em Manaus" style="flex:1" onkeydown="if(event.key==='Enter')webSearch()">
+        <label class="flabel" for="web-q">pesquisar</label>
+        <div class="frow">
+          <input type="text" id="web-q" placeholder="ex.: previsão do tempo em Manaus" onkeydown="if(event.key==='Enter')webSearch()">
           <button class="b primary" onclick="webSearch()">🔍 buscar</button>
         </div>
-        <div class="chatrow">
-          <input type="text" id="web-url" placeholder="abrir página — https://…" style="flex:1" onkeydown="if(event.key==='Enter')webFetch()">
+        <label class="flabel" for="web-url">abrir página</label>
+        <div class="frow">
+          <input type="text" id="web-url" placeholder="https://…" onkeydown="if(event.key==='Enter')webFetch()">
           <button class="b" onclick="webFetch()">📄 abrir</button>
         </div>
-        <div class="hint" style="margin-top:6px">O agente usa as mesmas ferramentas (web_search / web_fetch) no chat — e cita as fontes.</div>
-        <pre id="web-out" style="display:none;background:#05070c;border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;max-height:340px;overflow:auto;white-space:pre-wrap;margin-top:10px"></pre>
+        <div class="hint" style="margin-top:10px">O agente usa as mesmas ferramentas (web_search / web_fetch) no chat — e cita as fontes.</div>
+        <pre id="web-out" class="fpreview" style="max-height:340px"></pre>
       </div>
     </div>
     <div class="card" style="margin-top:16px">
@@ -812,6 +829,12 @@
           <input type="text" id="s-stt_language" placeholder="pt (vazio = detectar)">
         </div>
         <div class="field"><div class="check"><input type="checkbox" id="s-stt_autosend"><label for="s-stt_autosend" style="color:var(--txt)">🎤 enviar automaticamente após ditar</label></div></div>
+        <div class="field"><label>🎯 modelo do orquestrador/revisor <span class="hint">(vazio = o mesmo do agente)</span></label>
+          <input type="text" id="s-orchestrator_model" list="modellist" placeholder="ex.: qwen3:8b · gemma3:12b">
+          <span class="hint">pensa o plano e cobra a revisão — forte em raciocínio/instrução</span></div>
+        <div class="field"><label>⚡ modelo do executor <span class="hint">(vazio = o mesmo do agente)</span></label>
+          <input type="text" id="s-executor_model" list="modellist" placeholder="ex.: qwen3-coder:8b · llama3.1:8b">
+          <span class="hint">roda as ferramentas — forte em function calling. Um modelo por vez: troca sequencial (nada em paralelo)</span></div>
         <div class="field"><label>🔌 modelo do Claude Code (vazio = padrão dele)</label>
           <input type="text" id="s-claude_model" list="modellist" placeholder="ex.: qwen3-coder · hermes3:8b">
           <span class="hint">vazio = o mesmo modelo do Hermes · só funciona com modelos instalados no Ollama</span></div>
@@ -1923,7 +1946,9 @@ async function loadSettings(){
     $("s-claude_use_ollama").checked = !!s.claude_use_ollama;
     $("s-orchestrator_on").checked = s.orchestrator_on !== false;
     $("s-reviewer_on").checked = s.reviewer_on !== false;
-    $("s-creation_approval").checked = s.creation_approval !== false; $("s-claude_model").value = s.claude_model || "";
+    $("s-creation_approval").checked = s.creation_approval !== false;
+    $("s-orchestrator_model").value = s.orchestrator_model || "";
+    $("s-executor_model").value = s.executor_model || ""; $("s-claude_model").value = s.claude_model || "";
     $("s-web_access").checked = !!s.web_access;
     $("s-stt_model").value = s.stt_model || "base"; $("s-stt_language").value = s.stt_language || "pt";
     $("s-stt_autosend").checked = !!s.stt_autosend; window.STT_AUTOSEND = !!s.stt_autosend;
@@ -1944,6 +1969,7 @@ async function saveSettings(){
     sandbox: $("s-sandbox").checked, confirm_dangerous: $("s-confirm_dangerous").checked,
     claude_use_ollama: $("s-claude_use_ollama").checked, claude_model: $("s-claude_model").value.trim(),
     orchestrator_on: $("s-orchestrator_on").checked, reviewer_on: $("s-reviewer_on").checked,
+    orchestrator_model: $("s-orchestrator_model").value.trim(), executor_model: $("s-executor_model").value.trim(),
     creation_approval: $("s-creation_approval").checked,
     web_access: $("s-web_access").checked,
     stt_model: $("s-stt_model").value, stt_language: $("s-stt_language").value.trim(),

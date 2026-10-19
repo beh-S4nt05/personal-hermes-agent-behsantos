@@ -1,5 +1,38 @@
 # Changelog
 
+## v3.7.0 — 🎭 modelos por papel (sem paralelismo) · 🗨 respostas entendíveis · 🧰 Ferramentas reconstruídas
+
+Três pedidos do operador:
+
+**🎭 Um modelo para pensar, outro para executar — SEM rodar em paralelo.**
+Decisão de arquitetura: o pipeline é SEQUENCIAL por natureza (planejar →
+executar → revisar), então cada PAPEL usa seu modelo, um carregado por
+vez — o Ollama faz a troca sozinha (~2-5 s por swap). Paralelo não cabe
+no hardware local (dois modelos 8B ≈ 12 GB de VRAM/RAM) e não traria
+ganho: as etapas dependem umas das outras. Novos campos em Ajustes:
+- 🎯 **modelo do orquestrador/revisor** — raciocínio e instrução
+  (sugestões: qwen3:8b, gemma3:12b);
+- ⚡ **modelo do executor** — function calling (sugestões:
+  qwen3-coder:8b, llama3.1:8b).
+Vazio = o modelo padrão do agente (comportamento de antes). O override é
+aplicado no ponto único de execução e SEMPRE restaurado (try/finally).
+
+**🗨 Respostas plausíveis e entendíveis pela pessoa que pediu.** O padrão
+de qualidade do executor ganhou a regra de COMUNICAÇÃO: escrever para a
+PESSOA, explicando o que os dados SIGNIFICAM em português claro (ex.:
+"a memória está 41% em uso, sobra 9 GB — saudável"), sem colar saída crua
+sem explicação. O revisor passa a cobrar isso (item ENTREGA: "entendível
+para a pessoa que pediu"), e o planejador sugere critérios de explicação.
+
+**🧰 Página Ferramentas reconstruída** (o operador reportou botões/inputs
+quebrados): novo componente de formulário (.frow) com labels, inputs
+flexíveis que não colapsam e botões alinhados — Terminal rápido, Arquivos
+e Web reescritos; textarea com altura fixa; previews padronizados.
+
+Testes T61–T62 (modelos por papel: override aplicado durante a execução e
+restaurado sempre; ferramentas sem hacks inline; regras de comunicação).
+Suíte: **62/62**.
+
 ## v3.6.0 — 🛠 lições da primeira bateria real do operador (5 correções de comportamento)
 
 Diagnóstico a partir de um log REAL do operador (Zorin OS, Ollama local):
