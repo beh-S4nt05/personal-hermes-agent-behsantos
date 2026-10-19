@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.3.0 — memória de conversas (histórico + zerar + restauração)
+
+- **Conversas persistidas em sessões** (`conversations/sessions/`): toda troca
+  é gravada no servidor — a mensagem do usuário é salva ANTES da geração,
+  então nada se perde nem se a conexão cair.
+- **Restauração automática**: recarregar a GUI (F5) traz de volta a última
+  conversa aberta, exatamente como estava. Trocar de aba nunca interrompeu
+  nada; agora recarregar tampouco.
+- **🗑 zerar**: inicia uma conversa nova na hora — a anterior continua salva.
+- **🕘 conversas**: histórico completo com título, data e nº de mensagens;
+  abrir restaura o contexto (o agente "lembra" da conversa) e dá para apagar
+  conversas individuais.
+- IDs de sessão validados (sem path traversal) e gravação atômica.
+
 ## v1.2.0 — espera robusta + "A trabalhar…"
 
 ### ⏳ Loading na GUI

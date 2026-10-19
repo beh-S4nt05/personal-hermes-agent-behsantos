@@ -263,6 +263,14 @@
 
   <!-- ══════════════════════ CHAT ══════════════════════ -->
   <section class="page" id="page-chat">
+    <div class="chatrow" style="margin:0 0 10px;align-items:center">
+      <span class="hint" id="chat-session" style="flex:1">◈ nova conversa</span>
+      <button class="b small ghost" onclick="toggleHistory()">🕘 conversas (<span id="hist-count">0</span>)</button>
+      <button class="b small danger" onclick="resetChat()">🗑 zerar</button>
+    </div>
+    <div class="card" id="hist-panel" style="display:none;margin-bottom:12px;max-height:260px;overflow:auto">
+      <div id="hist-list" class="hint">carregando…</div>
+    </div>
     <div class="chatwrap">
       <div id="chatlog"></div>
       <div class="chips">
@@ -409,7 +417,7 @@
 "use strict";
 /* ═══════════════ utilidades ═══════════════ */
 const $ = (id) => document.getElementById(id);
-const state = { status:null, paused:false, es:null, sending:false, history:[], token:"", page:"painel" };
+const state = { status:null, paused:false, es:null, sending:false, history:[], token:"", page:"painel", sessionId:null, abort:null };
 
 function store(k, v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){ return null; } }
 function toast(msg, err){
@@ -595,6 +603,87 @@ function textDiv(turn){
   $("chatlog").appendChild(d); scrollChat(); return d;
 }
 
+/* ═══════════════ chat: sessões e histórico ═══════════════ */
+let CONVS = [];
+async function loadConversations(){
+  try{
+    const r = await api("/api/conversations"); const d = await r.json();
+    CONVS = d.sessions || [];
+    $("hist-count").textContent = CONVS.length;
+    return d;
+  }catch(e){ return {sessions: [], current: null}; }
+}
+async function restoreLastConversation(){
+  const d = await loadConversations();
+  if (d.current){
+    const r = await api("/api/conversations/"+encodeURIComponent(d.current));
+    const j = await r.json();
+    if (j.ok && (j.session.messages||[]).length){
+      state.sessionId = j.session.id;
+      state.history = j.session.messages
+        .filter(m=>m.role==="user"||m.role==="assistant")
+        .map(m=>({role:m.role, content:m.content}));
+      renderSession(j.session);
+      $("chat-session").textContent = "◈ " + (j.session.title || "conversa");
+    }
+  }
+}
+function renderSession(session){
+  $("chatlog").innerHTML = "";
+  (session.messages||[]).forEach(m=>{
+    if (m.role === "user") bubble("user", esc(m.content), "");
+    else if (m.content) bubble("bot", miniMD(m.content), "");
+  });
+  scrollChat();
+}
+function toggleHistory(){
+  const p = $("hist-panel");
+  p.style.display = p.style.display === "none" ? "" : "none";
+  if (p.style.display === "none") return;
+  const el = $("hist-list");
+  if (!CONVS.length){ el.innerHTML = "nenhuma conversa anterior — o histórico aparece aqui automaticamente."; return; }
+  el.innerHTML = CONVS.map(c=>`
+    <div class="task"><div class="top">
+      <span class="input"><b>${esc(c.title)}</b><br><span class="hint">${esc(c.updated_at)} · ${c.messages} mensagens</span></span>
+      <span class="btnrow" style="margin:0">
+        <button class="b small primary" onclick="openConversation('${esc(c.id)}')">abrir</button>
+        <button class="b small danger" onclick="deleteConversation('${esc(c.id)}')">🗑</button>
+      </span>
+    </div></div>`).join("");
+}
+async function openConversation(id){
+  const r = await api("/api/conversations/"+encodeURIComponent(id));
+  const j = await r.json();
+  if (!j.ok){ toast("conversa não encontrada", true); return; }
+  state.sessionId = j.session.id;
+  state.history = (j.session.messages||[])
+    .filter(m=>m.role==="user"||m.role==="assistant")
+    .map(m=>({role:m.role, content:m.content}));
+  renderSession(j.session);
+  $("chat-session").textContent = "◈ " + (j.session.title || "conversa");
+  $("hist-panel").style.display = "none";
+  await api("/api/conversations/current", {method:"POST", body: JSON.stringify({id: id})});
+  toast("conversa restaurada ✔");
+}
+async function resetChat(){
+  if (state.history.length && !confirm("zerar a conversa atual? (ela continua salva em 🕘 conversas)")) return;
+  state.history = []; state.sessionId = null;
+  $("chatlog").innerHTML = "";
+  $("chat-session").textContent = "◈ nova conversa";
+  $("hist-panel").style.display = "none";
+  await api("/api/conversations/current", {method:"POST", body: JSON.stringify({id: null})});
+  loadConversations();
+  toast("conversa zerada — as anteriores seguem em 🕘 conversas");
+}
+async function deleteConversation(id){
+  if (!confirm("apagar esta conversa definitivamente?")) return;
+  await api("/api/conversations/delete", {method:"POST", body: JSON.stringify({id: id})});
+  if (state.sessionId === id){ state.sessionId = null; state.history = []; $("chatlog").innerHTML = ""; $("chat-session").textContent = "◈ nova conversa"; }
+  await loadConversations();
+  $("hist-panel").style.display = "";
+  toggleHistory(); toggleHistory();
+}
+
 async function sendChat(){
   const input = $("chatin"), text = input.value.trim();
   if (!text || state.sending) return;
@@ -617,7 +706,7 @@ async function sendChat(){
   try{
     state.abort = new AbortController();
     const r = await api("/api/chat", {method:"POST", signal: state.abort.signal,
-      body: JSON.stringify({message:text, history: state.history.slice(0,-1)})});
+      body: JSON.stringify({message:text, history: state.history.slice(0,-1), session_id: state.sessionId})});
     const reader = r.body.getReader(); const dec = new TextDecoder();
     let buf = "";
     while (true){
@@ -650,6 +739,7 @@ async function sendChat(){
 }
 function stopChat(){ if (state.abort) state.abort.abort(); }
 function handleEvent(ev, turns, cursors){
+  if (ev.type === "session"){ state.sessionId = ev.id; return; }  // sessão persistida
   if (ev.type === "ping") return;  // keepalive do servidor enquanto a IA pensa
   if (ev.type === "step"){
     if (turns.loading)
@@ -963,6 +1053,7 @@ $("chatin").addEventListener("keydown", e=>{
 state.token = store("hermes_token") || "";
 if (state.token) $("tokenin").value = state.token;
 startLog();
+restoreLastConversation();   // a última conversa volta sozinha (nem F5 perde)
 </script>
 </body>
 </html>

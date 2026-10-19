@@ -390,6 +390,20 @@ def create_app(cfg: Config) -> Flask:
             if isinstance(m, dict) and m.get("role") in ("user", "assistant") and m.get("content")
         ][-20:]
 
+        # ---- sessão persistida (histórico recuperável a qualquer momento) ----
+        from ..conversations import SESSION_ID_RE, ConversationStore
+
+        store = ConversationStore(cfg)
+        session_id = str(payload.get("session_id") or "").strip()
+        if not SESSION_ID_RE.fullmatch(session_id):
+            session_id = ""  # id inválido/ausente -> nova conversa
+        new_session = not session_id
+        if new_session:
+            session_id = store.new_session()["id"]
+        # a mensagem do usuário é gravada ANTES da geração: nunca se perde
+        store.append(session_id, "user", message)
+        store.set_current(session_id)
+
         client = get_client(cfg)
         if not client.is_running():
             def unavailable():
@@ -432,6 +446,9 @@ def create_app(cfg: Config) -> Flask:
                 q.put(None)
 
         def generate():
+            # informa ao front em qual sessão esta conversa vive
+            yield json.dumps({"type": "session", "id": session_id},
+                             ensure_ascii=False) + "\n"
             t = threading.Thread(target=worker, daemon=True)
             t.start()
             try:
@@ -455,19 +472,62 @@ def create_app(cfg: Config) -> Flask:
                 raise
             finally:
                 cancel.set()  # nunca deixa thread órfã gerando sozinha
+                # persiste a resposta (mesmo parcial) na sessão
                 try:
-                    day = time.strftime("%Y-%m-%d")
-                    path = cfg.conversations_dir / f"chat-{day}.jsonl"
-                    cfg.conversations_dir.mkdir(parents=True, exist_ok=True)
-                    with open(path, "a", encoding="utf-8") as fh:
-                        fh.write(json.dumps({"ts": time.time(), "role": "user", "content": message}, ensure_ascii=False) + "\n")
-                        fh.write(json.dumps({"ts": time.time(), "role": "assistant", "content": result["final"]}, ensure_ascii=False) + "\n")
+                    if result["final"]:
+                        store.append(session_id, "assistant", result["final"])
                 except OSError:
                     pass
 
         resp = Response(stream_with_context(generate()), mimetype="application/x-ndjson")
         resp.headers["Cache-Control"] = "no-store"
         return resp
+
+    # -------------------------------------------------- conversas (histórico)
+    @app.get("/api/conversations")
+    @protected
+    def conversations_list():
+        from ..conversations import ConversationStore
+
+        store = ConversationStore(cfg)
+        return jsonify({"sessions": store.list(), "current": store.get_current()})
+
+    @app.get("/api/conversations/<sid>")
+    @protected
+    def conversations_get(sid: str):
+        from ..conversations import ConversationStore
+
+        session = ConversationStore(cfg).load(sid)
+        if not session:
+            return jsonify({"ok": False, "msg": "conversa não encontrada"}), 404
+        return jsonify({"ok": True, "session": session})
+
+    @app.post("/api/conversations/delete")
+    @protected
+    def conversations_delete():
+        from ..conversations import ConversationStore
+
+        payload = request.get_json(silent=True) or {}
+        sid = str(payload.get("id", ""))
+        store = ConversationStore(cfg)
+        if not store.delete(sid):
+            return jsonify({"ok": False, "msg": "conversa não encontrada"}), 404
+        if store.get_current() == sid:
+            store.set_current(None)
+        return jsonify({"ok": True, "msg": "conversa removida"})
+
+    @app.post("/api/conversations/current")
+    @protected
+    def conversations_current():
+        from ..conversations import ConversationStore
+
+        payload = request.get_json(silent=True) or {}
+        sid = str(payload.get("id") or "")
+        store = ConversationStore(cfg)
+        if sid and not store.load(sid):
+            return jsonify({"ok": False, "msg": "conversa não encontrada"}), 404
+        store.set_current(sid or None)
+        return jsonify({"ok": True})
 
     # ---------------------------------------------------------- tarefas
     @app.get("/api/tasks")
