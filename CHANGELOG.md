@@ -1,5 +1,30 @@
 # Changelog
 
+## v3.1.1 — 📡 Log ao vivo mostra TODA a atividade (bug real)
+
+Problema relatado pelo operador: o "Log ao vivo" do Painel não mostrava
+as atividades. Causa raiz: o painel faz tail de `data/logs/agent.log`,
+mas **somente o daemon escrevia nele** — tudo que acontecia no processo
+do `hermes server` (chat, execuções de ferramentas, tarefas agendadas,
+MCP, Ollama, ajustes, backups) ficava invisível.
+
+Correção: módulo `hermes/activity.py` — caneta única, thread-safe, com
+rotação em 5 MB (mantém `agent.log.1`). Agora o log registra:
+- 💬 chat: pergunta recebida + resposta concluída (agente, tempo, tokens,
+  passos) e erros de geração;
+- ⚙ cada ferramenta executada (nome, argumento principal, ok/erro, ms);
+- ⏰ tarefas agendadas: iniciada e concluída (status, duração);
+- 🔌 MCP: servidor ativo (nº de ferramentas), falha ao subir, reinício
+  pelo supervisor 🩺;
+- 🎛 painel: agente/ollama ligado/desligado, configuração alterada
+  (chaves), backup restaurado, servidor MCP adicionado;
+- 🔧 ferramentas do Claude Code (Bash/Read/Edit dele).
+
+O histórico continua disponível em `/api/logs` (limpar em 🗑) e cada
+execução segue na trilha estruturada da aba 🧾 Auditoria.
+Testes: T42 (chat+ferramenta+tarefa+ajustes+ação aparecem no log) e
+T43 (rotação por tamanho). Suíte: **43/43**.
+
 ## v3.1.0 — 📧 MCP de e-mail (leitura + envio, credenciais à prova de vazamento)
 
 Servidor MCP `mcp-servers/email_server.py` (stdlib pura: imaplib/smtplib)

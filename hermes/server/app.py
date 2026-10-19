@@ -27,6 +27,7 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, stream_with_context
 
+from .. import activity
 from ..config import VERSION, Config
 from ..daemon import enqueue, list_tasks
 from ..manager import DaemonManager, OllamaManager, python_env_check
@@ -164,6 +165,9 @@ def create_app(cfg: Config) -> Flask:
         if action not in ("start", "stop", "restart"):
             return jsonify({"ok": False, "msg": "ação inválida"}), 400
         result = getattr(DaemonManager(cfg), action)()
+        activity.log(cfg, "painel",
+                     f"{'✔' if result['ok'] else '✖'} agente: {action} — "
+                     f"{str(result.get('msg', ''))[:70]}")
         return jsonify(result), (200 if result["ok"] else 409)
 
     # ------------------------------------------------- ollama on/off
@@ -173,6 +177,9 @@ def create_app(cfg: Config) -> Flask:
         if action not in ("start", "stop"):
             return jsonify({"ok": False, "msg": "ação inválida"}), 400
         result = getattr(OllamaManager(cfg), action)()
+        activity.log(cfg, "painel",
+                     f"{'✔' if result['ok'] else '✖'} ollama: {action} — "
+                     f"{str(result.get('msg', ''))[:70]}")
         return jsonify(result), (200 if result["ok"] else 409)
 
     # ------------------------------------------------ ollama: visão completa
@@ -443,6 +450,8 @@ def create_app(cfg: Config) -> Flask:
         # a mensagem do usuário é gravada ANTES da geração: nunca se perde
         store.append(session_id, "user", message)
         store.set_current(session_id)
+        emoji = "🔌" if chat_agent == "claude" else "◈"
+        activity.log(cfg, "chat", f"💬 {emoji} pergunta: {message[:90]}")
 
         client = get_client(cfg)
         if chat_agent == "hermes" and not client.is_running():
@@ -498,10 +507,16 @@ def create_app(cfg: Config) -> Flask:
                     )
             except Exception as exc:  # noqa: BLE001
                 if not cancel.is_set():
+                    activity.log(cfg, "chat",
+                                 f"✖ erro na geração: {exc.__class__.__name__}")
                     q.put({"type": "error",
                            "message": f"falha interna: {exc.__class__.__name__}: {exc}"})
             finally:
                 result["duration_s"] = round(time.time() - t0, 1)
+                if not cancel.is_set():
+                    activity.log(cfg, "chat",
+                                 f"✔ resposta {emoji} em {result['duration_s']}s · "
+                                 f"{result['tokens']} tokens · {result['steps']} passo(s)")
                 # estatísticas da resposta (tempo, tokens, passos) para a GUI
                 tok_s = None
                 if not cancel.is_set():
@@ -1062,6 +1077,8 @@ def create_app(cfg: Config) -> Flask:
             changes["claude_model"] = cm
         cfg.update(changes)
         agents.clear()  # próximo chat usa a nova configuração
+        activity.log(cfg, "painel",
+                     f"⚙ configuração alterada: {', '.join(sorted(changes))}")
         return jsonify({"ok": True, "msg": f"configuração salva em {cfg.path}", "changes": changes})
 
     # ============================================ v3.0 — novos endpoints ===
@@ -1101,6 +1118,8 @@ def create_app(cfg: Config) -> Flask:
             from .. import audit as _audit
             _audit.log(cfg, "operador", "backups.restore",
                        {"id": payload.get("id")}, True, res["msg"], source="gui")
+            activity.log(cfg, "painel",
+                         f"↩ backup restaurado: {str(payload.get('id'))[:50]}")
         return jsonify(res), (200 if res["ok"] else 400)
 
     # --------------------------------------------------------- métricas
@@ -1228,6 +1247,7 @@ def create_app(cfg: Config) -> Flask:
         servers.append(entry)
         cfg.update({"mcp_servers": servers})
         agents.clear()
+        activity.log(cfg, "painel", f"🔌 servidor MCP adicionado: {name}")
         return jsonify({"ok": True,
                         "msg": f"servidor '{name}' adicionado — ative no Painel"})
 

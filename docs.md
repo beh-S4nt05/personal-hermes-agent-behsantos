@@ -471,6 +471,15 @@ CLI: `hermes models` (listar), `hermes ollama start|stop|status|test|pull <model
    sudo systemctl restart ollama
    ```
 
+### v3.1.1 — Log ao vivo completo
+
+O "📡 Log ao vivo" agora registra TODA a atividade do servidor: chat
+(pergunta/resposta com tempo e tokens), cada ferramenta executada,
+tarefas agendadas (início/fim), servidores MCP (subida/reinício),
+ações do painel (Ollama, ajustes, backups, MCP) e as ferramentas do
+Claude Code. Rotação automática em 5 MB (`agent.log.1`). A trilha
+estruturada (args completos) continua na aba 🧾 Auditoria.
+
 ### v3.0 — painel e endpoints novos
 
 - **Painel**: card 📈 Desempenho (tok/s médio + sparkline das últimas 20
@@ -692,6 +701,7 @@ na validação, a conta fica em modo somente leitura (não envia).
 |---|---|
 | E-mail: login recusado no Gmail | ative a 2FA e use **senha de app** (myaccount.google.com/apppasswords) — a senha normal não funciona via IMAP |
 | E-mail: "SMTP indisponível" no setup | a conta fica em modo somente leitura (leitura ✔, envio ✖); verifique se a senha de app tem permissão de SMTP |
+| Log ao vivo não mostrava as atividades | v3.1.1: toda a atividade do servidor agora é registrada (chat, ferramentas, agendador, MCP, painel) com rotação em 5 MB |
 | E-mail: ferramentas não aparecem no agente | rode `hermes email setup` (auto-registra o MCP) e reinicie o `hermes server`; confira o card MCP no Painel |
 
 | Sintoma | Causa/procedimento |

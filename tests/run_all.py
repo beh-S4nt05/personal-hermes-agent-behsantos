@@ -1145,6 +1145,59 @@ def T41_secrets_protegidos_contra_o_agente():
     assert "SUPER-SECRETA-123" not in yaml_txt
 
 
+# ════════════════════ v3.1.1 — log de atividades completo ════════════════════
+
+@case
+def T42_log_mostra_todas_as_atividades():
+    """Chat, ferramenta, tarefa agendada, ajustes e ações do painel
+    aparecem no agent.log (que o Log ao vivo faz tail)."""
+    from hermes import activity, scheduler as S
+
+    cfg = fresh()
+    c = _app(cfg)
+    # 1. chat (mock) → pergunta + resposta
+    r = c.post("/api/chat", json={"message": "teste do log vivo", "agent": "hermes"})
+    list(r.response)
+    # 2. ferramenta via terminal da GUI
+    assert c.post("/api/tools/run", json={"command": "echo log-vivo-ok"}).json["ok"]
+    # 3. tarefa agendada executada na hora
+    store = S.ScheduleStore(cfg)
+    e = store.create("tarefa para o log", {"type": "interval", "minutes": 60})
+    S.Scheduler(cfg)._execute(e["id"], force=True)
+    # 4. ajuste de configuração
+    assert c.post("/api/settings", json={"temperature": 0.5}).json["ok"]
+    # 5. ação do painel (ollama stop pode falhar na sandbox — o log registra)
+    c.post("/api/ollama/stop")
+
+    texto = cfg.logfile.read_text(encoding="utf-8")
+    for frag in ("💬 ◈ pergunta: teste do log vivo",
+                 "✔ resposta ◈",
+                 "⚙ run_command · echo log-vivo-ok → ok",
+                 "⏰ tarefa", "iniciada: tarefa para o log",
+                 "concluída (ok",
+                 "⚙ configuração alterada: temperature",
+                 "ollama: stop"):
+        assert frag in texto, f"faltou no log: {frag!r}\n---\n{texto[-600:]}"
+    # e o /api/logs (o que a GUI lê) devolve as mesmas linhas
+    api_txt = c.get("/api/logs").json["lines"]
+    assert "pergunta: teste do log vivo" in api_txt
+    assert "run_command" in api_txt
+
+
+@case
+def T43_activity_rotacao_por_tamanho():
+    """agent.log rota em 5 MB (mantém .log.1) — sem crescer sem fim."""
+    from hermes import activity
+
+    cfg = fresh()
+    activity.log(cfg, "t", "linha 1", max_bytes=30)
+    assert cfg.logfile.exists()
+    activity.log(cfg, "t", "linha 2 que passa do limite e força rotacao", max_bytes=30)
+    rot = cfg.logfile.with_suffix(".log.1")
+    assert rot.exists() and "linha 1" in rot.read_text(encoding="utf-8")
+    assert "linha 2" in cfg.logfile.read_text(encoding="utf-8")
+
+
 if __name__ == "__main__":
     print("◈ Hermes Agent — suíte de testes (v3.0)\n")
     sys.exit(run_all())

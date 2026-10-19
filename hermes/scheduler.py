@@ -551,6 +551,12 @@ class Scheduler:
         entry["retry_at_ts"] = None
         self.store.save(entry)
         _live_begin(sid, entry["input"])
+        try:
+            from . import activity
+            activity.log(self.cfg, "agendador",
+                         f"⏰ tarefa {sid[-6:]} iniciada: {entry['input'][:70]}")
+        except Exception:  # noqa: BLE001
+            pass
         original_input = entry["input"]
         if extra_context:
             entry = dict(entry)
@@ -616,6 +622,14 @@ class Scheduler:
         else:
             entry["retries_used"] = 0
         self.store.save(entry)
+        try:
+            from . import activity
+            marca = "✔" if result["status"] == "ok" else "✖"
+            activity.log(self.cfg, "agendador",
+                         f"{marca} tarefa {sid[-6:]} concluída "
+                         f"({result['status']}, {result['duration_s']}s)")
+        except Exception:  # noqa: BLE001
+            pass
 
         # resultado completo vai para o histórico de tarefas (aba Tarefas)
         try:

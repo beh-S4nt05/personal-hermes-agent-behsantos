@@ -299,11 +299,17 @@ def _run_impl(cfg, message, history, on_event, cancel, _light=None,
                         ok = not block.get("is_error")
                         ev({"type": "tool_end", "name": nome, "ok": ok,
                             "output": (out or "")[:4000]})
-                        # v3.0: trilha de auditoria das ações do Claude Code
+                        # v3.0: auditoria · v3.1.1: log ao vivo
                         try:
                             from . import audit
                             audit.log(cfg, "claude", nome, {}, ok,
                                       out or "", source="claude-cli")
+                        except Exception:  # noqa: BLE001
+                            pass
+                        try:
+                            from . import activity
+                            activity.log(cfg, "claude",
+                                         f"🔧 {nome} → {'ok' if ok else 'erro'}")
                         except Exception:  # noqa: BLE001
                             pass
 

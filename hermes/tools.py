@@ -533,12 +533,29 @@ def execute_tool(name: str, arguments: dict, cfg, source: str = "agent",
     if name not in EXECUTORS:
         return {"ok": False, "output": f"ERRO: ferramenta desconhecida: {name!r}"}
     t0 = _time.time()
+
+    def _atividade(ok: bool, output: str) -> None:
+        """v3.1.1: execução visível no Log ao vivo do painel."""
+        try:
+            from . import activity
+            hint = ""
+            for k in ("command", "path", "query", "url", "texto", "to"):
+                if args.get(k):
+                    hint = f" · {str(args[k])[:60]}"
+                    break
+            activity.log(cfg, "agente",
+                         f"⚙ {name}{hint} → {'ok' if ok else 'ERRO'} "
+                         f"({int((_time.time() - t0) * 1000)} ms)")
+        except Exception:  # noqa: BLE001
+            pass
+
     try:
         args = dict(arguments or {})
         output = EXECUTORS[name](args, cfg)
         ok = not output.startswith(("ERRO", "BLOQUEADO"))
         _audit.log(cfg, agent, name, args, ok, output,
                    duration_ms=int((_time.time() - t0) * 1000), source=source)
+        _atividade(ok, output)
         return {"ok": ok, "output": output}
     except ToolError as exc:
         _audit.log(cfg, agent, name, arguments, False, str(exc),

@@ -76,6 +76,13 @@ class McpSupervisor:
                     notify.push(self.cfg, "mcp",
                                 f"Servidor MCP '{name}' reiniciado",
                                 "O processo tinha morrido; o supervisor o trouxe de volta.")
+                    try:
+                        from . import activity
+                        activity.log(self.cfg, "mcp",
+                                     f"🩺 '{name}' reiniciado pelo supervisor "
+                                     f"(o processo tinha morrido)")
+                    except Exception:  # noqa: BLE001
+                        pass
                 except Exception as exc:  # noqa: BLE001
                     n = self._fails.get(name, 0) + 1
                     self._fails[name] = n

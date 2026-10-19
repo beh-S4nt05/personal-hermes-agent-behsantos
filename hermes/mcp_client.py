@@ -393,10 +393,22 @@ class MCPManager:
                     mapped_names.append(mapped)
                 self._server_tools[name] = mapped_names
                 self._state[name] = {"state": "ativo", "error": None}
+                try:
+                    from . import activity
+                    activity.log(self.cfg, "mcp",
+                                 f"🔌 '{name}' ativo ({len(mapped_names)} ferramentas)")
+                except Exception:  # noqa: BLE001
+                    pass
             except Exception as exc:
                 self._servers.pop(name, None)
                 self._server_tools.pop(name, None)
                 self._state[name] = {"state": "erro", "error": str(exc)[:400]}
+                try:
+                    from . import activity
+                    activity.log(self.cfg, "mcp",
+                                 f"✖ '{name}' falhou ao subir: {str(exc)[:90]}")
+                except Exception:  # noqa: BLE001
+                    pass
 
     def _ensure(self) -> None:
         # Inicia UMA vez automaticamente. Servidores em erro NÃO são retentados
