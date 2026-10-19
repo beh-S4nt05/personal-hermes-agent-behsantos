@@ -18,6 +18,7 @@ Stdlib pura (imaplib/smtplib/email) — zero dependências extras.
 
 from __future__ import annotations
 
+import base64
 import email
 import email.header
 import imaplib
@@ -26,6 +27,8 @@ import os
 import smtplib
 import sys
 import time
+import urllib.parse
+import urllib.request
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -99,13 +102,25 @@ TOOLS = [
 
 # ───────────────────────────── credenciais ─────────────────────────────
 
+_ACC_CACHE: dict = {"mtime": None, "accs": None, "loaded": 0.0}
+
+
 def _load_accounts() -> list[dict]:
+    """Contas do arquivo de segredos — em CACHE por mtime (o access_token
+    renovado fica vivo entre chamadas, sem regravar nada em disco)."""
     path = os.environ.get("HERMES_EMAIL_SECRETS") or \
         str(Path.home() / ".hermes" / "secrets" / "email.json")
     try:
+        mtime = os.path.getmtime(path)
+        if (_ACC_CACHE["accs"] is not None
+                and _ACC_CACHE["mtime"] == mtime
+                and time.time() - _ACC_CACHE["loaded"] < 120):
+            return _ACC_CACHE["accs"]
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-        accs = data.get("accounts") or []
-        return [a for a in accs if isinstance(a, dict) and a.get("user")]
+        accs = [a for a in (data.get("accounts") or [])
+                if isinstance(a, dict) and a.get("user")]
+        _ACC_CACHE.update(mtime=mtime, accs=accs, loaded=time.time())
+        return accs
     except (OSError, ValueError):
         return []
 
@@ -126,12 +141,42 @@ def _pick(args: dict) -> dict | None:
 
 # ───────────────────────────── helpers IMAP ─────────────────────────────
 
+def _xoauth2(user: str, token: str) -> bytes:
+    return f"user={user}\x01auth=Bearer {token}\x01\x01".encode()
+
+
+def _ensure_token(acc: dict) -> str:
+    """Access token válido (renova com o refresh_token se expirado) — stdlib."""
+    if acc.get("access_token") and acc.get("token_expires", 0) > time.time() + 60:
+        return acc["access_token"]
+    form = {"client_id": acc.get("client_id", ""),
+            "grant_type": "refresh_token",
+            "refresh_token": acc.get("refresh_token", ""),
+            "scope": acc.get("oauth_scopes", "")}
+    if acc.get("client_secret"):
+        form["client_secret"] = acc["client_secret"]
+    req = urllib.request.Request(
+        acc["token_endpoint"], data=urllib.parse.urlencode(form).encode(),
+        headers={"Content-Type": "application/x-www-form-urlencoded"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        tok = json.loads(r.read().decode())
+    if "access_token" not in tok:
+        raise RuntimeError(f"token endpoint recusou: {str(tok)[:120]}")
+    acc["access_token"] = tok["access_token"]
+    acc["token_expires"] = time.time() + int(tok.get("expires_in", 3600)) - 120
+    return acc["access_token"]
+
+
 def _connect(acc: dict) -> imaplib.IMAP4 | imaplib.IMAP4_SSL:
     if acc.get("imap_tls", "ssl") == "none":
         M = imaplib.IMAP4(acc["imap_host"], int(acc.get("imap_port", 143)), timeout=30)
     else:
         M = imaplib.IMAP4_SSL(acc["imap_host"], int(acc.get("imap_port", 993)), timeout=30)
-    M.login(acc["user"], acc["password"])
+    if acc.get("auth") == "oauth":
+        token = _ensure_token(acc)
+        M.authenticate("XOAUTH2", lambda _c: _xoauth2(acc["user"], token))
+    else:
+        M.login(acc["user"], acc["password"])
     return M
 
 
@@ -326,7 +371,12 @@ def tool_send(args: dict) -> str:
     try:
         if tls == "starttls":
             S.starttls()
-        S.login(acc["user"], acc["password"])
+        if acc.get("auth") == "oauth":
+            token = _ensure_token(acc)
+            S.auth("XOAUTH2",
+                   lambda _c=None: _xoauth2(acc["user"], token).decode())
+        else:
+            S.login(acc["user"], acc["password"])
         S.send_message(msg)
     finally:
         try:
@@ -344,6 +394,7 @@ def tool_accounts(_args: dict) -> str:
         return ("nenhuma conta configurada — rode `hermes email setup` no terminal "
                 "e reinicie o server")
     linhas = [f"- {a.get('id')} → {a.get('user')} "
+              f"[{'OAuth' if a.get('auth') == 'oauth' else 'senha'}] "
               f"({'leitura+envio' if a.get('smtp_ok', True) else 'somente leitura'})"
               for a in accs]
     return "Contas de e-mail disponíveis (use o id em 'account'):\n" + "\n".join(linhas)

@@ -939,6 +939,7 @@ class _FakeImap(_threading.Thread):
         self.sock.listen(4)
         self.port = self.sock.getsockname()[1]
         self.logins: list[list[str]] = []
+        self.auths: list[str] = []          # strings SASL XOAUTH2 recebidas
         self.messages = [
             b"From: Prof. Silva <prof@fmm.org.br>\r\n"
             b"To: t@x.com\r\n"
@@ -976,8 +977,23 @@ class _FakeImap(_threading.Thread):
                 tag, cmd = parts[0], parts[1].upper()
                 rest = parts[2] if len(parts) > 2 else ""
                 if cmd == "CAPABILITY":
-                    conn.sendall(f"* CAPABILITY IMAP4rev1 AUTH=PLAIN\r\n"
+                    conn.sendall(f"* CAPABILITY IMAP4rev1 AUTH=PLAIN AUTH=XOAUTH2\r\n"
                                  f"{tag} OK CAPABILITY done\r\n".encode())
+                elif cmd == "AUTHENTICATE":
+                    if "XOAUTH2" not in rest.upper():
+                        conn.sendall(f"{tag} NO mecanismo nao suportado\r\n".encode())
+                        continue
+                    conn.sendall(b"+ \r\n")          # continuação SASL
+                    import base64 as _b64
+                    b64line = f.readline().strip()
+                    try:
+                        sasl = _b64.b64decode(b64line).decode(errors="replace")
+                    except Exception:  # noqa: BLE001
+                        sasl = ""
+                    self.auths.append(sasl)
+                    ok = sasl == "user=t@x.com\x01auth=Bearer TOK123\x01\x01"
+                    conn.sendall((f"{tag} OK AUTHENTICATE done\r\n" if ok
+                                  else f"{tag} NO AUTH failed\r\n").encode())
                 elif cmd == "LOGIN":
                     creds = rest.split()
                     self.logins.append([c.strip('"') for c in creds])
@@ -1023,6 +1039,7 @@ class _FakeSmtp(_threading.Thread):
         self.sock.listen(4)
         self.port = self.sock.getsockname()[1]
         self.received: list[bytes] = []
+        self.auth_cmds: list[str] = []
 
     def run(self):
         while True:
@@ -1050,6 +1067,7 @@ class _FakeSmtp(_threading.Thread):
                 if c in ("EHLO", "HELO"):
                     conn.sendall(b"250-fake\r\n250 AUTH PLAIN LOGIN\r\n")
                 elif c == "AUTH":
+                    self.auth_cmds.append(cmd)
                     conn.sendall(b"235 ok\r\n")
                 elif c == "DATA":
                     conn.sendall(b"354 go\r\n")
@@ -1062,6 +1080,39 @@ class _FakeSmtp(_threading.Thread):
                     conn.sendall(b"250 ok\r\n")
         except OSError:
             pass
+
+
+class _FakeToken(_threading.Thread):
+    """Endpoint OAuth2 de token (refresh_token -> access_token)."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        outer = self
+        self.hits = 0
+        self.last_body = ""
+
+        class H(BaseHTTPRequestHandler):
+            def do_POST(self):
+                ln = int(self.headers.get("Content-Length", 0))
+                outer.last_body = self.rfile.read(ln).decode()
+                outer.hits += 1
+                out = json.dumps({"access_token": "TOK123",
+                                  "expires_in": 3600}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(out)))
+                self.end_headers()
+                self.wfile.write(out)
+
+            def log_message(self, *a):
+                pass
+
+        self.httpd = HTTPServer(("127.0.0.1", 0), H)
+        self.port = self.httpd.server_port
+
+    def run(self):
+        self.httpd.serve_forever()
 
 
 @case
@@ -1196,6 +1247,128 @@ def T43_activity_rotacao_por_tamanho():
     rot = cfg.logfile.with_suffix(".log.1")
     assert rot.exists() and "linha 1" in rot.read_text(encoding="utf-8")
     assert "linha 2" in cfg.logfile.read_text(encoding="utf-8")
+
+
+# ════════════════════ v3.1.2 — email 2FA/OAuth (XOAUTH2) ════════════════════
+
+@case
+def T44_email_oauth_xoauth2_e2e():
+    """Conta OAuth (XOAUTH2): refresh via token endpoint + login IMAP/SMTP
+    com Bearer — ponta a ponta pelo servidor MCP real."""
+    from hermes import emailcfg
+    from hermes.mcp_client import get_manager, map_tool_name
+
+    cfg = fresh()
+    imap = _FakeImap(); imap.start()
+    smtp = _FakeSmtp(); smtp.start()
+    tok_srv = _FakeToken(); tok_srv.start()
+    emailcfg.save(cfg, {"accounts": [{
+        "id": "oauth1", "user": "t@x.com", "auth": "oauth", "provider": "fake",
+        "client_id": "cid", "client_secret": "", "refresh_token": "rtok",
+        "oauth_scopes": "mail", "token_endpoint": f"http://127.0.0.1:{tok_srv.port}/token",
+        "access_token": None, "token_expires": 0,
+        "imap_host": "127.0.0.1", "imap_port": imap.port, "imap_tls": "none",
+        "smtp_host": "127.0.0.1", "smtp_port": smtp.port, "smtp_tls": "none",
+        "smtp_ok": True}], "default": "oauth1"})
+    emailcfg.register_mcp(cfg)
+    try:
+        mgr = get_manager(cfg)
+        mgr.start_all()
+        res = mgr.call(map_tool_name("email", "email_list"), {})
+        assert res["ok"], res["output"][:200]
+        # login foi XOAUTH2 com token renovado no endpoint falso
+        assert imap.auths and imap.auths[0] == "user=t@x.com\x01auth=Bearer TOK123\x01\x01"
+        assert imap.logins == []                       # nada de senha em texto
+        assert tok_srv.hits >= 1 and "refresh_token=rtok" in tok_srv.last_body
+        # envio também via XOAUTH2
+        res = mgr.call(map_tool_name("email", "email_send"),
+                       {"to": "d@x.com", "subject": "OAuth", "body": "via token"})
+        assert res["ok"], res["output"][:200]
+        assert smtp.auth_cmds and smtp.auth_cmds[0].upper().startswith("AUTH XOAUTH2")
+        # segunda listagem reusa o token em cache (sem novo refresh)
+        hits_antes = tok_srv.hits
+        mgr.call(map_tool_name("email", "email_list"), {})
+        assert tok_srv.hits == hits_antes
+        mgr.stop_all()
+    finally:
+        imap.sock.close(); smtp.sock.close(); tok_srv.httpd.shutdown()
+
+
+@case
+def T45_oauth_device_flow_e_token_refresh():
+    """Fluxo device-code (endpoint falso) e renovação quando o token expira."""
+    from hermes import emailcfg
+
+    # refresh: token válido em cache não bate no endpoint; expirado bate
+    acc = {"client_id": "cid", "refresh_token": "rtok", "oauth_scopes": "s",
+           "token_endpoint": "http://invalido-endpoint-teste/token",
+           "access_token": "CACHEI", "token_expires": time.time() + 9999}
+    assert emailcfg.refresh_access_token(acc) == "CACHEI"   # cache
+    acc2 = {"client_id": "cid", "refresh_token": "rtok", "oauth_scopes": "s",
+            "token_endpoint": "BAD", "access_token": "X", "token_expires": 0}
+    try:
+        emailcfg.refresh_access_token(acc2)
+        raise AssertionError("devia falhar com endpoint inválido")
+    except Exception:  # noqa: BLE001
+        pass
+    # device flow: mostra código e recusa 'access_denied' com erro claro
+    import urllib.error as _ue
+
+    class _Resp:
+        def __init__(self, payload):
+            self._p = payload
+
+        def read(self):
+            return json.dumps(self._p).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    saida: list[str] = []
+    import hermes.emailcfg as ec
+    orig_request = ec.urllib.request.Request
+    orig_urlopen = ec.urllib.request.urlopen
+    def _device_resp(req, timeout=20):
+        return _Resp({"device_code": "DC", "user_code": "ABCD-EFGH", "interval": 0,
+                      "expires_in": 30, "verification_uri": "https://exemplo/ativar"})
+
+    def _pending(req, timeout=20):
+        import io as _io
+        raise _ue.HTTPError(req, 400, "Bad Request", None,
+                            _io.BytesIO(b'{"error": "authorization_pending"}'))
+
+    def _token_resp(req, timeout=20):
+        return _Resp({"refresh_token": "RT", "access_token": "AT", "expires_in": 3600})
+
+    respostas = [_device_resp, _pending, _token_resp]
+    ec.urllib.request.Request = lambda url, data=None, headers=None: url
+    ec.urllib.request.urlopen = lambda req, timeout=20: respostas.pop(0)(req, timeout)
+    try:
+        tok = ec.oauth_device_flow("microsoft", "cid", "", print_fn=saida.append)
+        assert tok["refresh_token"] == "RT"
+        assert any("ABCD-EFGH" in s for s in saida)           # mostrou o código
+        assert any("exemplo/ativar" in s for s in saida)      # e o link
+    finally:
+        ec.urllib.request.Request = orig_request
+        ec.urllib.request.urlopen = orig_urlopen
+
+
+@case
+def T46_auth_hint_diagnostico_por_provedor():
+    """A mensagem de erro certa para cada bloqueio de 2FA/OAuth."""
+    from hermes.emailcfg import auth_hint
+
+    h = auth_hint("a@gmail.com",
+                  "AUTHENTICATIONFAILED [ALERT] Please log in via your web browser")
+    assert "senha de aplicativo" in h.lower()
+    h2 = auth_hint("a@outlook.com", "AUTHENTICATE failed")
+    assert "hermes email oauth" in h2
+    h3 = auth_hint("a@hotmail.com", "authenticationfailed")
+    assert "microsoft" in h3.lower()
+    assert auth_hint("a@x.com", "timeout") == ""              # sem palpite indevido
 
 
 if __name__ == "__main__":

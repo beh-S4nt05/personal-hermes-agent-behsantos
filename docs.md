@@ -649,6 +649,7 @@ agendamentos, configuração).
 hermes email setup
 # informe: breno0s1s6@gmail.com  + senha de app (não a senha normal)
 # informe: breno.239941@fmm.org.br + a senha usada no webmail da FMM
+hermes email oauth     # contas Microsoft/Google (2FA via navegador)
 hermes email test      # valida os logins
 # reinicie o hermes server
 ```
@@ -665,7 +666,25 @@ hermes email test      # valida os logins
 Silva dizendo que…"* — as ferramentas `mcp_email_*` entram no agente
 automaticamente (e o seletor v3.0 injeta só as relevantes à pergunta).
 
-**Onde ficam as senhas (e por que não vazam):**
+**2FA/OAuth — qual caminho por provedor:**
+
+| Provedor | Senha direta no IMAP? | O que fazer |
+|---|---|---|
+| **Gmail** (e Google Workspace) | ❌ a normal; ✅ com **senha de app** | ative a verificação em 2 etapas → crie a senha de app em `myaccount.google.com/apppasswords` (16 caracteres) → use ELA no `hermes email setup` |
+| **Microsoft 365 / Outlook / Hotmail** | ❌ desativada pela Microsoft | `hermes email oauth` (fluxo device code com seu 2FA normal; precisa de um client_id próprio — instruções no comando) |
+| **Yahoo / iCloud** | ✅ com senha de app | setup normal usando a senha de app do provedor |
+| **ProtonMail** | ❌ IMAP só via Proton Bridge | instale o Bridge e aponte `imap_host`/`smtp_host` para `127.0.0.1` |
+| **Servidor próprio / Zimbra / institucional** | geralmente ✅ | setup normal; se o domínio for Microsoft 365 por trás, use OAuth |
+
+**OAuth (Microsoft/Google) em 2 passos:**
+1. um client_id (uma vez): Azure → "Registros de aplicativo" → app de
+   cliente público com fluxo de dispositivo (Microsoft); ou Google Cloud
+   → credenciais OAuth → "App para TV e dispositivos de entrada limitada";
+2. `hermes email oauth` → escolha o provedor, informe e-mail + client_id
+   → abre o link, digite o código mostrado, autorize com seu 2FA. Pronto:
+   o refresh token fica guardado junto das demais credenciais (600).
+
+**Onde ficam as senhas/tokens (e por que não vazam):**
 `<data>/secrets/email.json` com permissão 600, fora do workspace do agente.
 O sandbox bloqueia `read_file`; a denylist bloqueia `cat/grep` em `secrets`;
 o servidor MCP lê o arquivo direto — **as credenciais nunca passam pelo

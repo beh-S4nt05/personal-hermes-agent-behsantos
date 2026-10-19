@@ -100,6 +100,10 @@ def cmd_email(args) -> None:
     if action == "setup":
         setup_interactive(cfg)
         return
+    if action == "oauth":
+        from .emailcfg import _oauth_wizard
+        _oauth_wizard(cfg)
+        return
     if action == "test":
         data = load(cfg)
         if not data.get("accounts"):
@@ -359,8 +363,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("email", help="configura contas de e-mail (MCP email_*)")
     p.add_argument("email_action", nargs="?", default="status",
-                   choices=["setup", "test", "status"],
-                   help="setup = adicionar contas · test = validar logins · status = ver")
+                   choices=["setup", "oauth", "test", "status"],
+                   help="setup = adicionar contas · oauth = Microsoft/Google (2FA) · "
+                        "test = validar logins · status = ver")
     p.set_defaults(fn=cmd_email)
 
     p = sub.add_parser("status", help="status do agente e do Ollama")

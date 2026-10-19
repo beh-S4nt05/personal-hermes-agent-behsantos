@@ -1,5 +1,34 @@
 # Changelog
 
+## v3.1.2 — 📧 e-mail com 2FA/OAuth (XOAUTH2 + device code)
+
+Preocupação do operador: "a maioria dos e-mails tem 2FA — vai bloquear o
+login". Resposta técnica em duas partes:
+
+**1. 2FA ≠ bloqueio (Gmail & cia):** o caminho continua sendo a SENHA DE
+APLICATIVO (existe exatamente para isso). O setup agora detecta o erro
+"Gmail exige senha de app" no login e mostra o passo a passo na hora.
+
+**2. Onde senha realmente morreu (Microsoft 365/Outlook/Hotmail):**
+implementado **OAuth2 completo**:
+- `hermes email oauth` (ou opção 'o' no setup): fluxo **device code** —
+  o Hermes mostra um código, você abre o link no navegador e autoriza com
+  o **2FA normal do provedor**; nenhuma senha passa pelo terminal;
+- **XOAUTH2** (padrão SASL) no IMAP e SMTP, no servidor MCP e no setup;
+- **refresh automático**: access token renovado via refresh_token quando
+  expira (em cache por chamada — sem regravar o arquivo de segredos);
+- diagnóstico por provedor: falha de login no domínio Microsoft →
+  "rode hermes email oauth"; Gmail sem app password → instruções exatas.
+
+Tabela de provedores no docs.md (Gmail/Workspace, Microsoft 365, Yahoo,
+iCloud, Proton Bridge, servidor próprio). Requer um client_id próprio
+(uma vez) para o fluxo OAuth — instruções no setup e no docs.
+
+Testes T44–T46: XOAUTH2 ponta a ponta pelo MCP real (IMAP/SMTP falsos
+com AUTHENTICATE/AUTH XOAUTH2 + token endpoint falso; sem senha em texto
+nenhuma), device code (código mostrado, pending, denied), refresh com
+cache, e hints de diagnóstico. Suíte: **46/46**.
+
 ## v3.1.1 — 📡 Log ao vivo mostra TODA a atividade (bug real)
 
 Problema relatado pelo operador: o "Log ao vivo" do Painel não mostrava
