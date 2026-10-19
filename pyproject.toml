@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-agent"
-version = "2.2.1"
+version = "2.2.2"
 description = "Agente Linux via terminal com Ollama (Hermes) e GUI web para ligar/desligar"
 readme = "README.md"
 requires-python = ">=3.9"

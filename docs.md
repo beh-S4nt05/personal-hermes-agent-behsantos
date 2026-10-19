@@ -181,7 +181,7 @@ Ajustes opcionais (aba ⚙ Ajustes ou `config.yaml`):
 | Chave | Padrão | Efeito |
 |---|---|---|
 | `claude_use_ollama` | `true` | Claude Code fala com o Ollama local (automático) |
-| `claude_model` | vazio | modelo do Claude Code (ex.: `qwen3-coder`, `hermes3:8b`); vazio = padrão dele |
+| `claude_model` | vazio | modelo do Claude Code (ex.: `qwen2.5-coder:7b`, `llama3.2:3b`); vazio = o mesmo modelo do Hermes (o padrão do Claude Code, `claude-opus-*`, não existe no Ollama) |
 
 Use `claude_use_ollama: false` se o seu Claude Code falar com a API real da
 Anthropic (login/assinatura) — nesse caso as variáveis não são aplicadas.
@@ -560,6 +560,7 @@ agendamentos, configuração).
 | Resposta lenta na 1ª msg | modelo carregando na memória (normal; aguarde o `ping`) |
 | Claude Code "não encontrado" | instale com `curl -fsSL https://claude.ai/install.sh \| bash` (ou npm) e reinicie o `hermes server` |
 | Claude Code vazio/erro | já aponta para o Ollama por padrão; confira o `claude_model` (use um modelo instalado) ou, se usa a API real, desative `claude_use_ollama` |
+| ⚠ "There's an issue with the selected model (claude-opus-…)" | o Claude Code tentou o modelo padrão da nuvem Anthropic, que não existe no Ollama — rode com `--model <modelo local>` (ex.: `claude --model llama3.2:3b`) ou defina o modelo na GUI (⚙ Ajustes); pelo Ollama: `ollama launch claude --model llama3.2:3b` |
 | PyYAML com erro no pip (Windows/NTFS) | `pip install --force-reinstall --no-cache-dir PyYAML` |
 | Tarefa agendada não disparou | server estava fechado no horário? once perdeu a janela de 10 min ("perdida"); as demais disparam no próximo ciclo |
 | Erro de YAML no config | confira indentação (2 espaços) e aspas |

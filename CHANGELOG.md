@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.2.2 — Claude Code: fallback de modelo local
+
+- No agente 🔌 Claude Code via Ollama, deixar o modelo vazio agora usa **o
+  mesmo modelo do agente Hermes** em vez do padrão da nuvem (`claude-opus-*`,
+  que não existe no Ollama e gerava "There's an issue with the selected
+  model"). Dica de campo e troubleshooting atualizados.
+
 ## v2.2.1 — respostas mais rápidas (keep_alive + num_predict)
 
 - **keep_alive** (padrão `30m`): todo pedido ao Ollama agora pede para manter

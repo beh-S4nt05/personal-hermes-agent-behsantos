@@ -187,7 +187,8 @@ No chat, o seletor no topo escolhe quem responde:
 
   ```bash
   curl -fsSL https://claude.ai/install.sh | bash   # instala a CLI (uma vez)
-  ollama launch claude --model hermes3:8b          # teste rodando via Ollama
+  ollama launch claude --model llama3.2:3b         # teste via Ollama (use um modelo instalado!)
+  # ⚠ sem --model ele tenta "claude-opus-…", que NÃO existe no Ollama
   ```
 
 As tarefas agendadas também têm seletor de agente (Hermes ou Claude Code).

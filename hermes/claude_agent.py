@@ -49,9 +49,16 @@ def _claude_env(cfg) -> dict:
 
 
 def _claude_cmd(exe: str, cfg, prompt: str) -> list[str]:
-    """Linha de comando do Claude Code (modo headless, stream JSON)."""
+    """Linha de comando do Claude Code (modo headless, stream JSON).
+
+    Via Ollama, o modelo padrão do Claude Code (claude-opus-*, da nuvem)
+    NÃO existe localmente — sem claude_model definido, usamos o mesmo
+    modelo do agente Hermes (que está instalado).
+    """
     cmd = [exe, "-p", prompt, "--output-format", "stream-json", "--verbose"]
     model = str(getattr(cfg, "claude_model", "") or "").strip()
+    if not model and getattr(cfg, "claude_use_ollama", True):
+        model = str(getattr(cfg, "model", "") or "").strip()
     if model:
         cmd += ["--model", model]
     return cmd
