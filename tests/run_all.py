@@ -1521,6 +1521,89 @@ def T48_agenda_google_somente_leitura():
 
 
 @case
+def T59_skills_precisas_caso_real():
+    """v3.6 (caso real do operador): 'resumo detalhado do uso de memória
+    ram' NÃO pode aplicar a skill resumo-inbox (era falso-positivo por
+    palavras genéricas); skills certas continuam casando."""
+    from hermes import orchestrator as orc
+
+    cfg = fresh()
+    # falso-positivo real: RAM ≠ caixa de e-mail
+    assert orc.skills_for(cfg, "quero um resumo detalhado do uso de memória "
+                               "ram do meu notebook") == []
+    # positivo: e-mail continua casando com resumo-inbox
+    sks = orc.skills_for(cfg, "resuma meus e-mails não lidos e o que chegou "
+                              "na caixa de entrada")
+    assert "resumo-inbox" in [s["name"] for s in sks], sks
+    # positivo: web e design continuam casando
+    assert "pesquisa-web" in [s["name"] for s in
+                              orc.skills_for(cfg, "pesquise na internet os preços de passagens aéreas")]
+    assert any("figma" in s["name"] or "app" in s["name"] or "ui" in s["name"]
+               for s in orc.skills_for(cfg, "crie um design de app de tarefas no figma"))
+
+
+@case
+def T60_contexto_followup_e_retomada():
+    """v3.6 (casos reais): planejador VÊ a conversa e a última task em
+    follow-ups; retomada é imperativa (EXECUTE AGORA + pedido original);
+    revisor ancorado (não inventa critério, tolera cortesia); heurística
+    trata 'conclua o anterior' como ação."""
+    from hermes import orchestrator as orc
+
+    # prompts com as âncoras
+    assert "REGRA DE CONTINUAÇÃO" in orc._PLANO_JSON
+    assert "ps aux --sort=-%mem" in orc._PLANO_JSON          # passo concreto
+    assert "NÃO invente critérios" in orc._REVISAO_JSON
+    assert "cortesia" in orc._REVISAO_JSON
+
+    cfg = fresh()
+    # heurística: continuação é ação
+    assert orc.plan(cfg, "conclua meu pedido anterior", [])["rota"] == "executar"
+
+    # plan() leva o contexto da conversa
+    capturado = {}
+    orig = orc._fast
+    orc._fast = lambda cfg, sys, user, ntok=200, **kw: (
+        capturado.update(user=user) or '{"rota":"responder"}')
+    hist = [{"role": "user", "content": "quero um resumo do uso de memória ram"},
+            {"role": "assistant", "content": "resposta sobre memória"}]
+    orc.plan(cfg, "estão sendo usados por quais processos?", hist)
+    assert "CONTEXTO da conversa" in capturado["user"]
+    assert "memória ram" in capturado["user"]
+    assert "MENSAGEM ATUAL: estão sendo usados" in capturado["user"]
+    # follow-up herda a última task registrada
+    orc.record(cfg, {"objetivo": "Listar processos que consomem RAM",
+                     "status": "reprovada"})
+    orc.plan(cfg, "tente concluir meu pedido anterior", [])
+    assert "ÚLTIMA TASK" in capturado["user"]
+    assert "Listar processos que consomem RAM" in capturado["user"]
+    orc._fast = orig
+
+    # retomada imperativa: agente falso captura as chamadas
+    class _Ag:
+        def __init__(self):
+            self.calls = []
+        def run(self, msgs, on_event=None, cancel=None):
+            self.calls.append(msgs)
+            on_event({"type": "done", "message": "resposta vaga sem dados"})
+            return "resposta vaga sem dados"
+    ag = _Ag()
+    rev_orig = orc.review
+    orc.review = lambda cfg, obj, crit, res: {
+        "veredito": "refazer", "problema": "sem dados reais"}
+    try:
+        final = orc.run_pipeline(ag, cfg, "verifique o uso de disco", [],
+                                 on_event=lambda e: None)
+    finally:
+        orc.review = rev_orig
+    assert len(ag.calls) == 2, len(ag.calls)             # executou + retomada
+    retomada = ag.calls[1][-1]["content"]
+    assert "EXECUTE AGORA" in retomada
+    assert "PEDIDO ORIGINAL: verifique o uso de disco" in retomada
+    assert "reprovada" in final                          # entregue com ressalva
+
+
+@case
 def T57_resposta_sempre_entregue():
     """v3.5 REGRESSÃO do bug recorrente 'não recebo a resposta':
     (a) todo caminho do chat emite UM done com mensagem não vazia;

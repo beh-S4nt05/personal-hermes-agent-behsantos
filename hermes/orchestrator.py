@@ -45,7 +45,8 @@ _ACAO_RE = re.compile(
     r"gerar|apague|apagar|limpe|limpar|atualize|atualizar|mova|mover|copie|"
     r"copiar|envie|enviar|resuma|resumir|sumarize|baixe|baixar|monitore|"
     r"monitorar|otimize|otimizar|corrija|corrigir|mostre|mostrar|consulte|"
-    r"consultar|leia|ler|busque|buscar|pesquise|pesquisar)\b", re.IGNORECASE)
+    r"consultar|leia|ler|busque|buscar|pesquise|pesquisar|conclua|concluir|"
+    r"conclui|continue|continuar|retome)\b", re.IGNORECASE)
 
 # v3.5: a MENTE do orquestrador — um sênior de 30 anos de estrada.
 # Com modelos ≤8B, persona clara + regras curtas + exemplos firmes rendem
@@ -64,8 +65,9 @@ _PLANO_JSON = (
     "Padrão de qualidade do veterano (obedecer):\n"
     "- objetivo: UMA frase com verbo de conclusão e a interpretação mais "
     "útil se o pedido for vago;\n"
-    "- no máximo 4 passos, curtos e diretos (cada um executável sem perguntar "
-    "nada a ninguém);\n"
+    "- no máximo 4 passos, curtos e CONCRETOS: cite o comando ou a ferramenta "
+    "(ex.: 'executar free -h', 'ps aux --sort=-%mem | head -15') — nunca "
+    "'verificar X' sem dizer como;\n"
     "- critérios VERIFICÁVEIS na resposta (ex.: 'a saída real do comando "
     "aparece', 'o caminho do arquivo criado aparece');\n"
     "Exemplos:\n"
@@ -73,8 +75,16 @@ _PLANO_JSON = (
     '"como funciona o DNS?" → {"rota":"responder"}\n'
     '"tem alguma coisa estranha no disco?" → {"rota":"executar","tipo":"leitura",'
     '"objetivo":"Diagnosticar o uso de disco e apontar anomalias com dados reais",'
-    '"passos":["verificar uso por ponto de montagem","listar maiores diretórios"],'
+    '"passos":["executar df -h","executar du -xh / | sort -rh | head -15"],'
     '"criterios":["saída real dos comandos na resposta"]}\n'
+    '"quais processos estão usando?" (após pedido sobre memória RAM) → '
+    '{"rota":"executar","tipo":"leitura","objetivo":"Listar os processos que '
+    'mais consomem memória RAM, com dados reais","passos":["executar '
+    'ps aux --sort=-%mem | head -15"],"criterios":["a listagem real de '
+    'processos aparece na resposta"]}\n'
+    "REGRA DE CONTINUAÇÃO: se a mensagem se referir a um pedido ANTERIOR "
+    "('pedido anterior', 'de novo', 'conclua', 'continue', 'mesma conversa'), "
+    "o objetivo é completar AQUELE pedido (use o contexto/última task).\n"
     "Responda APENAS o JSON."
 )
 
@@ -90,7 +100,12 @@ _REVISAO_JSON = (
     "3. PROIBIÇÕES — pediu ao usuário para executar/verificar algo? (falha "
     "grave) · inventou dados? · ficou no 'vou fazer'?\n"
     "4. ENTREGA — claro, direto, em português, com o resultado visível?\n"
-    "Aprove SÓ se TODOS os itens passarem. Responda APENAS um JSON:\n"
+    "DISCIPLINA DO VETERANO: julgue APENAS pelo OBJETIVO e pelos CRITÉRIOS "
+    "dados — NÃO invente critérios novos nem exija o que não foi pedido; "
+    "perguntas de cortesia no fim da resposta ('precisa de algo mais?') NÃO "
+    "são motivo para reprovar; se o objetivo era exibir/consultar algo e os "
+    "dados reais estão na resposta, APROVE.\n"
+    "Aprove SÓ se TODOS os itens do checklist passarem. Responda APENAS um JSON:\n"
     '{"veredito":"ok"}\n'
     '{"veredito":"refazer","problema":"o que exatamente faltou, em uma frase '
     'acionável"}\n'
@@ -172,6 +187,10 @@ def _extract_json(text: str) -> dict | None:
 
 # ───────────────────────────── 🎯 plano ─────────────────────────────
 
+_FOLLOWUP_RE = re.compile(
+    r"\b(pedido|tarefa|anterior|de novo|continu|conclu|repita|refa\w*|"
+    r"mesma conversa)\b", re.IGNORECASE)
+
 _CRIACAO_RE = re.compile(
     r"\b(crie|criar|cria|escreva|escrever|gere|gerar|instale|instalar|"
     r"apague|apagar|delete|deletar|mova|mover|copie|copiar|envie|enviar|"
@@ -200,7 +219,31 @@ def plan(cfg, message: str, history: list[dict] | None = None) -> dict:
     if not getattr(cfg, "orchestrator_on", True):
         return {"rota": "responder"}
     try:
-        texto = _fast(cfg, _PLANO_JSON, message, ntok=220,
+        # v3.6: o sênior lê a conversa, não a linha isolada — evita
+        # interpretar "você tem acesso a esses dados" como pedido de ls.
+        partes = []
+        conv = [m for m in (history or [])
+                if isinstance(m, dict) and m.get("role") in ("user", "assistant")
+                and str(m.get("content") or "").strip()]
+        if conv:
+            partes.append("CONTEXTO da conversa (últimas falas):")
+            for m in conv[-4:]:
+                quem = "usuário" if m.get("role") == "user" else "agente"
+                partes.append(f"{quem}: {str(m['content'])[:180]}")
+            partes.append("")
+        # v3.6: "conclua meu pedido anterior" → herda a última task
+        if _FOLLOWUP_RE.search(message or ""):
+            try:
+                ult = (list_tasks(cfg, limit=1) or [{}])[0]
+                if ult.get("objetivo"):
+                    partes.append(
+                        f"[ÚLTIMA TASK: {ult.get('id')} — {ult.get('objetivo')} — "
+                        f"status {ult.get('status', '?')}. Se a mensagem atual se "
+                        "refere a ela, o objetivo é CONCLUIR essa task.]")
+            except Exception:  # noqa: BLE001
+                pass
+        partes.append("MENSAGEM ATUAL: " + (message or ""))
+        texto = _fast(cfg, _PLANO_JSON, "\n".join(partes), ntok=220,
                       stage="🎯 orquestrador")
         obj = _extract_json(texto)
         if obj and obj.get("rota") in ("responder", "executar"):
@@ -302,7 +345,10 @@ def get_goal(session_id: str) -> str:
 _STOPWORDS = set("""a o as os um uma de do da dos das em no na nos nas para por com sem sobre
 e ou que qual quais quando onde como porque ao aos à às pelo pela os isso este esta
 esse essa ser estar ter fazer quero queria preciso pode podem deve devem vou vai
-task tarefa use quando envolver qualquer""".split())
+task tarefa use quando envolver qualquer
+resumo resumir resumida resumido detalhado detalhes uso usa usar dados dado mostra
+mostre mostrar listagem informação informações relatório máquina dispositivo
+notebook computador sistema pessoa pessoas""".split())
 
 
 def skills_for(cfg, text: str, max_skills: int = 2) -> list[dict]:
@@ -528,13 +574,19 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
                                f"(tentativa {tentativa + 1}/{max_t})"})
                 activity.log(cfg, "chat",
                              f"🔍 revisor reprovou (tentativa {tentativa}) — refazendo")
+                lista = ("\n".join(f"{i + 1}. {p}" for i, p in enumerate(passos))
+                         if passos else
+                         "1. Execute a ação que falta com a ferramenta adequada.")
                 msgs = [
                     msgs[0],
                     {"role": "assistant", "content": resultado[:2500]},
                     {"role": "user", "content":
-                        f"O REVISOR reprovou o resultado: {prob}\n"
-                        "Corrija o problema e complete a tarefa ORIGINAL de verdade. "
-                        "Não peça ao usuário para fazer — execute você."},
+                        f"O REVISOR SÊNIOR reprovou: {prob}\n\n"
+                        "EXECUTE AGORA, sem perguntar nada a ninguém:\n"
+                        f"{lista}\n"
+                        "Depois responda com a EVIDÊNCIA REAL (saídas/conteúdos "
+                        "colados na resposta).\n\n"
+                        f"PEDIDO ORIGINAL: {message}"},
                 ]
             else:
                 ev({"type": "note",

@@ -703,6 +703,13 @@ com opção de ✏️ editar o plano — e pausam de novo na entrega, onde o
 resultado pode ser editado antes de você receber. Tasks de leitura
 (listar, verificar, resumir) seguem direto. Desligável em Ajustes.
 
+**🛠 Lições da bateria real (v3.6.0):** revisor ancorado nos critérios
+(não inventa motivo para reprovar), skills só casam por termos
+distintivos (fim do falso-positivo "resumo-inbox" em pedido de RAM),
+retomada pós-reprovação imperativa (EXECUTE AGORA + pedido original),
+planejador com contexto da conversa e da última task ("conclua meu
+pedido anterior" funciona), passos sempre com comando concreto.
+
 **🧠 Mente sênior (v3.5.0):** o 🎯 orquestrador e o 🔍 revisor pensam
 como um engenheiro de sistemas sênior de 30 anos de estrada — o
 orquestrador lê a INTENÇÃO real do pedido e escreve a task como uma

@@ -1,5 +1,43 @@
 # Changelog
 
+## v3.6.0 — 🛠 lições da primeira bateria real do operador (5 correções de comportamento)
+
+Diagnóstico a partir de um log REAL do operador (Zorin OS, Ollama local):
+tarefas simples em parte funcionaram, em parte não. As cinco falhas
+observadas foram corrigidas na raiz:
+
+**1. Revisor reprovava resposta BOA com critério inventado** ("falta de
+solicitação explícita…"). Agora o revisor é ANCORADO: julga apenas pelo
+objetivo e critérios da task, NÃO inventa critérios, ignora perguntas de
+cortesia ("precisa de algo mais?") e aprova quando os dados reais estão lá.
+
+**2. Skill errada aplicada** ("✦ resumo-inbox" num pedido de memória RAM
+— falso-positivo por palavras genéricas). O casamento de skills agora
+ignora palavras genéricas (resumo, detalhado, uso, dados, notebook…);
+só termos distintivos pontuam. RAM → nenhuma skill; e-mail → resumo-inbox.
+
+**3. Executor PERGUNTANDO em vez de executar** (4× no log: "poderia
+fornecer mais detalhes?"). A retomada pós-reprovação agora é imperativa:
+"EXECUTE AGORA, sem perguntar nada a ninguém: <passos numerados com
+comandos> … PEDIDO ORIGINAL: …".
+
+**4. Orquestrador sem contexto da conversa** ("está na mesma conversa, o
+ideal era você ter acesso a esses dados" → interpretado como pedido de
+`ls`, executou literal `/path/to/directory`). O planejador agora recebe
+as últimas falas da conversa + a ÚLTIMA TASK registrada quando a mensagem
+se refere a trabalho anterior.
+
+**5. "Conclua meu pedido anterior" virava conversa** (2.1s, "me diga
+mais detalhes"). Regra de continuação no prompt (com exemplo), palavra
+de continuação na heurística e herança da última task.
+
+Passos do plano agora são SEMPRE concretos (comando/ferramenta citado —
+ex.: `ps aux --sort=-%mem | head -15`), para o executor de 8B não ter
+liberdade de divagar.
+
+Testes T59–T60 reproduzem os casos reais (skill errada, contexto,
+follow-up, retomada imperativa). Suíte: **60/60**.
+
 ## v3.5.0 — 🧠 mente sênior no orquestrador/revisor · 🛡 fim do bug "não recebo a resposta"
 
 Dois pedidos do operador, tratados na raiz:
