@@ -1,0 +1,430 @@
+"""Agendador de tarefas — executa pedidos em momentos específicos.
+
+Formatos aceitos (texto em português, campo "quando"):
+  "diário 08:30" / "todo dia às 08:30"       -> todos os dias às 08:30
+  "seg,qua 14:00" / "semanal seg,sex 07:00"   -> dias da semana específicos
+  "uma vez 2026-10-02 14:00" / "amanhã 09:00" -> executa uma vez e desativa
+  "a cada 30m" / "a cada 2h"                  -> recorrente por intervalo
+
+As tarefas agendadas rodam de forma DESASSISTIDA: sem confirmação interativa
+(nada de "executar mesmo assim?"), mas a denylist de segurança continua
+protegendo contra comandos destrutivos (rm -rf /, mkfs, shutdown…).
+
+O agendador vive no processo `hermes server` — mantenha a GUI rodando para
+que os horários disparem. Cada execução gera resultado completo em
+tasks/done/ e fica registrada na própria tarefa agendada.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import threading
+import time
+import uuid
+from datetime import date, datetime, time as dtime, timedelta
+from pathlib import Path
+
+SCHEDULE_ID_RE = re.compile(r"^[a-z0-9-]{6,64}$")
+POLL_SECONDS = 15
+
+_DAYS_PT = {
+    "dom": 6, "domingo": 6,
+    "seg": 0, "segunda": 0,
+    "ter": 1, "terca": 1, "terça": 1,
+    "qua": 2, "quarta": 2,
+    "qui": 3, "quinta": 3,
+    "sex": 4, "sexta": 4,
+    "sab": 5, "sabado": 5, "sábado": 5,
+}
+_DAY_NAMES = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+
+
+def _norm(text: str) -> str:
+    text = (text or "").lower().strip()
+    subs = {"á": "a", "à": "a", "ã": "a", "â": "a", "é": "e", "ê": "e", "í": "i",
+            "ó": "o", "ô": "o", "õ": "o", "ú": "u", "ç": "c"}
+    for k, v in subs.items():
+        text = text.replace(k, v)
+    return re.sub(r"\s+", " ", text)
+
+
+def parse_schedule(text: str) -> dict:
+    """Converte texto em português num spec de agendamento."""
+    t = _norm(text)
+    if not t:
+        raise ValueError("informe quando a tarefa deve rodar")
+
+    # a cada Nm / Nh
+    m = re.search(r"a cada\s+(\d+)\s*(m|min|minutos?|h|horas?)", t)
+    if m:
+        n = max(1, int(m.group(1)))
+        minutes = n * 60 if m.group(2).startswith("h") else n
+        return {"type": "interval", "minutes": minutes}
+
+    # data+hora absoluta: 2026-10-02 14:00 (com ou sem "uma vez")
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})[ t]+(\d{1,2}):(\d{2})", t)
+    if m:
+        try:
+            dt = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)),
+                          int(m.group(4)), int(m.group(5)))
+        except ValueError as exc:
+            raise ValueError(f"data inválida: {exc}") from exc
+        return {"type": "once", "at": dt.strftime("%Y-%m-%dT%H:%M")}
+
+    hm = re.search(r"\b(\d{1,2}):(\d{2})\b", t)
+    if hm:
+        hh, mm = int(hm.group(1)) % 24, int(hm.group(2))
+    else:
+        # "às 8h", "às 8h30", "às 8" (às normaliza p/ "as")
+        mh = re.search(r"\bas\s+(\d{1,2})h(\d{2})?\b", t) or \
+             re.search(r"\bas\s+(\d{1,2})\b", t)
+        if not mh:
+            raise ValueError(
+                "não entendi o horário — exemplos: 'diário 08:30', 'seg,qua 14:00', "
+                "'amanhã 09:00', 'a cada 30m'"
+            )
+        hh, mm = int(mh.group(1)) % 24, (int(mh.group(2)) if mh.lastindex == 2 else 0)
+
+    # hoje/amanhã HH:MM -> once
+    if "amanha" in t:
+        dt = datetime.combine(date.today() + timedelta(days=1), dtime(hh, mm))
+        return {"type": "once", "at": dt.strftime("%Y-%m-%dT%H:%M")}
+    if "hoje" in t:
+        dt = datetime.combine(date.today(), dtime(hh, mm))
+        return {"type": "once", "at": dt.strftime("%Y-%m-%dT%H:%M")}
+
+    # dias da semana -> weekly
+    days = sorted({_DAYS_PT[d] for d in _DAYS_PT if re.search(rf"\b{d}\b", t)})
+    if days:
+        return {"type": "weekly", "days": days, "time": f"{hh:02d}:{mm:02d}"}
+
+    # diário (padrão quando só tem horário)
+    return {"type": "daily", "time": f"{hh:02d}:{mm:02d}"}
+
+
+def human_schedule(spec: dict) -> str:
+    t = spec.get("type")
+    if t == "daily":
+        return f"todos os dias às {spec.get('time')}"
+    if t == "weekly":
+        dias = ", ".join(_DAY_NAMES[d] for d in spec.get("days", []))
+        return f"{dias} às {spec.get('time')}"
+    if t == "once":
+        return f"uma vez em {spec.get('at', '').replace('T', ' ')}"
+    if t == "interval":
+        n = spec.get("minutes", 0)
+        return f"a cada {n // 60}h{n % 60:02d}m" if n >= 60 else f"a cada {n} min"
+    return "?"
+
+
+def _parse_hm(value: str) -> dtime:
+    hh, mm = str(value).split(":")[:2]
+    return dtime(int(hh) % 24, int(mm) % 60)
+
+
+def next_run(entry: dict, now: datetime | None = None) -> datetime | None:
+    """Próxima disparada da tarefa (None se não houver)."""
+    now = now or datetime.now()
+    spec = entry.get("schedule") or {}
+    t = spec.get("type")
+    if t == "daily":
+        hhmm = _parse_hm(spec.get("time", "08:00"))
+        candidate = now.replace(hour=hhmm.hour, minute=hhmm.minute,
+                                second=0, microsecond=0)
+        if candidate <= now:
+            candidate += timedelta(days=1)
+        return candidate
+    if t == "weekly":
+        hhmm = _parse_hm(spec.get("time", "08:00"))
+        days = set(spec.get("days") or [0])
+        for i in range(8):
+            candidate = (now + timedelta(days=i)).replace(
+                hour=hhmm.hour, minute=hhmm.minute, second=0, microsecond=0)
+            if candidate > now and candidate.weekday() in days:
+                return candidate
+        return None
+    if t == "once":
+        try:
+            at = datetime.strptime(spec.get("at", ""), "%Y-%m-%dT%H:%M")
+        except ValueError:
+            return None
+        return at if at > now else None
+    if t == "interval":
+        minutes = max(1, int(spec.get("minutes", 60)))
+        base = None
+        for key in ("last_run_ts", "created_ts"):
+            if entry.get(key):
+                base = datetime.fromtimestamp(float(entry[key]))
+                break
+        if base is None:
+            return now
+        cand = base + timedelta(minutes=minutes)
+        step = timedelta(minutes=minutes)
+        while cand <= now:  # pula slots perdidos (server desligado etc.)
+            cand += step
+        return cand
+    return None
+
+
+def is_due(entry: dict, now: datetime | None = None) -> bool:
+    """A tarefa deve disparar AGORA? (next_run é só para exibição.)"""
+    now = now or datetime.now()
+    spec = entry.get("schedule") or {}
+    t = spec.get("type")
+    if t in ("daily", "weekly"):
+        hhmm = _parse_hm(spec.get("time", "08:00"))
+        if now.time() < hhmm:
+            return False
+        if t == "weekly" and now.weekday() not in set(spec.get("days") or [0]):
+            return False
+        last = entry.get("last_run_ts")
+        if last and datetime.fromtimestamp(float(last)).date() == now.date():
+            return False  # já rodou hoje
+        created = entry.get("created_ts")
+        if not last and created:
+            c = datetime.fromtimestamp(float(created))
+            if c.date() == now.date() and c.time() > hhmm:
+                return False  # criada depois do horário → começa no próximo dia
+        return True
+    if t == "once":
+        try:
+            at = datetime.strptime(spec.get("at", ""), "%Y-%m-%dT%H:%M")
+        except ValueError:
+            return False
+        if entry.get("last_run_ts"):
+            return False
+        # tolerância de 10 min: depois disso, considera perdida
+        return at <= now <= at + timedelta(minutes=10)
+    if t == "interval":
+        minutes = max(1, int(spec.get("minutes", 60)))
+        base = None
+        for key in ("last_run_ts", "created_ts"):
+            if entry.get(key):
+                base = datetime.fromtimestamp(float(entry[key]))
+                break
+        if base is None:
+            return True
+        return (now - base) >= timedelta(minutes=minutes)
+    return False
+
+
+class ScheduleStore:
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.dir = cfg.data_dir / "schedules"
+
+    def _path(self, sid: str) -> Path:
+        return self.dir / f"{sid}.json"
+
+    def _ensure(self) -> None:
+        self.dir.mkdir(parents=True, exist_ok=True)
+
+    def create(self, input_text: str, spec: dict) -> dict:
+        self._ensure()
+        entry = {
+            "id": time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6],
+            "input": input_text.strip(),
+            "schedule": spec,
+            "enabled": True,
+            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "created_ts": time.time(),
+            "run_count": 0,
+            "last_run": None,
+            "last_status": None,
+            "last_duration_s": None,
+            "last_output": None,
+            "running": False,
+        }
+        self.save(entry)
+        return entry
+
+    def save(self, entry: dict) -> None:
+        self._ensure()
+        path = self._path(entry["id"])
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(entry, ensure_ascii=False, indent=1), encoding="utf-8")
+        tmp.replace(path)
+
+    def load(self, sid: str) -> dict | None:
+        if not SCHEDULE_ID_RE.fullmatch(sid or ""):
+            return None
+        p = self._path(sid)
+        if not p.exists():
+            return None
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+
+    def list_all(self) -> list[dict]:
+        self._ensure()
+        out = []
+        for f in sorted(self.dir.glob("*.json")):
+            try:
+                out.append(json.loads(f.read_text(encoding="utf-8")))
+            except (OSError, json.JSONDecodeError):
+                continue
+        return out
+
+    def public_list(self) -> list[dict]:
+        now = datetime.now()
+        items = []
+        for e in self.list_all():
+            nr = next_run(e, now)
+            items.append({
+                "id": e.get("id"),
+                "input": e.get("input", ""),
+                "schedule": e.get("schedule", {}),
+                "human": human_schedule(e.get("schedule") or {}),
+                "enabled": bool(e.get("enabled")),
+                "running": bool(e.get("running")),
+                "next_run": nr.strftime("%Y-%m-%d %H:%M") if (nr and e.get("enabled")) else None,
+                "run_count": e.get("run_count", 0),
+                "last_run": e.get("last_run"),
+                "last_status": e.get("last_status"),
+                "last_duration_s": e.get("last_duration_s"),
+            })
+        return items
+
+    def delete(self, sid: str) -> bool:
+        if not SCHEDULE_ID_RE.fullmatch(sid or ""):
+            return False
+        p = self._path(sid)
+        if p.exists():
+            p.unlink()
+            return True
+        return False
+
+
+# ---------------------------------------------------------------- executor
+
+def execute_entry(cfg, entry: dict) -> dict:
+    """Roda a tarefa agendada de forma desassistida e devolve o resultado."""
+    from .agent import Agent
+
+    if getattr(cfg, "auto_start_ollama", False) and not cfg.mock:
+        try:
+            from .ollama_client import get_client
+            if not get_client(cfg).is_running():
+                from .manager import OllamaManager
+                OllamaManager(cfg).start()
+        except Exception:
+            pass
+
+    agent = Agent(cfg)
+    events: list[dict] = []
+    t0 = time.time()
+    final = agent.run([{"role": "user", "content": entry["input"]}],
+                      on_event=events.append)
+    return {
+        "status": "ok",
+        "output": final,
+        "tools": [
+            {"name": e["name"], "ok": e["ok"], "output": (e.get("output") or "")[-1500:]}
+            for e in events if e.get("type") == "tool_end"
+        ],
+        "duration_s": round(time.time() - t0, 1),
+    }
+
+
+class Scheduler:
+    """Loop que dispara as tarefas agendadas (roda dentro do `hermes server`)."""
+
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.store = ScheduleStore(cfg)
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    # ------------------------------------------------------------- ciclo
+    def start(self) -> None:
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._loop, daemon=True,
+                                        name="hermes-scheduler")
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _loop(self) -> None:
+        while not self._stop.wait(POLL_SECONDS):
+            try:
+                self.tick()
+            except Exception:
+                pass
+
+    def tick(self) -> None:
+        now = datetime.now()
+        for entry in self.store.list_all():
+            if not entry.get("enabled") or entry.get("running"):
+                continue
+            if is_due(entry, now):
+                threading.Thread(target=self._execute, args=(entry["id"],),
+                                 daemon=True).start()
+            elif ((entry.get("schedule") or {}).get("type") == "once"
+                  and not entry.get("run_count")
+                  and next_run(entry, now) is None):
+                # once cujo horário passou (mais de 10 min) e nunca rodou → perdida
+                entry["enabled"] = False
+                entry["last_status"] = "perdida"
+                self.store.save(entry)
+
+    # ---------------------------------------------------------- execução
+    def _execute(self, sid: str, force: bool = False) -> dict:
+        entry = self.store.load(sid)
+        if not entry or entry.get("running"):
+            return {"ok": False, "msg": "tarefa não encontrada ou já em execução"}
+        entry["running"] = True
+        self.store.save(entry)
+        try:
+            result = execute_entry(self.cfg, entry)
+        except Exception as exc:  # noqa: BLE001
+            result = {"status": "error",
+                      "output": f"[erro] {exc.__class__.__name__}: {exc}",
+                      "tools": [], "duration_s": 0}
+
+        entry = self.store.load(sid) or entry
+        entry.update({
+            "running": False,
+            "run_count": entry.get("run_count", 0) + 1,
+            "last_run": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "last_run_ts": time.time(),
+            "last_status": result["status"],
+            "last_duration_s": result["duration_s"],
+            "last_output": (result["output"] or "")[:4000],
+        })
+        spec = entry.get("schedule") or {}
+        if spec.get("type") == "once" and not force:
+            entry["enabled"] = False  # única execução concluída
+        self.store.save(entry)
+
+        # resultado completo vai para o histórico de tarefas (aba Tarefas)
+        try:
+            done = self.cfg.done_dir
+            done.mkdir(parents=True, exist_ok=True)
+            record = {
+                "id": f"{sid}-{int(time.time())}",
+                "input": f"⏰ [agendada] {entry['input']}",
+                "output": result["output"],
+                "tools": result.get("tools", []),
+                "status": result["status"],
+                "started_at": entry["last_run"],
+                "duration_s": result["duration_s"],
+            }
+            (done / f"{record['id']}.json").write_text(
+                json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError:
+            pass
+        return {"ok": True, "msg": f"tarefa executada ({result['status']}, "
+                                   f"{result['duration_s']}s)"}
+
+    def run_now(self, sid: str) -> dict:
+        entry = self.store.load(sid)
+        if not entry:
+            return {"ok": False, "msg": "tarefa não encontrada"}
+        threading.Thread(target=self._execute, args=(sid,), kwargs={"force": True},
+                         daemon=True).start()
+        return {"ok": True, "msg": "executando agora — o resultado aparece em instantes"}

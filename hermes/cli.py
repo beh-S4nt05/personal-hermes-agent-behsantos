@@ -209,6 +209,52 @@ def cmd_server(args) -> None:
     serve(cfg, host=args.host or cfg.host, port=args.port or cfg.port)
 
 
+def cmd_schedule(args) -> None:
+    import time as _time
+
+    from .scheduler import Scheduler, ScheduleStore, human_schedule, parse_schedule
+
+    cfg = _cfg(args)
+    store = ScheduleStore(cfg)
+    if args.action == "list":
+        items = store.public_list()
+        if not items:
+            _p('nenhuma tarefa agendada — crie com: hermes schedule add "tarefa" "diário 08:30"')
+            return
+        _p(f"\n⏰ {len(items)} tarefa(s) agendada(s)")
+        for s in items:
+            mark = "🟢" if s["enabled"] else "⚪"
+            _p(f"  {mark} {s['id']}")
+            _p(f"      o quê : {s['input'][:90]}")
+            _p(f"      quando: {s['human']} | próxima: {s['next_run'] or '—'} | execuções: {s['run_count']}")
+        _p()
+    elif args.action == "add":
+        try:
+            spec = parse_schedule(args.when)
+        except ValueError as exc:
+            _fail(str(exc))
+        entry = store.create(args.text, spec)
+        _ok(f"agendada ({human_schedule(spec)}): {entry['id']}")
+        _p("  dica: o agendador roda dentro do `hermes server` — mantenha-o aberto.")
+    elif args.action == "del":
+        sid = args.id or args.text or args.when
+        removed = store.delete(sid)
+        (_ok if removed else _fail)("agendamento removido" if removed else "não encontrado")
+    elif args.action == "run":
+        sid = args.id or args.text or args.when
+        sched = Scheduler(cfg)
+        sched.start()
+        result = sched.run_now(sid)
+        (_ok if result["ok"] else _fail)(result["msg"])
+        if result["ok"]:
+            _time.sleep(4)
+            entry = store.load(args.id)
+            if entry and entry.get("last_output"):
+                _p("─" * 60)
+                _p(entry["last_output"][:1200])
+                _p("─" * 60)
+
+
 def cmd_tasks(args) -> None:
     from .daemon import list_tasks
 
@@ -300,6 +346,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("tasks", help="lista tarefas da fila e resultados")
     p.set_defaults(fn=cmd_tasks)
+
+    p = sub.add_parser("schedule", help="tarefas agendadas (⏰)")
+    p.add_argument("action", choices=["list", "add", "del", "run"])
+    p.add_argument("text", nargs="?", help="para 'add': o que o agente deve fazer")
+    p.add_argument("when", nargs="?", help="para 'add': quando — ex.: 'diário 08:30', 'seg,qua 14:00', 'a cada 30m'")
+    p.add_argument("id", nargs="?", help="para 'del'/'run': id da tarefa")
+    p.set_defaults(fn=cmd_schedule)
 
     p = sub.add_parser("config", help="configuração")
     p.add_argument("action", choices=["show", "set", "edit"])

@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.4.0 — tarefas agendadas (⏰)
+
+- **Agendador embutido no `hermes server`** (verifica a cada 15s): tarefas
+  disparadas em momentos específicos, sem ninguém no teclado.
+- **Agendamento em português**: "diário 07:30", "todo dia às 8", "seg,qua
+  14:00", "amanhã 09:00", "uma vez 2026-10-05 08:00", "a cada 30m".
+- **Execução desassistida**: sem confirmação interativa (nada bloqueia a
+  tarefa agendada); a denylist de segurança segue ativa (rm -rf /, mkfs,
+  shutdown… continuam bloqueados).
+- **GUI**: nova seção "⏰ Tarefas agendadas" na aba Tarefas — criar, ▶ rodar
+  agora, ⏸ pausar/ativar, 🗑 remover, próxima execução e histórico (nº de
+  execuções, última com duração). Resultados completos aparecem na fila.
+- **CLI**: `hermes schedule list|add|del|run`.
+- Auto-liga o Ollama na execução quando "ligar automaticamente" está ativo.
+- Nova skill **resumo-inbox**: relatórios de e-mail (Gmail MCP oficial do
+  Google) e Google Classroom (via e-mails de notificação ou API).
+
 ## v1.3.1 — tempo de geração da resposta
 
 - **⏱ badge de tempo** sob cada resposta: `⏱ 4.2s · 87 tokens · 2 passo(s)`

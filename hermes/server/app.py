@@ -585,6 +585,70 @@ def create_app(cfg: Config) -> Flask:
                 pass
         return jsonify({"ok": True, "msg": f"{removed} resultado(s) removido(s)"})
 
+    # ------------------------------------------------------- agendamentos
+    @app.get("/api/schedules")
+    @protected
+    def schedules_list():
+        from ..scheduler import ScheduleStore
+
+        return jsonify({"schedules": ScheduleStore(cfg).public_list()})
+
+    @app.post("/api/schedules")
+    @protected
+    def schedules_create():
+        from ..scheduler import ScheduleStore, human_schedule, parse_schedule
+
+        payload = request.get_json(silent=True) or {}
+        input_text = str(payload.get("input", "")).strip()
+        when = str(payload.get("when", "")).strip()
+        if not input_text:
+            return jsonify({"ok": False, "msg": "descreva o que o agente deve fazer"}), 400
+        try:
+            spec = parse_schedule(when)
+        except ValueError as exc:
+            return jsonify({"ok": False, "msg": str(exc)}), 400
+        entry = ScheduleStore(cfg).create(input_text, spec)
+        return jsonify({
+            "ok": True,
+            "msg": f"tarefa agendada: {human_schedule(spec)}",
+            "schedule": entry["id"],
+        })
+
+    @app.post("/api/schedules/toggle")
+    @protected
+    def schedules_toggle():
+        from ..scheduler import ScheduleStore
+
+        payload = request.get_json(silent=True) or {}
+        store = ScheduleStore(cfg)
+        entry = store.load(str(payload.get("id", "")))
+        if not entry:
+            return jsonify({"ok": False, "msg": "tarefa não encontrada"}), 404
+        entry["enabled"] = bool(payload.get("enabled", not entry.get("enabled")))
+        store.save(entry)
+        return jsonify({"ok": True,
+                        "msg": f"agendamento {'ativado' if entry['enabled'] else 'pausado'}"})
+
+    @app.post("/api/schedules/delete")
+    @protected
+    def schedules_delete():
+        from ..scheduler import ScheduleStore
+
+        payload = request.get_json(silent=True) or {}
+        if not ScheduleStore(cfg).delete(str(payload.get("id", ""))):
+            return jsonify({"ok": False, "msg": "tarefa não encontrada"}), 404
+        return jsonify({"ok": True, "msg": "agendamento removido"})
+
+    @app.post("/api/schedules/run")
+    @protected
+    def schedules_run():
+        payload = request.get_json(silent=True) or {}
+        sched = app.config.get("HERMES_SCHEDULER")
+        if sched is None:
+            return jsonify({"ok": False, "msg": "agendador não está ativo"}), 409
+        result = sched.run_now(str(payload.get("id", "")))
+        return jsonify(result), (200 if result["ok"] else 404)
+
     # ------------------------------------------------------ configuração
     @app.get("/api/settings")
     @protected
@@ -657,4 +721,15 @@ def serve(cfg: Config, host: str, port: int) -> None:
             print(f"     ollama pull {cfg.model:<20}      # baixar o modelo")
             print("     hermes config set model <nome>        # usar um modelo de `ollama list`")
     print("  ➜ CTRL+C para encerrar\n")
+
+    # agendador de tarefas (mantenha o server rodando para os horários dispararem)
+    from ..scheduler import Scheduler
+
+    sched = Scheduler(cfg)
+    sched.start()
+    app.config["HERMES_SCHEDULER"] = sched
+    ativos = sum(1 for s in sched.store.public_list() if s["enabled"])
+    print(f"  ⏰ agendador ativo — {ativos} tarefa(s) agendada(s) "
+          f"(verifica a cada 15s)")
+
     app.run(host=host, port=port, threaded=True, debug=False)

@@ -300,6 +300,22 @@
       <div class="hint" style="margin-top:8px">As tarefas ficam na fila e o agente executa em sequência assim que estiver ligado.</div>
       <div id="tasklist" style="margin-top:16px"></div>
     </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">⏰</span> Tarefas agendadas <span class="hint" style="margin-left:auto">executam sozinhas no horário</span></h3>
+      <div class="chatrow" style="margin-top:0">
+        <input type="text" id="sched-input" placeholder="o que o agente deve fazer — ex.: resuma meus e-mails e as atividades do classroom"
+               style="flex:2" onkeydown="if(event.key==='Enter')$('sched-when').focus()">
+        <input type="text" id="sched-when" placeholder="quando — ex.: diário 07:30" style="max-width:220px" onkeydown="if(event.key==='Enter')schedAdd()">
+        <button class="b primary" onclick="schedAdd()">⏰ agendar</button>
+      </div>
+      <div class="hint" style="margin-top:8px">
+        formatos: <b>diário 07:30</b> · <b>seg,qua 14:00</b> · <b>amanhã 09:00</b> ·
+        <b>uma vez 2026-10-05 08:00</b> · <b>a cada 30m</b> — rodam sem exigir confirmação
+        (mantenha o server aberto; a denylist de segurança continua ativa)
+      </div>
+      <div id="sched-list" style="margin-top:16px">carregando…</div>
+    </div>
   </section>
 
   <!-- ══════════════════════ OLLAMA ══════════════════════ -->
@@ -456,7 +472,7 @@ document.querySelectorAll("nav button").forEach(b=>{
     b.classList.add("active"); $("page-"+b.dataset.page).classList.add("active");
     state.page = b.dataset.page;
     if (state.page==="chat") $("chatin").focus();
-    if (state.page==="tarefas") loadTasks();
+    if (state.page==="tarefas"){ loadTasks(); loadSchedules(); }
     if (state.page==="ollama") loadOllamaPage();
     if (state.page==="skills") loadSkills();
     if (state.page==="ajustes") loadSettings();
@@ -842,6 +858,57 @@ async function clearTasks(){
   await api("/api/tasks/clear", {method:"POST"}); loadTasks();
 }
 setInterval(()=>{ if (state.page==="tarefas") loadTasks(); }, 5000);
+
+/* ═══════════════ tarefas agendadas ═══════════════ */
+let SCHEDS = [];
+async function loadSchedules(){
+  try{
+    const r = await api("/api/schedules"); const d = await r.json();
+    SCHEDS = d.schedules || [];
+    const el = $("sched-list");
+    if (!SCHEDS.length){
+      el.innerHTML = '<div class="hint">nenhuma tarefa agendada — use o formulário acima (ex.: "resumo dos e-mails", "diário 07:30").</div>';
+      return;
+    }
+    el.innerHTML = SCHEDS.map(s=>`
+      <div class="task"><div class="top">
+        <span class="st ${s.running?"pend":(s.enabled?(s.last_status==="ok"?"ok":(s.last_status?"err":"pend")):"err")}">${s.running?"rodando…":(s.enabled?"ativa":"pausada")}</span>
+        <span class="input"><b>${esc(s.input.slice(0,110))}</b><br>
+          <span class="hint">⏰ ${esc(s.human)} · próxima: ${esc(s.next_run||"—")} · ${s.run_count} execução(ões)${s.last_run?` · última: ${esc(s.last_run)} (${esc(s.last_duration_s)}s)`:''}</span></span>
+        <span class="btnrow" style="margin:0">
+          <button class="b small" onclick="schedRun('${esc(s.id)}')">▶ agora</button>
+          <button class="b small ghost" onclick="schedToggle('${esc(s.id)}',${!s.enabled})">${s.enabled?"⏸ pausar":"▶ ativar"}</button>
+          <button class="b small danger" onclick="schedDel('${esc(s.id)}')">🗑</button>
+        </span>
+      </div></div>`).join("");
+  }catch(e){}
+}
+async function schedAdd(){
+  const input = $("sched-input").value.trim(), when = $("sched-when").value.trim();
+  if (!input || !when){ toast("preencha o que fazer e quando", true); return; }
+  const r = await api("/api/schedules", {method:"POST", body: JSON.stringify({input, when})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  if (j.ok){ $("sched-input").value=""; $("sched-when").value=""; }
+  loadSchedules();
+}
+async function schedToggle(id, enable){
+  const r = await api("/api/schedules/toggle", {method:"POST", body: JSON.stringify({id, enabled: enable})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); loadSchedules();
+}
+async function schedRun(id){
+  const r = await api("/api/schedules/run", {method:"POST", body: JSON.stringify({id})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  setTimeout(loadSchedules, 1500); setTimeout(loadTasks, 4000);
+}
+async function schedDel(id){
+  if (!confirm("remover este agendamento?")) return;
+  await api("/api/schedules/delete", {method:"POST", body: JSON.stringify({id})});
+  loadSchedules();
+}
+setInterval(()=>{ if (state.page==="tarefas") loadSchedules(); }, 5000);
 
 /* ═══════════════ página Ollama ═══════════════ */
 async function loadOllamaPage(){

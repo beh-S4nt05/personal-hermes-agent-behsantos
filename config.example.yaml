@@ -40,5 +40,12 @@ mcp_servers:
     env:
       HERMES_WORKDIR: ~/.hermes/workspace
 
+  # Gmail — servidor MCP oficial do Google (requer projeto no Google Cloud,
+  # Gmail API habilitada e OAuth; Developer Preview). Transporte HTTP:
+  # - name: gmail
+  #   url: https://gmailmcp.googleapis.com/mcp/v1
+  #   headers:            # token OAuth (Bearer) quando disponível
+  #     Authorization: "Bearer SEU-TOKEN"
+
 # --- Skills ---
 skills_disabled: []                  # nomes desabilitados pela GUI

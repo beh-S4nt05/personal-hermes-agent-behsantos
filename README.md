@@ -137,6 +137,35 @@ curl -s localhost:8080/api/agent/start -X POST | jq
 curl -N localhost:8080/api/logs/stream          # log ao vivo no terminal
 ```
 
+## ⏰ Tarefas agendadas
+
+Deixe pedidos para executarem sozinhos em horários específicos — o
+agendador roda **dentro do `hermes server`** (mantenha a GUI aberta):
+
+```bash
+hermes schedule add "resuma meus e-mails e as atividades do classroom" "diário 07:30"
+hermes schedule add "relatório de uso de disco" "seg,sex 18:00"
+hermes schedule add "limpeza de backups antigos" "domingo 03:00"
+hermes schedule list
+```
+
+Ou pela GUI → aba **Tarefas → ⏰ Tarefas agendadas**. Formatos aceitos:
+`diário 07:30` · `todo dia às 8` · `seg,qua 14:00` · `amanhã 09:00` ·
+`uma vez 2026-10-05 08:00` · `a cada 30m`.
+
+As tarefas agendadas rodam **sem confirmação interativa** (nada as barra),
+mas a denylist de segurança permanece: comandos destrutivos continuam
+bloqueados. Resultados ficam no histórico da aba Tarefas.
+
+**E-mail/Classroom**: adicione o conector Gmail (MCP oficial do Google) no
+`config.yaml` e a skill `resumo-inbox` guia o agente no relatório diário:
+
+```yaml
+mcp_servers:
+  - name: gmail
+    url: https://gmailmcp.googleapis.com/mcp/v1   # requer OAuth (Google Cloud)
+```
+
 ## 🧠 Gerenciando o Ollama pela GUI (o "app desktop" do Linux)
 
 A aba **Ollama** dá a visibilidade de processo que no Windows fica na bandeja:
