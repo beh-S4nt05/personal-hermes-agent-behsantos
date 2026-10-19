@@ -192,6 +192,19 @@ No chat, o seletor no topo escolhe quem responde:
 
 As tarefas agendadas também têm seletor de agente (Hermes ou Claude Code).
 
+## 🎤 Ditar pelo microfone (Whisper local)
+
+Botão **🎤** no chat: fale, pare a gravação e o **Whisper local** transcreve —
+o texto é enviado ao agente, que interpreta e executa (dite "mostre informações
+do sistema"). Requer uma vez:
+
+```bash
+./.venv/bin/pip install faster-whisper "av<19"   # modelo 'base' baixa no 1º uso
+```
+
+100% local, sem API. Modelo e idioma ajustáveis em ⚙ Ajustes; microfone exige
+`http://127.0.0.1:8080` ou HTTPS.
+
 ## 🌐 Acesso à web
 
 O **próprio agente** pesquisa na internet e lê páginas quando precisa — no

@@ -70,6 +70,12 @@ ollama pull hermes3:8b               # modelo padrão
 
 A GUI abre em **http://127.0.0.1:8080** (localhost apenas, por padrão).
 
+Opcional — **ditado por voz** (Whisper local):
+
+```bash
+./.venv/bin/pip install faster-whisper "av<19"   # ~200 MB; modelo 'base' baixa no 1º uso
+```
+
 Opcional — Claude Code como 2º agente: instale a CLI `claude`
 (`curl -fsSL https://claude.ai/install.sh | bash`) e confirme com
 `ollama launch claude --model hermes3:8b`. O Hermes faz a integração com o
@@ -127,7 +133,7 @@ Módulos (`hermes/`):
 | Aba | O que faz |
 |---|---|
 | ▤ **Painel** | Visão geral: agente, Ollama, host, atalhos |
-| ◈ **Chat** | Conversa com seletor de agente, ＋ nova conversa, 🕘 histórico com 🔍 busca, cronômetro "A trabalhar…", badge ⏱ tempo · tokens · passos |
+| ◈ **Chat** | Conversa com seletor de agente, ＋ nova conversa, 🕘 histórico com 🔍 busca, cronômetro "A trabalhar…", badge ⏱ tempo · tokens · passos, **🎤 ditado por voz** |
 | ☑ **Tarefas** | Fila do agente + resultados; **⏰ Tarefas agendadas** (criar, ▶ agora, 👁 ao vivo, ⏸ pausar, 🗑 apagar) |
 | 🧠 **Ollama** | Ligar/desligar/reiniciar, conexão, auto-start, **modelos: buscar catálogo, baixar com progresso, cancelar, apagar** |
 | 🛠 **Ferramentas** | Terminal rápido, arquivos do workspace (listar/ler/gravar), info do sistema, **🌐 web (busca DuckDuckGo + leitura de páginas)** e catálogo de funções |
@@ -203,6 +209,23 @@ Sem a CLI instalada, o agente responde com instruções de instalação.
 5. Ao terminar, a resposta é gravada na sessão com `dur` e, se for o caso,
    `agent: "claude"`;
 6. ⏹ **parar** (botão) cancela a geração — o texto parcial já gerado é mantido.
+
+### 🎤 Ditado por voz (Whisper local)
+
+No chat, o botão **🎤** grava sua voz pelo microfone e o **Whisper local**
+(faster-whisper, na CPU) transcreve — o texto vai para o campo de mensagem e
+(o padrão) é **enviado sozinho ao agente**, que interpreta e executa como
+qualquer mensagem: dite *"liste os arquivos do workspace"* e veja acontecer.
+
+- Requer uma vez: `./.venv/bin/pip install faster-whisper` (~200 MB); o modelo
+  (`base`, ≈140 MB) é baixado no primeiro ditado e fica em cache — depois é
+  100% local, sem API;
+- ⚙ Ajustes: **modelo de voz** (tiny/base/small/medium/large-v3 — maior =
+  mais preciso e mais pesado), **idioma** (padrão `pt`) e **enviar
+  automaticamente após ditar** (desligue para revisar antes de enviar);
+- O microfone exige contexto seguro: funciona em `http://127.0.0.1:8080` ou
+  HTTPS; se abrir a GUI por IP na rede (http://192.168.x.x), o navegador
+  bloqueia a gravação.
 
 ## 7. Conversas: persistência, nova e busca
 
@@ -382,6 +405,7 @@ Autenticação: se `auth_token` estiver definido, envie header
 | `POST /api/tools/run` | terminal rápido `{command}` (denylist ativa) |
 | `POST /api/tools/list_dir` / `read_file` / `write_file` / `sys_info` | arquivos e diagnóstico |
 | `POST /api/tools/web_search` / `web_fetch` | 🌐 `{query}` busca · `{url}` abre página |
+| `GET /api/stt/status` · `POST /api/stt` | 🎤 status da voz · transcreve áudio (multipart `audio`) |
 | **Ollama** | |
 | `GET /api/ollama/diagnose` · `POST /api/ollama/test` | diagnóstico · teste de conexão |
 | `GET /api/ollama/models` | modelos instalados |
@@ -429,6 +453,8 @@ ambiente: `HERMES_DATA_DIR` (pasta de dados) e `HERMES_MOCK=1` (demo).
 | `claude_use_ollama` | true | 🔌 Claude Code integrado ao Ollama (variáveis automáticas) |
 | `claude_model` | vazio | modelo do Claude Code (ex.: `qwen3-coder`) |
 | `web_access` | true | 🌐 ferramentas de web do agente e da GUI |
+| `stt_model` / `stt_language` | base / pt | 🎤 modelo do Whisper e idioma do ditado |
+| `stt_autosend` | true | envia a mensagem ao agente após ditar |
 | `host` / `port` | 127.0.0.1 / 8080 | onde a GUI escuta |
 | `auth_token` | vazio | senha da GUI (use se abrir para a rede) |
 | `max_steps` | 8 | ciclos modelo→ferramenta por tarefa |
@@ -509,6 +535,9 @@ agendamentos, configuração).
 | GUI pedindo token | é o `auth_token`; defina/altere em Ajustes |
 | Sandbox bloqueou um caminho | desative `sandbox` em Ajustes (por sua conta e risco) |
 | Busca na web sem resultados | DuckDuckGo limita rajadas — espere uns segundos e tente de novo; confira se "🌐 acesso à web" está ativo em Ajustes |
+| 🎤 não grava | o microfone só funciona em `http://127.0.0.1:8080` ou HTTPS (abrindo por IP na rede, o navegador bloqueia); confira a permissão do microfone no navegador |
+| 🎤 "transcrição não instalada" | `./.venv/bin/pip install faster-whisper "av<19"` e recarregue a página |
+| 1º ditado demora | é o download do modelo (base ≈140 MB, uma vez só) — os seguintes são rápidos |
 
 ## 19. Histórico de versões
 

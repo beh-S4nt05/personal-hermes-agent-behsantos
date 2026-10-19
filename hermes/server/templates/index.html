@@ -319,6 +319,7 @@
       </div>
       <div class="chatrow">
         <textarea id="chatin" rows="1" placeholder="fale com o Hermes…  (Enter envia · Shift+Enter quebra linha)"></textarea>
+        <button class="b ghost" id="btn-mic" title="ditar pelo microfone (Whisper local)" onclick="toggleMic()">🎤</button>
         <button class="b danger" id="btn-stop" style="display:none" onclick="stopChat()">⏹ parar</button>
         <button class="b primary" id="btn-send" onclick="sendChat()">enviar ➤</button>
       </div>
@@ -529,6 +530,19 @@
         <div class="field"><div class="check"><input type="checkbox" id="s-confirm_dangerous"><label for="s-confirm_dangerous" style="color:var(--txt)">confirmar comandos arriscados no terminal</label></div></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-claude_use_ollama"><label for="s-claude_use_ollama" style="color:var(--txt)">🔌 Claude Code via Ollama (mesmo servidor do Hermes)</label></div></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-web_access"><label for="s-web_access" style="color:var(--txt)">🌐 acesso à web (busca e leitura de páginas)</label></div></div>
+        <div class="field"><label>🎤 modelo de voz (Whisper)</label>
+          <select id="s-stt_model">
+            <option value="tiny">tiny — mais rápido (~75 MB)</option>
+            <option value="base">base — recomendado (~140 MB)</option>
+            <option value="small">small — mais preciso (~460 MB)</option>
+            <option value="medium">medium — pesado</option>
+            <option value="large-v3">large-v3 — muito pesado</option>
+          </select>
+          <span class="hint">requer: pip install faster-whisper · baixa o modelo no 1º uso</span></div>
+        <div class="field"><label>🎤 idioma do ditado</label>
+          <input type="text" id="s-stt_language" placeholder="pt (vazio = detectar)">
+        </div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-stt_autosend"><label for="s-stt_autosend" style="color:var(--txt)">🎤 enviar automaticamente após ditar</label></div></div>
         <div class="field"><label>🔌 modelo do Claude Code (vazio = padrão dele)</label>
           <input type="text" id="s-claude_model" list="modellist" placeholder="ex.: qwen3-coder · hermes3:8b">
           <span class="hint">só funciona com modelos instalados no Ollama</span></div>
@@ -569,7 +583,7 @@ function toast(msg, err){
 }
 async function api(path, opts={}){
   const o = Object.assign({headers:{}}, opts);
-  o.headers["Content-Type"] = "application/json";
+  if (!(o.body instanceof FormData)) o.headers["Content-Type"] = "application/json";
   if (state.token) o.headers["X-Hermes-Token"] = state.token;
   const r = await fetch(path, o);
   if (r.status === 401){ $("tokenbar").classList.add("show"); throw new Error("token necessário"); }
@@ -1352,6 +1366,8 @@ async function loadSettings(){
     $("s-sandbox").checked = !!s.sandbox; $("s-confirm_dangerous").checked = !!s.confirm_dangerous;
     $("s-claude_use_ollama").checked = !!s.claude_use_ollama; $("s-claude_model").value = s.claude_model || "";
     $("s-web_access").checked = !!s.web_access;
+    $("s-stt_model").value = s.stt_model || "base"; $("s-stt_language").value = s.stt_language || "pt";
+    $("s-stt_autosend").checked = !!s.stt_autosend; window.STT_AUTOSEND = !!s.stt_autosend;
     const dl = $("modellist"); dl.innerHTML = "";
     ((state.status&&state.status.ollama.models)||[]).forEach(m=>{
       const o = document.createElement("option"); o.value = m; dl.appendChild(o);
@@ -1368,6 +1384,8 @@ async function saveSettings(){
     sandbox: $("s-sandbox").checked, confirm_dangerous: $("s-confirm_dangerous").checked,
     claude_use_ollama: $("s-claude_use_ollama").checked, claude_model: $("s-claude_model").value.trim(),
     web_access: $("s-web_access").checked,
+    stt_model: $("s-stt_model").value, stt_language: $("s-stt_language").value.trim(),
+    stt_autosend: $("s-stt_autosend").checked,
   };
   const r = await api("/api/settings", {method:"POST", body: JSON.stringify(body)});
   const j = await r.json().catch(()=>({msg:"sem resposta"}));
@@ -1476,6 +1494,58 @@ async function loadToolsPage(){
         <div class="hint" style="margin-top:4px">${esc((t.d||"").split("\n")[0].slice(0,150))}</div>
       </div>`).join("") || '<span class="hint">nenhuma</span>';
   }catch(e){}
+}
+
+/* ═══════════════ 🎤 ditado por voz (Whisper local) ═══════════════ */
+let mediaRec = null, micChunks = [];
+async function toggleMic(){
+  if (mediaRec && mediaRec.state === "recording"){ mediaRec.stop(); return; }
+  if (!navigator.mediaDevices || !window.MediaRecorder){
+    toast("este navegador não suporta gravação de áudio", true); return;
+  }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    mediaRec = new MediaRecorder(stream);
+    micChunks = [];
+    mediaRec.ondataavailable = e => { if (e.data.size) micChunks.push(e.data); };
+    mediaRec.onstop = async () => {
+      stream.getTracks().forEach(t=>t.stop());
+      $("btn-mic").className = "b ghost"; $("btn-mic").textContent = "🎤";
+      const blob = new Blob(micChunks, {type: mediaRec.mimeType || "audio/webm"});
+      if (!blob.size){ toast("nada gravado", true); return; }
+      await transcribeBlob(blob);
+    };
+    mediaRec.start();
+    $("btn-mic").className = "b danger"; $("btn-mic").textContent = "⏹";
+    toast("🎤 gravando — clique ⏹ quando terminar de falar");
+    $("chatin").placeholder = "🎙 gravando…";
+    setTimeout(()=>{ if (mediaRec && mediaRec.state === "recording")
+      $("chatin").placeholder = "fale e clique ⏹ (ou continue digitando)…"; }, 1200);
+  }catch(e){
+    toast("microfone indisponível: "+e.message, true);
+  }
+}
+async function transcribeBlob(blob){
+  toast("🎧 transcrevendo com o Whisper…");
+  const fd = new FormData(); fd.append("audio", blob, "dictado.webm");
+  try{
+    const r = await api("/api/stt", {method:"POST", body: fd});
+    const j = await r.json();
+    if (!j.ok){ toast((j.msg||"falha na transcrição"), true); return; }
+    if (!j.text){ toast("não entendi nada — tente falar mais perto do microfone", true); return; }
+    const inp = $("chatin");
+    inp.value = (inp.value ? inp.value.trimEnd()+" " : "") + j.text;
+    inp.placeholder = "fale com o Hermes…  (Enter envia · Shift+Enter quebra linha)";
+    autoGrow(inp); inp.focus();
+    toast("🎧 "+(j.text.length>48 ? j.text.slice(0,48)+"…" : j.text));
+    if (window.STT_AUTOSEND !== false) sendChat();
+  }catch(e){
+    inp_placeholder_reset();
+    toast("falha: "+e.message, true);
+  }
+}
+function inp_placeholder_reset(){
+  $("chatin").placeholder = "fale com o Hermes…  (Enter envia · Shift+Enter quebra linha)";
 }
 
 /* ═══════════════ web (busca + páginas) ═══════════════ */

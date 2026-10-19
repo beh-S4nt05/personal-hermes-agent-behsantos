@@ -609,6 +609,34 @@ def create_app(cfg: Config) -> Flask:
         return jsonify(execute_tool("web_fetch",
                                     {"url": str(payload.get("url", ""))}, cfg))
 
+    # ------------------------------------------------------------ voz
+    @app.get("/api/stt/status")
+    @protected
+    def stt_status():
+        from ..stt import STT_MODELS, stt_available
+
+        return jsonify({"available": stt_available(),
+                        "model": getattr(cfg, "stt_model", "base"),
+                        "language": getattr(cfg, "stt_language", "pt"),
+                        "models": list(STT_MODELS)})
+
+    @app.post("/api/stt")
+    @protected
+    def stt_transcribe():
+        from ..stt import transcribe
+
+        f = request.files.get("audio")
+        if f is None:
+            return jsonify({"ok": False,
+                            "msg": "envie o áudio no campo 'audio' (multipart)"}), 400
+        data = f.read(30 * 1024 * 1024)
+        try:
+            return jsonify(transcribe(cfg, data))
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"ok": False,
+                            "msg": f"falha na transcrição: "
+                                   f"{exc.__class__.__name__}: {exc}"}), 500
+
     # ------------------------------------------- catálogo de modelos (LMMs)
     @app.get("/api/ollama/library")
     @protected
@@ -921,7 +949,8 @@ def create_app(cfg: Config) -> Flask:
         payload = request.get_json(silent=True) or {}
         allowed = {"model", "system_prompt_extra", "max_steps", "num_ctx",
                    "cmd_timeout", "sandbox", "confirm_dangerous", "temperature", "auth_token",
-                   "ollama_url", "auto_start_ollama", "claude_use_ollama", "claude_model", "web_access"}
+                   "ollama_url", "auto_start_ollama", "claude_use_ollama", "claude_model", "web_access",
+                   "stt_model", "stt_language", "stt_autosend"}
         changes = {k: v for k, v in payload.items() if k in allowed}
         if not changes:
             return jsonify({"ok": False, "msg": "nada para alterar"}), 400
@@ -939,6 +968,12 @@ def create_app(cfg: Config) -> Flask:
                 return jsonify({"ok": False,
                                 "msg": "endereço inválido — use http://host:porta"}), 400
             changes["ollama_url"] = url
+        if "stt_model" in changes:
+            from ..stt import STT_MODELS
+            if str(changes["stt_model"]) not in STT_MODELS:
+                return jsonify({"ok": False,
+                                "msg": f"modelo de voz inválido — use um destes: "
+                                       f"{', '.join(STT_MODELS)}"}), 400
         if "claude_model" in changes:
             cm = str(changes["claude_model"]).strip()
             if cm and not MODEL_RE.fullmatch(cm):

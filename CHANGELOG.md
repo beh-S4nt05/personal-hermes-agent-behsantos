@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.2.0 — ditado por voz (🎤 Whisper local)
+
+- **Botão 🎤 no chat**: grave sua voz pelo microfone e o **Whisper local**
+  (faster-whisper, CPU, int8 — sem PyTorch e sem API paga) transcreve; o texto
+  vai para a mensagem e (padrão) é **enviado sozinho** — o agente interpreta
+  e executa o que você ditou.
+- Opcional e fácil de ativar: `pip install faster-whisper "av<19"` (o PyAV 19
+  quebra a API do faster-whisper); o modelo (`base`,
+  ≈140 MB) baixa só no primeiro uso e fica em cache.
+- Novos endpoints `GET /api/stt/status` e `POST /api/stt` (multipart `audio`).
+- Ajustes novos: modelo de voz (tiny→large-v3), idioma do ditado (padrão `pt`)
+  e "enviar automaticamente após ditar".
+
 ## v2.1.0 — acesso à web (🌐 pesquisa e leitura de páginas)
 
 - Novas ferramentas nativas do agente: **`web_search`** (busca no DuckDuckGo,

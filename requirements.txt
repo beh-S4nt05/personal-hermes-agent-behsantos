@@ -2,3 +2,6 @@ flask>=3.0
 requests>=2.31
 PyYAML>=6.0
 rich>=13.0
+
+# voz (opcional — ditar pelo microfone com Whisper local):
+# faster-whisper>=1.0  "av>=14,<19"   (o av 19 quebra a API)
