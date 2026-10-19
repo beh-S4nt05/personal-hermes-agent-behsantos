@@ -685,13 +685,34 @@ automaticamente (e o seletor v3.0 injeta só as relevantes à pergunta).
    → abre o link, digite o código mostrado, autorize com seu 2FA. Pronto:
    o refresh token fica guardado junto das demais credenciais (600).
 
+**⌨️ Comandos no chat da GUI (v3.4.0):** digite `/` no campo de
+mensagem — abre um menu com autocompletar. `/goal <texto>` define o
+objetivo da sessão (o orquestrador usa em cada task); `/tools`,
+`/skills`, `/tasks`, `/memoria`, `/reset`, `/ajuda`. Os mesmos do
+terminal, agora no navegador.
+
+**🔬 Por baixo dos panos (v3.4.0):** no chat, "🔬 panos" liga a visão
+das entranhas — decisões do orquestrador (com a resposta bruta do
+modelo), skills aplicadas, prompt injetado no executor e veredito do
+revisor, em blocos expansíveis na própria conversa. "🧾 fluxo" abre o
+fluxo bruto completo (todos os eventos em JSON).
+
+**🔒 Aprovação de criação (v3.4.0):** tasks de CRIAÇÃO (criar arquivo,
+escrever, enviar, instalar…) pausam para o seu ✅ antes de executar —
+com opção de ✏️ editar o plano — e pausam de novo na entrega, onde o
+resultado pode ser editado antes de você receber. Tasks de leitura
+(listar, verificar, resumir) seguem direto. Desligável em Ajustes.
+
 **🎯 Pipeline orquestrado (v3.3.0):** mensagens de AÇÃO no chat seguem o
 fluxo **🎯 orquestrador → ⚡ executor → 🔍 revisor**. O orquestrador (rápido)
 decide a rota e monta objetivo/passos/critérios; a task é registrada; o
 Agent executa com ferramentas reais; o revisor confere o resultado —
 reprovado refaz com o problema apontado (máx. 2 tentativas); aprovado
 chega com selo "🔍 revisada". Conversa simples responde direto (custo
-zero extra). Desligue em Ajustes ("🎯 Orquestrador" / "🔍 Revisor").
+zero extra). Desligue em Ajustes ("🎯 Orquestrador" / "🔍 Revisor"). Skills ATIVAS
+(aba Skills) são aplicadas automaticamente quando a task combina com a
+descrição delas — a nota "✦ skills aplicadas" mostra quando isso
+aconteceu.
 Histórico: `hermes` não tem CLI para isso — use `GET
 /api/orchestrator/tasks` ou o arquivo `data/orchestrator_tasks.jsonl`.
 

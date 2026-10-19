@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 APP_NAME = "hermes-agent"
-VERSION = "3.3.0"
+VERSION = "3.4.0"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
@@ -34,6 +34,7 @@ DEFAULTS = {
     "claude_use_ollama": True,
     "orchestrator_on": True,        # 🎯 conversa → plano → task → revisão
     "reviewer_on": True,            # 🔍 revisar o resultado antes de entregar
+    "creation_approval": True,      # 🔒 criação exige aprovação do operador
     "claude_model": "",            # modelo p/ o Claude Code (vazio = padrão dele)
     # Servidor web (GUI)
     "host": "127.0.0.1",
@@ -63,7 +64,7 @@ DEFAULTS = {
 _INT_KEYS = {"max_steps", "cmd_timeout", "port", "num_ctx", "num_predict",
              "max_tool_calls", "backups_keep", "memory_top_k"}
 _FLOAT_KEYS = {"temperature"}
-_BOOL_KEYS = {"sandbox", "confirm_dangerous", "auto_start_ollama", "claude_use_ollama", "orchestrator_on", "reviewer_on", "web_access", "stt_autosend",
+_BOOL_KEYS = {"sandbox", "confirm_dangerous", "auto_start_ollama", "claude_use_ollama", "orchestrator_on", "reviewer_on", "creation_approval", "web_access", "stt_autosend",
               "mcp_autorestart", "tool_selector"}
 _STR_KEYS = {"ollama_url", "model", "host", "auth_token", "system_prompt_extra", "claude_model", "stt_model", "stt_language", "keep_alive"}
 

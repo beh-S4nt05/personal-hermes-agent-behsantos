@@ -1,5 +1,40 @@
 # Changelog
 
+## v3.4.0 — ⌨️ comandos /na GUI · 🔬 por baixo dos panos · ✦ skills no pipeline · 🔒 aprovação de criação
+
+Quatro pedidos do operador, implementados como features permanentes:
+
+**⌨️ Comandos do terminal no chat da GUI (digite `/`):** menu com
+autocompletar (setas/Tab) e os mesmos comandos do CLI — e um novo:
+- `/goal <texto>` — define o OBJETIVO da sessão; o orquestrador leva em
+  conta em cada task (persistido por sessão);
+- `/tools` `/skills` `/tasks` `/memoria` `/reset` `/ajuda`.
+
+**🔬 Por baixo dos panos:** botão "🔬 panos" no chat — as decisões do
+orquestrador (plano JSON + resposta bruta do modelo), skills aplicadas,
+prompt injetado no executor e veredito do revisor aparecem na conversa
+em blocos expansíveis. Botão "🧾 fluxo" mostra o fluxo BRUTO completo
+(todos os eventos, JSON linha a linha). Preferência fica salva.
+
+**✦ Skills aplicadas automaticamente:** o orquestrador cruza a task com
+as skills ATIVAS (aba Skills) por palavras-chave da descrição e injeta
+as instruções da SKILL no executor (máx. 2, score mínimo) — com nota
+"✦ skills aplicadas: …" para você ver quando aconteceu.
+
+**🔒 Aprovação para tarefas de CRIAÇÃO:** o orquestrador classifica a
+task (leitura × criação). Criação (criar/escrever/enviar/instalar…)
+pausa ANTES de executar e mostra o plano: ✅ Aprovar · ✏️ Editar
+(objetivo e passos) · ⛔ Cancelar. Depois da revisão, pausa de novo na
+ENTREGA: o resultado vem EDITÁVEL — ✅ Entregar · 💾 Entregar editada ·
+🔁 Refazer. Timeout de 5 min; desligável em Ajustes ("🔒 Aprovação em
+tarefas de criação"). Tasks de leitura seguem direto (sem atrito).
+
+Testes T54–T56: comandos (goal/tools/skills/tasks/memoria/ajuda),
+seleção de skills por palavra-chave com leitura real do SKILL.md, e o
+portão de aprovação PONTA A PONTA no stream real do chat (aprovar →
+executar → aprovar entrega → done com selo; cancelar; editar).
+Suíte: **56/56**.
+
 ## v3.3.0 — 🎯 Orquestrador + ⚡ Executor + 🔍 Revisor (pipeline de tasks)
 
 Diretriz do operador: a conversa deve passar por um ORQUESTRADOR que

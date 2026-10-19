@@ -1,6 +1,9 @@
 """Orquestrador + Revisor (v3.3) — pipeline plan → execute → review.
 
-Fluxo de uma mensagem do chat (agente Hermes):
+Fluxo de uma mensagem do chat (agente Hermes) — v3.4 acrescenta
+goals de sessão (/goal), skills aplicadas automaticamente, portão de
+APROVAÇÃO para tarefas de criação e eventos "brain" (visão por baixo
+dos panos na GUI):
 
     mensagem ──► 🎯 ORQUESTRADOR (rápido, JSON)
                    │ rota "responder"  ──► resposta direta (fluxo de antes)
@@ -48,9 +51,12 @@ _PLANO_JSON = (
     "Você é o ORQUESTRADOR de um agente Linux local. Analise a mensagem do "
     "usuário e responda APENAS um objeto JSON, sem nenhum texto em volta:\n"
     '{"rota":"responder"}  — para conversa, dúvida, opinião, saudação;\n'
-    '{"rota":"executar","objetivo":"...","passos":["..."],"criterios":["..."]}'
+    '{"rota":"executar","tipo":"leitura|criacao","objetivo":"...",'
+    '"passos":["..."],"criterios":["..."]}'
     " — quando o usuário pede uma AÇÃO (executar comando, criar/ler arquivo, "
-    "diagnóstico, e-mail, agenda, instalação, monitoramento).\n"
+    "diagnóstico, e-mail, agenda, instalação, monitoramento). 'tipo' = "
+    "'criacao' quando CRIA/MODIFICA/ENVIA algo (arquivo, e-mail, design, "
+    "instalação); 'leitura' quando só consulta.\n"
     "Seja objetivo: objetivo em 1 frase; no máximo 4 passos; critérios "
     "verificáveis (ex.: \"mostrar a saída real do comando\")."
 )
@@ -68,11 +74,16 @@ _REVISAO_JSON = (
 
 # ───────────────────────────── infra ─────────────────────────────
 
+# v3.4 🧠 rastro das chamadas do orquestrador/revisor (visão "por baixo
+# dos panos" na GUI — eventos `brain`). Zerado a cada pipeline.
+TRACE: list[dict] = []
+
 def tasks_path(cfg) -> Path:
     return cfg.data_dir / "orchestrator_tasks.jsonl"
 
 
-def _fast(cfg, system: str, user: str, ntok: int = 200) -> str:
+def _fast(cfg, system: str, user: str, ntok: int = 200,
+          stage: str = "chamada") -> str:
     """Chamada rápida e curta ao modelo (orquestrador/revisor). Nunca lança;
     em modo mock devolve '' (o chamador cai na heurística/fallback)."""
     if getattr(cfg, "mock", False):
@@ -92,7 +103,10 @@ def _fast(cfg, system: str, user: str, ntok: int = 200) -> str:
                 out.append(piece)
             if chunk.get("done"):
                 break
-        return "".join(out)
+        texto = "".join(out)
+        TRACE.append({"stage": stage, "pergunta": user[:240],
+                      "resposta_bruta": texto[:500] or "(vazio)"})
+        return texto
     except Exception:  # noqa: BLE001
         return ""
 
@@ -132,11 +146,21 @@ def _extract_json(text: str) -> dict | None:
 
 # ───────────────────────────── 🎯 plano ─────────────────────────────
 
+_CRIACAO_RE = re.compile(
+    r"\b(crie|criar|cria|escreva|escrever|gere|gerar|instale|instalar|"
+    r"apague|apagar|delete|deletar|mova|mover|copie|copiar|envie|enviar|"
+    r"modifique|modificar|atualize|atualizar|edite|editar|baixe|baixar|"
+    r"monte|montar|construa|construir|salve|salvar|renomeie|renomear)\b",
+    re.IGNORECASE)
+
+
 def _heuristic(message: str) -> dict:
-    if _ACAO_RE.search(message or ""):
+    msg = message or ""
+    if _ACAO_RE.search(msg):
         return {
             "rota": "executar",
-            "objetivo": (message or "").strip()[:300],
+            "tipo": "criacao" if _CRIACAO_RE.search(msg) else "leitura",
+            "objetivo": msg.strip()[:300],
             "passos": [],
             "criterios": ["a ação foi realmente executada e o resultado "
                           "real está na resposta"],
@@ -150,13 +174,17 @@ def plan(cfg, message: str, history: list[dict] | None = None) -> dict:
     if not getattr(cfg, "orchestrator_on", True):
         return {"rota": "responder"}
     try:
-        texto = _fast(cfg, _PLANO_JSON, message, ntok=220)
+        texto = _fast(cfg, _PLANO_JSON, message, ntok=220,
+                      stage="🎯 orquestrador")
         obj = _extract_json(texto)
         if obj and obj.get("rota") in ("responder", "executar"):
             if obj["rota"] == "executar":
                 obj.setdefault("objetivo", message[:300])
                 obj.setdefault("passos", [])
                 obj.setdefault("criterios", [])
+                if obj.get("tipo") not in ("leitura", "criacao"):
+                    obj["tipo"] = ("criacao" if _CRIACAO_RE.search(message or "")
+                                   else "leitura")
                 obj["passos"] = [str(p)[:160] for p in (obj.get("passos") or [])[:4]]
                 obj["criterios"] = [str(c)[:160] for c in (obj.get("criterios") or [])[:3]]
             return obj
@@ -176,7 +204,8 @@ def review(cfg, objetivo: str, criterios: list[str], resultado: str) -> dict:
         crit = "\n".join(f"- {c}" for c in (criterios or [])[:3]) or "- cumprir o objetivo"
         user = (f"OBJETIVO: {objetivo}\nCRITÉRIOS:\n{crit}\n\n"
                 f"RESULTADO (trecho):\n{resultado[:1800]}")
-        texto = _fast(cfg, _REVISAO_JSON, user, ntok=140)
+        texto = _fast(cfg, _REVISAO_JSON, user, ntok=140,
+                      stage="🔍 revisor")
         obj = _extract_json(texto)
         if obj and obj.get("veredito") == "refazer":
             return {"veredito": "refazer",
@@ -190,19 +219,30 @@ def review(cfg, objetivo: str, criterios: list[str], resultado: str) -> dict:
 
 # ───────────────────────── registro das tasks ─────────────────────────
 
-def record(cfg, entry: dict) -> str:
+def record(cfg, entry: dict, tid: str | None = None) -> str:
     """Anexa o registro da task (auditoria leve, sem banco)."""
     p = tasks_path(cfg)
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
-        n = sum(1 for _ in p.open(encoding="utf-8")) if p.exists() else 0
-        entry = {"id": f"T{n + 1:04d}", "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
-                 **entry}
+        if not tid:
+            n = sum(1 for _ in p.open(encoding="utf-8")) if p.exists() else 0
+            tid = f"T{n + 1:04d}"
+        entry = {"id": tid, "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+                 **{k: v for k, v in entry.items() if k != "id"}}
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        return entry["id"]
+        return tid
     except OSError:
-        return "?"
+        return tid or "?"
+
+
+def _next_id(cfg) -> str:
+    p = tasks_path(cfg)
+    try:
+        n = sum(1 for _ in p.open(encoding="utf-8")) if p.exists() else 0
+        return f"T{n + 1:04d}"
+    except OSError:
+        return "T0001"
 
 
 def list_tasks(cfg, limit: int = 100) -> list[dict]:
@@ -214,15 +254,128 @@ def list_tasks(cfg, limit: int = 100) -> list[dict]:
         return []
 
 
+# ──────────────────── 🎯 goals de sessão (/goal) ────────────────────
+
+SESSION_GOALS: dict[str, str] = {}
+
+
+def set_goal(session_id: str, texto: str) -> None:
+    sid = (session_id or "default").strip() or "default"
+    if texto and texto.strip():
+        SESSION_GOALS[sid] = texto.strip()[:500]
+    else:
+        SESSION_GOALS.pop(sid, None)
+
+
+def get_goal(session_id: str) -> str:
+    return SESSION_GOALS.get((session_id or "default").strip() or "default", "")
+
+
+# ──────────────────── ✦ skills aplicadas à task ────────────────────
+
+_STOPWORDS = set("""a o as os um uma de do da dos das em no na nos nas para por com sem sobre
+e ou que qual quais quando onde como porque ao aos à às pelo pela os isso este esta
+esse essa ser estar ter fazer quero queria preciso pode podem deve devem vou vai
+task tarefa use quando envolver qualquer""".split())
+
+
+def skills_for(cfg, text: str, max_skills: int = 2) -> list[dict]:
+    """Skills ATIVAS relevantes ao texto (por palavras-chave da descrição).
+    Devolve [{name, path, score}] — no máximo 2, score mínimo 2."""
+    try:
+        from .skills import SkillLoader
+        ativas = SkillLoader(cfg).enabled()
+    except Exception:  # noqa: BLE001
+        return []
+    palavras = {w for w in re.findall(r"[a-zà-ú]{4,}", (text or "").lower())
+                if w not in _STOPWORDS}
+    if not palavras:
+        return []
+    resultados = []
+    for s in ativas:
+        alvo = (str(s.get("name", "")) + " " + str(s.get("description", ""))).lower()
+        score = sum(1 for w in palavras if w in alvo)
+        if score >= 2:
+            resultados.append({"name": s.get("name", "?"),
+                               "skill_md": s.get("skill_md", ""), "score": score})
+    resultados.sort(key=lambda x: -x["score"])
+    return resultados[:max_skills]
+
+
+def _skill_conteudo(cfg, skills: list[dict]) -> str:
+    """Conteúdo das SKILLs selecionadas (para injetar no executor)."""
+    try:
+        from .skills import SkillLoader
+        loader = SkillLoader(cfg)
+        partes = []
+        for s in skills[:2]:
+            try:
+                md = loader.read_skill_md(s["skill_md"])[:2400]
+                partes.append(f"[✦ SKILL {s['name']} — SIGA estas instruções]\n{md}")
+            except Exception:  # noqa: BLE001
+                continue
+        return "\n\n".join(partes)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+# ──────────────────── 🔒 aprovação do operador ────────────────────
+# Tarefas de CRIAÇÃO pausam e esperam o operador (✅ aprovar · ✏️ editar ·
+# ⛔ cancelar) antes de executar — e a entrega final pode ser editada.
+
+import threading as _threading
+
+_APPROVALS: dict[str, dict] = {}
+_AP_LOCK = _threading.Lock()
+APPROVAL_TIMEOUT_S = 300.0   # tempo máximo esperando o operador (testes reduzem)
+
+
+def request_approval(tid: str, timeout: float = 300.0,
+                     check=None) -> tuple[str, dict | None]:
+    """Bloqueia até o operador decidir (ou esgotar o tempo). Devolve
+    (ação, edição): aprovar|editar|cancelar|refazer|entregar · None em
+    timeout/cancelamento externo."""
+    evt = _threading.Event()
+    with _AP_LOCK:
+        _APPROVALS[tid] = {"event": evt, "action": None, "edit": None}
+    decidiu = evt.wait(timeout) if check is None else False
+    if check is not None:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if evt.wait(0.25):
+                decidiu = True
+                break
+            if check():
+                break
+    with _AP_LOCK:
+        item = _APPROVALS.pop(tid, None)
+    if not item or not decidiu:
+        return ("cancelado" if check and check() else "timeout"), None
+    return item["action"] or "cancelar", item["edit"]
+
+
+def approve(tid: str, action: str, edit: dict | None = None) -> bool:
+    """Registra a decisão do operador (chamado pelo endpoint da GUI)."""
+    with _AP_LOCK:
+        item = _APPROVALS.get(tid)
+        if not item:
+            return False
+        item["action"] = str(action or "").strip() or "aprovar"
+        item["edit"] = edit if isinstance(edit, dict) else None
+        item["event"].set()
+        return True
+
+
 # ───────────────────────── pipeline completo ─────────────────────────
 
 def run_pipeline(agent, cfg, message: str, history: list[dict],
-                 on_event=None, cancel=None, max_tentativas: int = 2) -> str:
-    """Conversa → 🎯 plano → ⚡ execução → 🔍 revisão → entrega.
+                 on_event=None, cancel=None, max_tentativas: int = 2,
+                 goal: str = "", session_id: str = "") -> str:
+    """Conversa → 🎯 plano → [🔒 aprovação p/ criação] → ⚡ execução →
+    🔍 revisão → [🔒 entrega editável p/ criação] → done.
 
-    Usa o Agent de sempre como executor (ferramentas reais, denylist,
-    auditoria); as etapas de planejamento/revisão emitem eventos `note`
-    para a GUI acompanhar o pipeline ao vivo.
+    Emite eventos `note` (etapas, visíveis sempre) e `brain` (por baixo
+    dos panos — a GUI mostra quando o operador liga 🔬).
     """
     ev = on_event or (lambda _e: None)
     from . import activity
@@ -230,31 +383,89 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     def _cancelado() -> bool:
         return cancel is not None and cancel.is_set()
 
+    TRACE.clear()
+    goal_txt = (f"\n[🎯 OBJETIVO DA SESSÃO definido pelo operador: {goal}]"
+                if goal else "")
+
     plano = plan(cfg, message, history)
+    ev({"type": "brain", "stage": "🎯 orquestrador",
+        "data": {"decisao": plano, "chamadas": list(TRACE)}})
 
     # rota direta: conversa comum — custo zero adicional
     if plano.get("rota") != "executar":
-        return agent.run(history + [{"role": "user", "content": message}],
+        return agent.run(history + [{"role": "user",
+                                     "content": message + goal_txt}],
                          on_event=on_event, cancel=cancel)
 
     objetivo = str(plano.get("objetivo") or message)[:300]
-    passos = plano.get("passos") or []
-    criterios = plano.get("criterios") or []
-    plano_txt = f"[PLANO DO ORQUESTRADOR]\nObjetivo: {objetivo}"
-    if passos:
-        plano_txt += "\nPassos:\n" + "\n".join(f"- {p}" for p in passos)
-    if criterios:
-        plano_txt += "\nCritérios de conclusão:\n" + "\n".join(f"- {c}" for c in criterios)
+    passos = [str(p)[:160] for p in (plano.get("passos") or [])[:4]]
+    criterios = [str(c)[:160] for c in (plano.get("criterios") or [])[:3]]
+    tipo = plano.get("tipo") if plano.get("tipo") in ("leitura", "criacao") else "leitura"
 
+    # ✦ skills ativas relevantes → instruções injetadas no executor
+    sks = skills_for(cfg, message + " " + objetivo)
+    skills_txt = ""
+    if sks:
+        ev({"type": "note",
+            "message": "✦ skills aplicadas: " + ", ".join(s["name"] for s in sks)})
+        ev({"type": "brain", "stage": "✦ skills",
+            "data": {"aplicadas": sks}})
+        skills_txt = "\n\n" + _skill_conteudo(cfg, sks)
+
+    tid = _next_id(cfg)
     t0 = time.time()
-    ev({"type": "note", "message": f"🎯 orquestrador: task criada — {objetivo}"})
-    activity.log(cfg, "chat", f"🎯 orquestrador criou task — {objetivo[:80]}")
+    ev({"type": "note",
+        "message": f"🎯 orquestrador: task {tid} criada ({tipo}) — {objetivo}"})
+    activity.log(cfg, "chat", f"🎯 task {tid} ({tipo}) — {objetivo[:80]}")
 
-    mensagens = history[-6:] + [{"role": "user",
-                                 "content": f"{message}\n\n{plano_txt}"}]
-    resultado, veredito, problema, tentativas = "", "ok", "", 0
+    def _plano_txt() -> str:
+        pt = f"[PLANO DO ORQUESTRADOR]\nObjetivo: {objetivo}"
+        if passos:
+            pt += "\nPassos:\n" + "\n".join(f"- {p}" for p in passos)
+        if criterios:
+            pt += "\nCritérios de conclusão:\n" + "\n".join(f"- {c}" for c in criterios)
+        return pt + goal_txt + skills_txt
+
+    # ── 🔒 portão 1: aprovação do PLANO (só tarefas de criação) ──
+    aprovacao = "auto"
+    exige_aprovacao = (tipo == "criacao"
+                       and getattr(cfg, "creation_approval", True))
+    if exige_aprovacao and not _cancelado():
+        ev({"type": "approval_request", "id": tid, "kind": "plano",
+            "objetivo": objetivo, "passos": passos,
+            "skills": [s["name"] for s in sks],
+            "msg": "🔒 tarefa de CRIAÇÃO — aprove o plano antes de executar"})
+        act, edit = request_approval(
+            tid, timeout=APPROVAL_TIMEOUT_S,
+            check=lambda: cancel is not None and cancel.is_set())
+        if act in ("cancelar", "cancelado", "timeout"):
+            motivo = ("cancelada pelo operador" if act == "cancelar"
+                      else "cancelada (geração interrompida)" if act == "cancelado"
+                      else "aprovação expirou (5 min)")
+            record(cfg, {"objetivo": objetivo, "tipo": tipo, "status": "cancelada",
+                         "tentativas": 0, "dur_s": round(time.time() - t0, 1),
+                         "veredito": "—", "problema": motivo,
+                         "skills": [s["name"] for s in sks],
+                         "aprovacao": "cancelada"}, tid)
+            final = f"⛔ task {tid} {motivo}."
+            ev({"type": "note", "message": f"⛔ {final}"})
+            ev({"type": "done", "message": final})
+            return final
+        if act == "editar" and edit:
+            objetivo = str(edit.get("objetivo") or objetivo)[:300]
+            passos = [str(p)[:160] for p in (edit.get("passos") or passos)[:4]]
+            aprovacao = "editada"
+            ev({"type": "note",
+                "message": "✏️ plano editado pelo operador — seguindo o plano editado"})
+        else:
+            aprovacao = "aprovada"
+            ev({"type": "note", "message": "✅ plano aprovado pelo operador"})
+
+    ev({"type": "brain", "stage": "⚡ executor",
+        "data": {"prompt_injetado": _plano_txt()[:700]}})
+
     # o executor emite o próprio "done"; o pipeline o ENGOLE e emite o done
-    # FINAL só depois da revisão (a GUI recebe a resposta já com o selo 🔍)
+    # FINAL só depois da revisão/entrega (a GUI recebe a resposta com selo 🔍)
     caixa = {"done": ""}
 
     def _ev_exec(e: dict) -> None:
@@ -263,52 +474,112 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
             return
         ev(e)
 
-    for tentativa in range(1, max_tentativas + 1):
-        if _cancelado():
-            break
-        tentativas = tentativa
-        resultado = agent.run(mensagens, on_event=_ev_exec, cancel=cancel)
-        if _cancelado():
-            break
-        ver = review(cfg, objetivo, criterios, resultado)
-        veredito, problema = ver.get("veredito", "ok"), ver.get("problema", "")
-        if veredito == "ok":
-            if tentativa > 1:
+    def _ciclo(msgs: list[dict], max_t: int) -> tuple[str, str, str, int]:
+        resultado, verd, prob, tent = "", "ok", "", 0
+        for tentativa in range(1, max_t + 1):
+            if _cancelado():
+                break
+            tent = tentativa
+            resultado = agent.run(msgs, on_event=_ev_exec, cancel=cancel)
+            if _cancelado():
+                break
+            ver = review(cfg, objetivo, criterios, resultado)
+            verd, prob = ver.get("veredito", "ok"), ver.get("problema", "")
+            if verd == "ok":
+                if tentativa > 1:
+                    ev({"type": "note",
+                        "message": f"🔍 revisor: aprovada na {tentativa}ª tentativa ✔"})
+                break
+            if tentativa < max_t:
                 ev({"type": "note",
-                    "message": f"🔍 revisor: aprovada na {tentativa}ª tentativa ✔"})
-            break
-        if tentativa < max_tentativas:
+                    "message": f"🔍 revisor: reprovou ({prob[:120]}) — refazendo "
+                               f"(tentativa {tentativa + 1}/{max_t})"})
+                activity.log(cfg, "chat",
+                             f"🔍 revisor reprovou (tentativa {tentativa}) — refazendo")
+                msgs = [
+                    msgs[0],
+                    {"role": "assistant", "content": resultado[:2500]},
+                    {"role": "user", "content":
+                        f"O REVISOR reprovou o resultado: {prob}\n"
+                        "Corrija o problema e complete a tarefa ORIGINAL de verdade. "
+                        "Não peça ao usuário para fazer — execute você."},
+                ]
+            else:
+                ev({"type": "note",
+                    "message": f"⚠ revisor ainda reprovou após {tentativa} tentativas "
+                               f"— entregando com ressalva: {prob[:120]}"})
+        return resultado, verd, prob, tent
+
+    mensagens = history[-6:] + [{"role": "user",
+                                 "content": f"{message}\n\n{_plano_txt()}"}]
+    resultado, veredito, problema, tentativas = _ciclo(mensagens, max_tentativas)
+    execucoes = tentativas
+
+    # ── 🔒 portão 2: entrega editável (só criação aprovada) ──
+    entregue = "direta"
+    selo = ("\n\n─\n🔍 *revisada pelo revisor — veredito: aprovada*"
+            if veredito == "ok" else
+            f"\n\n─\n⚠ *revisão: reprovada* — {problema[:200]}")
+    if (exige_aprovacao and aprovacao in ("aprovada", "editada")
+            and veredito == "ok" and not _cancelado()):
+        texto_entrega = (caixa["done"] or resultado) + selo
+        ev({"type": "approval_request", "id": f"{tid}-e", "kind": "entrega",
+            "texto": texto_entrega,
+            "msg": "📦 entrega final — revise, edite se quiser, e confirme"})
+        act2, edit2 = request_approval(
+            f"{tid}-e", timeout=APPROVAL_TIMEOUT_S,
+            check=lambda: cancel is not None and cancel.is_set())
+        if act2 == "editar" and edit2 and str(edit2.get("texto", "")).strip():
+            texto = str(edit2["texto"]).rstrip()
+            final = texto + "\n\n─\n✏️ *entrega editada pelo operador · 🔍 revisada antes*"
+            entregue = "editada"
+        elif act2 == "refazer" and execucoes < 3:
             ev({"type": "note",
-                "message": f"🔍 revisor: reprovou ({problema[:120]}) — refazendo "
-                           f"(tentativa {tentativa + 1}/{max_tentativas})"})
-            activity.log(cfg, "chat",
-                         f"🔍 revisor reprovou (tentativa {tentativa}) — refazendo")
-            mensagens = [
-                {"role": "user", "content": f"{message}\n\n{plano_txt}"},
-                {"role": "assistant", "content": resultado[:2500]},
-                {"role": "user", "content":
-                    f"O REVISOR reprovou o resultado: {problema}\n"
-                    "Corrija o problema e complete a tarefa ORIGINAL de verdade. "
-                    "Não peça ao usuário para fazer — execute você."},
-            ]
-        else:
-            ev({"type": "note",
-                "message": f"⚠ revisor ainda reprovou após {tentativas} tentativas "
-                           f"— entregando com ressalva: {problema[:120]}"})
+                "message": "🔁 refazendo a pedido do operador (entrega reprovada)"})
+            msgs2 = [mensagens[0],
+                     {"role": "assistant", "content": (caixa["done"] or resultado)[:2500]},
+                     {"role": "user", "content":
+                         "O OPERADOR reprovou a ENTREGA. Refaça a tarefa original "
+                         "com mais capricho e complete de verdade."}]
+            resultado, veredito, problema, tent2 = _ciclo(msgs2, 1)
+            execucoes += tent2
+            selo2 = ("\n\n─\n🔍 *revisada — aprovada após refazer a pedido do operador*"
+                     if veredito == "ok" else
+                     f"\n\n─\n⚠ *revisão: reprovada* — {problema[:200]}")
+            final = (caixa["done"] or resultado) + selo2
+            entregue = "refeita"
+        elif act2 in ("cancelar", "cancelado"):
+            record(cfg, {"objetivo": objetivo, "tipo": tipo, "status": "cancelada",
+                         "tentativas": execucoes, "dur_s": round(time.time() - t0, 1),
+                         "veredito": veredito, "problema": "cancelada na entrega",
+                         "skills": [s["name"] for s in sks],
+                         "aprovacao": f"{aprovacao}+cancelada"}, tid)
+            final = f"⛔ task {tid} cancelada na entrega — nenhum resultado entregue."
+            ev({"type": "note", "message": final})
+            ev({"type": "done", "message": final})
+            return final
+        elif act2 == "timeout":
+            final = texto_entrega + "\n\n─\n⚠ *entrega sem confirmação (tempo esgotado)*"
+            entregue = "sem_confirmacao"
+        else:                                   # entregar
+            final = texto_entrega
+            entregue = "entregue"
+    else:
+        final = (caixa["done"] or resultado) + selo
 
     dur = round(time.time() - t0, 1)
     status = ("aprovada" if veredito == "ok" and not _cancelado() else
               "reprovada" if not _cancelado() else "cancelada")
-    tid = record(cfg, {"objetivo": objetivo, "status": status,
-                       "tentativas": tentativas, "dur_s": dur,
-                       "veredito": veredito, "problema": problema[:200]})
+    record(cfg, {"objetivo": objetivo, "tipo": tipo, "status": status,
+                 "tentativas": execucoes, "dur_s": dur,
+                 "veredito": veredito, "problema": problema[:200],
+                 "skills": [s["name"] for s in sks],
+                 "aprovacao": (aprovacao if not exige_aprovacao else
+                               f"{aprovacao}·{entregue}")}, tid)
     activity.log(cfg, "chat",
-                 f"🎯 task {tid} {status} · {tentativas} tentativa(s) · {dur}s")
-
-    selo = ("\n\n─\n🔍 *revisada pelo revisor — veredito: aprovada*"
-            if status == "aprovada" else
-            f"\n\n─\n⚠ *revisão: {status}* — {problema[:200]}"
-            if status == "reprovada" else "")
-    final = (caixa["done"] or resultado) + selo
-    ev({"type": "done", "message": final})   # o done verdadeiro, pós-revisão
+                 f"🎯 task {tid} {status} · {execucoes} execução(ões) · {dur}s")
+    ev({"type": "brain", "stage": "🔍 revisor",
+        "data": {"veredito": veredito, "problema": problema,
+                 "chamadas": TRACE[-1:]}})
+    ev({"type": "done", "message": final})   # o done verdadeiro, pós-tudo
     return final

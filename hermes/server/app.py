@@ -250,6 +250,96 @@ self.addEventListener("fetch", (e) => {
         from ..orchestrator import list_tasks
         return jsonify({"ok": True, "tasks": list_tasks(cfg)})
 
+    # -------------------------------------- comandos e aprovação (v3.4)
+    @app.post("/api/chat/command")
+    @protected
+    def chat_command():
+        """Comandos slash do chat da GUI (mesmos do terminal, e /goal)."""
+        payload = request.get_json(silent=True) or {}
+        text = str(payload.get("text") or "").strip()
+        session_id = str(payload.get("session_id") or "").strip()
+        if not text.startswith("/"):
+            return jsonify({"ok": False, "msg": "comando deve começar com /"}), 400
+        partes = text.split(None, 1)
+        cmd = partes[0].lower()
+        args = partes[1].strip() if len(partes) > 1 else ""
+        from .. import orchestrator as orc
+        if cmd in ("/goal", "/objetivo"):
+            if args:
+                orc.set_goal(session_id, args)
+                return jsonify({"ok": True, "action": "goal", "output":
+                                "🎯 objetivo da sessão definido:\n  " + args +
+                                "\n  (o orquestrador leva isso em conta em cada task)"})
+            atual = orc.get_goal(session_id)
+            return jsonify({"ok": True, "output": (
+                "🎯 objetivo atual da sessão:\n  " + atual if atual
+                else "nenhum objetivo definido — use: /goal <o que você quer alcançar>")})
+        if cmd in ("/reset", "/novo"):
+            orc.set_goal(session_id, "")
+            return jsonify({"ok": True, "action": "reset", "output":
+                            "🧹 objetivo da sessão limpo — a conversa continuará "
+                            "sem goal (botão ＋ nova abre outra)"})
+        if cmd in ("/tools", "/ferramentas"):
+            from ..tools import tool_summary
+            return jsonify({"ok": True, "output":
+                            "🛠 ferramentas do agente:\n  " + tool_summary()})
+        if cmd in ("/skills", "/skill"):
+            from ..skills import SkillLoader
+            ativas = SkillLoader(cfg).enabled()
+            if not ativas:
+                return jsonify({"ok": True, "output": "nenhuma skill ativa (aba Skills)"})
+            linhas = "\n".join(
+                f"  ✦ {s['name']} — {str(s.get('description', ''))[:110]}"
+                for s in ativas)
+            return jsonify({"ok": True, "output":
+                            f"✦ skills ativas ({len(ativas)}):\n" + linhas})
+        if cmd in ("/tasks", "/tarefas"):
+            tasks = orc.list_tasks(cfg, limit=6)
+            if not tasks:
+                return jsonify({"ok": True, "output":
+                                "nenhuma task do orquestrador ainda — peça uma ação no chat"})
+            linhas = "\n".join(
+                f"  {t['id']} [{t.get('status')}] {t.get('objetivo', '')[:70]} "
+                f"· {t.get('tentativas', '?')} exec · {t.get('dur_s', '?')}s"
+                for t in tasks)
+            return jsonify({"ok": True, "output":
+                            "🎯 últimas tasks do orquestrador:\n" + linhas})
+        if cmd in ("/memoria", "/memory", "/lembrancas"):
+            from ..memory import MemoryStore
+            fatos = MemoryStore(cfg).list_all()[:6]
+            if not fatos:
+                return jsonify({"ok": True, "output":
+                                "nada na memória ainda — peça ao agente: “lembre que…”"})
+            linhas = "\n".join(f"  📔 {f.get('text', '')[:100]}" for f in fatos)
+            return jsonify({"ok": True, "output":
+                            f"📔 memória do agente ({len(fatos)} mais recentes):\n" + linhas})
+        if cmd in ("/ajuda", "/help", "/?"):
+            return jsonify({"ok": True, "output": (
+                "comandos do chat (CLI e GUI):\n"
+                "  /goal <texto>   — define o objetivo da sessão (o orquestrador usa)\n"
+                "  /goal           — mostra o objetivo atual\n"
+                "  /reset          — limpa o objetivo da sessão\n"
+                "  /tools          — ferramentas disponíveis ao agente\n"
+                "  /skills         — skills ativas (aplicadas automaticamente)\n"
+                "  /tasks          — últimas tasks do orquestrador\n"
+                "  /memoria        — o que o agente lembra de você\n"
+                "  /ajuda          — esta lista")})
+        return jsonify({"ok": False, "msg": f"comando desconhecido: {cmd} — /ajuda lista os comandos"})
+
+    @app.post("/api/chat/approve")
+    @protected
+    def chat_approve():
+        """Decisão do operador num portão de aprovação (✅/✏️/⛔)."""
+        payload = request.get_json(silent=True) or {}
+        tid = str(payload.get("id") or "").strip()
+        action = str(payload.get("action") or "").strip().lower()
+        if action not in ("aprovar", "editar", "cancelar", "entregar", "refazer"):
+            return jsonify({"ok": False, "msg": "ação inválida"}), 400
+        from ..orchestrator import approve
+        if not approve(tid, action, payload.get("edit") or None):
+            return jsonify({"ok": False, "msg": "não há aprovação pendente com esse id"}), 404
+        return jsonify({"ok": True, "msg": f"decisão registrada: {action}"})
+
     # ----------------------------------------------------------- status
     @app.get("/api/status")
     @protected
@@ -621,10 +711,12 @@ self.addEventListener("fetch", (e) => {
                                                  on_event=collect, cancel=cancel)
                 else:
                     # v3.3: 🎯 orquestrador → ⚡ execução → 🔍 revisão
-                    from ..orchestrator import run_pipeline
+                    # v3.4: + goal da sessão (/goal) + skills + 🔒 aprovação
+                    from ..orchestrator import get_goal, run_pipeline
                     result["final"] = run_pipeline(
                         agent, cfg, message, clean_history,
-                        on_event=collect, cancel=cancel)
+                        on_event=collect, cancel=cancel,
+                        goal=get_goal(session_id), session_id=session_id)
             except Exception as exc:  # noqa: BLE001
                 if not cancel.is_set():
                     activity.log(cfg, "chat",
@@ -1158,7 +1250,7 @@ self.addEventListener("fetch", (e) => {
                    "cmd_timeout", "sandbox", "confirm_dangerous", "temperature", "auth_token",
                    "ollama_url", "auto_start_ollama", "claude_use_ollama", "claude_model", "web_access",
                    "stt_model", "stt_language", "stt_autosend", "keep_alive", "num_predict",
-                   "orchestrator_on", "reviewer_on",
+                   "orchestrator_on", "reviewer_on", "creation_approval",
                    "max_tool_calls", "backups_keep", "mcp_autorestart", "tool_selector",
                    "memory_top_k"}
         changes = {k: v for k, v in payload.items() if k in allowed}

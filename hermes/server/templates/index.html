@@ -267,6 +267,34 @@
   .sysnote{align-self:center;text-align:center;color:var(--dim);font-size:11.5px;
     border:1px dashed var(--border2);border-radius:99px;padding:4px 14px;
     margin:4px 0;max-width:94%;word-break:break-word}
+  /* ═══ v3.4 — comandos, aprovação, por baixo dos panos ═══ */
+  .syscmd{align-self:stretch;border:1px solid var(--border2);border-radius:12px;
+    background:linear-gradient(180deg,var(--panel),var(--bg2));padding:12px 14px;
+    font-size:12.5px;white-space:pre-wrap;word-break:break-word;margin:6px 0}
+  .syscmd .cmd{color:var(--acc2);font-weight:700}
+  .slashmenu{display:none;position:absolute;bottom:100%;left:0;right:0;z-index:40;
+    background:var(--panel);border:1px solid var(--border2);border-radius:12px;
+    max-height:240px;overflow:auto;box-shadow:0 -8px 30px rgba(0,0,0,.45);margin-bottom:8px}
+  .slashmenu.show{display:block}
+  .slashmenu .it{padding:9px 14px;cursor:pointer;display:flex;gap:10px;align-items:baseline}
+  .slashmenu .it:hover,.slashmenu .it.sel{background:rgba(124,92,255,.12)}
+  .slashmenu .it b{color:var(--acc2);min-width:86px}
+  .slashmenu .it span{color:var(--dim);font-size:11.5px}
+  .approval{align-self:stretch;border:1px solid var(--warn);border-left:4px solid var(--warn);
+    background:rgba(255,180,84,.06);border-radius:12px;padding:14px;margin:8px 0}
+  .approval .ttl{font-weight:700;margin-bottom:8px}
+  .approval .corpo{font-size:13px;white-space:pre-wrap;margin-bottom:10px}
+  .approval textarea,.approval input[type=text]{width:100%;margin:4px 0;
+    background:#0a0e17;border:1px solid var(--border);border-radius:9px;
+    color:var(--txt);padding:9px 12px;font-family:inherit;font-size:13px}
+  .approval .acts{display:flex;gap:8px;flex-wrap:wrap}
+  .approval .status{font-size:12px;color:var(--dim);margin-top:8px}
+  .brain{align-self:stretch;border:1px dashed var(--acc);border-radius:10px;
+    font-size:11.5px;margin:6px 0;background:rgba(124,92,255,.05)}
+  .brain summary{cursor:pointer;padding:7px 12px;color:var(--acc2);list-style:none}
+  .brain summary::before{content:'🔬 '}
+  .brain pre{margin:0 12px 10px;white-space:pre-wrap;word-break:break-word;color:var(--dim);
+    max-height:300px;overflow:auto;font-size:11px}
 
   /* ═══════════════ v3.2 — responsivo: celular e tablet ═══════════════ */
   @media (max-width:1024px){
@@ -468,6 +496,8 @@
   <section class="page" id="page-chat">
     <div class="chatrow" style="margin:0 0 10px;align-items:center">
       <span class="hint" id="chat-session" style="flex:1">◈ nova conversa</span>
+      <button class="b small ghost" id="btn-brain" title="ver a IA por baixo dos panos (orquestrador, skills, revisor)" onclick="toggleBrain()">🔬 panos</button>
+      <button class="b small ghost" title="fluxo bruto de eventos desta conversa (JSON)" onclick="openRawLog()">🧾 fluxo</button>
       <select id="agent-sel" title="qual agente responde"
               style="background:#0a0e17;border:1px solid var(--border);border-radius:9px;color:var(--txt);padding:7px 10px;font-size:12.5px">
         <option value="hermes">◈ Hermes (Ollama)</option>
@@ -494,8 +524,9 @@
         <button class="chip" onclick="suggest(this)">Liste os arquivos do workspace</button>
         <button class="chip" onclick="suggest(this)">Crie um arquivo relatorio.txt com um resumo da máquina</button>
       </div>
-      <div class="chatrow">
-        <textarea id="chatin" rows="1" placeholder="fale com o Hermes…  (Enter envia · Shift+Enter quebra linha)"></textarea>
+      <div class="chatrow" style="position:relative">
+        <div class="slashmenu" id="slashmenu"></div>
+        <textarea id="chatin" rows="1" placeholder="fale com o Hermes…  (Enter envia · Shift+Enter quebra linha · / comandos)"></textarea>
         <button class="b ghost" id="btn-mic" title="ditar pelo microfone (Whisper local)" onclick="toggleMic()">🎤</button>
         <button class="b danger" id="btn-stop" style="display:none" onclick="stopChat()">⏹ parar</button>
         <button class="b primary" id="btn-send" onclick="sendChat()">enviar ➤</button>
@@ -764,6 +795,8 @@
           <span class="hint">conversa vira plano → task → execução → revisão</span></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-reviewer_on"><label for="s-reviewer_on" style="color:var(--txt)">🔍 Revisor (conferir o resultado antes de entregar)</label></div>
           <span class="hint">reprovado = refaz (máx. 2 tentativas)</span></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-creation_approval"><label for="s-creation_approval" style="color:var(--txt)">🔒 Aprovação em tarefas de criação</label></div>
+          <span class="hint">criar/modificar/enviar exige seu ✅ (ou ✏️ editar) antes de executar e antes da entrega</span></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-claude_use_ollama"><label for="s-claude_use_ollama" style="color:var(--txt)">🔌 Claude Code via Ollama (mesmo servidor do Hermes)</label></div></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-web_access"><label for="s-web_access" style="color:var(--txt)">🌐 acesso à web (busca e leitura de páginas)</label></div></div>
         <div class="field"><label>🎤 modelo de voz (Whisper)</label>
@@ -1144,7 +1177,9 @@ async function deleteConversation(id){
 async function sendChat(){
   const input = $("chatin"), text = input.value.trim();
   if (!text || state.sending) return;
+  if (text.startsWith("/")){ input.value=""; autoGrow(input); runSlash(text); return; }
   input.value = ""; autoGrow(input);
+  state.rawLog = [];
   bubble("user", esc(text), "");
   state.history.push({role:"user", content:text});
   state.sending = true; $("btn-send").disabled = true;
@@ -1218,6 +1253,7 @@ async function sendChat(){
 }
 function stopChat(){ if (state.abort) state.abort.abort(); }
 function handleEvent(ev, turns, cursors){
+  (state.rawLog = state.rawLog || []).push(ev);   // 🧾 fluxo bruto do turno
   if (ev.type === "session"){ state.sessionId = ev.id; return; }  // sessão persistida
   if (ev.type === "stats"){ turns.stats = ev; return; }           // tempo/tokens da resposta
   if (ev.type === "ping") return;  // keepalive do servidor enquanto a IA pensa
@@ -1226,6 +1262,13 @@ function handleEvent(ev, turns, cursors){
     nd.className = "sysnote"; nd.textContent = ev.message || "";
     $("chatlog").appendChild(nd); turns.cur = null; scrollChat();
     return;
+  }
+  if (ev.type === "approval_request"){   // v3.4: 🔒 portão do operador
+    if (turns.loading){ turns.loading.remove(); turns.loading = null; }
+    renderApproval(ev); return;
+  }
+  if (ev.type === "brain"){              // v3.4: 🔬 por baixo dos panos
+    if (state.brain) renderBrain(ev); return;
   }
   if (ev.type === "step"){
     if (turns.loading)
@@ -1873,7 +1916,8 @@ async function loadSettings(){
     $("s-sandbox").checked = !!s.sandbox; $("s-confirm_dangerous").checked = !!s.confirm_dangerous;
     $("s-claude_use_ollama").checked = !!s.claude_use_ollama;
     $("s-orchestrator_on").checked = s.orchestrator_on !== false;
-    $("s-reviewer_on").checked = s.reviewer_on !== false; $("s-claude_model").value = s.claude_model || "";
+    $("s-reviewer_on").checked = s.reviewer_on !== false;
+    $("s-creation_approval").checked = s.creation_approval !== false; $("s-claude_model").value = s.claude_model || "";
     $("s-web_access").checked = !!s.web_access;
     $("s-stt_model").value = s.stt_model || "base"; $("s-stt_language").value = s.stt_language || "pt";
     $("s-stt_autosend").checked = !!s.stt_autosend; window.STT_AUTOSEND = !!s.stt_autosend;
@@ -1894,6 +1938,7 @@ async function saveSettings(){
     sandbox: $("s-sandbox").checked, confirm_dangerous: $("s-confirm_dangerous").checked,
     claude_use_ollama: $("s-claude_use_ollama").checked, claude_model: $("s-claude_model").value.trim(),
     orchestrator_on: $("s-orchestrator_on").checked, reviewer_on: $("s-reviewer_on").checked,
+    creation_approval: $("s-creation_approval").checked,
     web_access: $("s-web_access").checked,
     stt_model: $("s-stt_model").value, stt_language: $("s-stt_language").value.trim(),
     stt_autosend: $("s-stt_autosend").checked,
@@ -1916,13 +1961,171 @@ function saveToken(){
 
 /* ═══════════════ input ═══════════════ */
 function autoGrow(el){ el.style.height="auto"; el.style.height=Math.min(el.scrollHeight,160)+"px"; }
-$("chatin").addEventListener("input", e=>autoGrow(e.target));
+$("chatin").addEventListener("input", e=>{ autoGrow(e.target); updateSlashMenu(); });
 $("chatin").addEventListener("keydown", e=>{
-  if (e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendChat(); }
+  const menu = $("slashmenu");
+  const aberto = menu.classList.contains("show");
+  if (aberto && (e.key==="ArrowDown" || e.key==="ArrowUp" || e.key==="Tab")){
+    e.preventDefault();
+    const itens = menu.querySelectorAll(".it"); if (!itens.length) return;
+    if (e.key==="Tab" || e.key==="Enter"){ pickSlash(itens[Math.min(slashSel, itens.length-1)].dataset.c); return; }
+    slashSel = e.key==="ArrowDown" ? Math.min(slashSel+1, itens.length-1) : Math.max(slashSel-1, 0);
+    itens.forEach((el,i)=>el.classList.toggle("sel", i===slashSel));
+    return;
+  }
+  if (e.key==="Escape" && aberto){ menu.classList.remove("show"); return; }
+  if (e.key==="Enter" && !e.shiftKey){
+    e.preventDefault();
+    const txt = $("chatin").value.trim();
+    if (txt.startsWith("/")){
+      $("chatin").value=""; autoGrow($("chatin")); menu.classList.remove("show");
+      runSlash(txt);
+    } else sendChat();
+  }
 });
+
+/* ═══════════════ v3.4 — comandos / aprovação / por baixo dos panos ═══════════════ */
+const SLASH = [
+  {c:"/goal",    d:"define o objetivo da sessão (o orquestrador usa em cada task)"},
+  {c:"/reset",   d:"limpa o objetivo da sessão"},
+  {c:"/tools",   d:"ferramentas disponíveis ao agente"},
+  {c:"/skills",  d:"skills ativas (aplicadas automaticamente às tasks)"},
+  {c:"/tasks",   d:"últimas tasks do orquestrador"},
+  {c:"/memoria", d:"o que o agente lembra de você"},
+  {c:"/ajuda",   d:"lista os comandos"},
+];
+let slashSel = 0;
+function updateSlashMenu(){
+  const input = $("chatin"), menu = $("slashmenu");
+  const v = input.value;
+  if (!v.startsWith("/") || v.includes("\n")){ menu.classList.remove("show"); return; }
+  const q = v.slice(1).split(" ")[0].toLowerCase();
+  const itens = SLASH.filter(x=>x.c.slice(1).startsWith(q));
+  if (!itens.length){ menu.classList.remove("show"); return; }
+  slashSel = 0;
+  menu.innerHTML = itens.map(x=>'<div class="it" data-c="'+x.c+'"><b>'+x.c+'</b><span>'+esc(x.d)+'</span></div>').join("");
+  menu.querySelectorAll(".it").forEach(el=>el.addEventListener("click", ()=>pickSlash(el.dataset.c)));
+  menu.classList.add("show");
+}
+function pickSlash(c){
+  const input = $("chatin");
+  const args = input.value.split(" ").slice(1).join(" ");
+  input.value = c + (args ? " " + args : "");
+  $("slashmenu").classList.remove("show");
+  input.focus();
+}
+async function runSlash(text){
+  const d = document.createElement("div");
+  d.className = "syscmd";
+  d.innerHTML = '<span class="cmd">'+esc(text.split(" ")[0])+'</span>';
+  $("chatlog").appendChild(d); scrollChat();
+  try{
+    const r = await api("/api/chat/command", {method:"POST",
+      body: JSON.stringify({text: text, session_id: state.sessionId || ""})});
+    const j = await r.json().catch(()=>({msg:"sem resposta"}));
+    d.textContent = (j.ok ? (text.split(" ")[0]+"\n"+(j.output||"")) : ("✖ "+(j.msg||"erro")));
+  }catch(e){ d.textContent = "✖ "+e.message; }
+  scrollChat();
+}
+function mkBtn(label, cls, fn){
+  const b = document.createElement("button");
+  b.className = "b small " + cls; b.textContent = label;
+  b.addEventListener("click", fn); return b;
+}
+function renderApproval(ev){
+  const card = document.createElement("div");
+  card.className = "approval"; card.dataset.id = ev.id || "";
+  const ttl = document.createElement("div"); ttl.className = "ttl";
+  ttl.textContent = (ev.kind === "entrega" ? "📦 " : "🔒 ") + (ev.msg || "aprovação necessária");
+  card.appendChild(ttl);
+  if (ev.kind === "entrega"){
+    const ta = document.createElement("textarea"); ta.className = "ed-txt"; ta.rows = 10;
+    ta.value = ev.texto || ""; card.appendChild(ta);
+    const acts = document.createElement("div"); acts.className = "acts";
+    acts.appendChild(mkBtn("✅ Entregar", "primary", ()=>approveTask(card, "entregar")));
+    acts.appendChild(mkBtn("💾 Entregar editada", "ghost", ()=>approveTask(card, "editar")));
+    acts.appendChild(mkBtn("🔁 Refazer", "ghost", ()=>approveTask(card, "refazer")));
+    card.appendChild(acts);
+  } else {
+    const corpo = document.createElement("div"); corpo.className = "corpo";
+    let txt = "🎯 " + (ev.objetivo || "");
+    (ev.passos||[]).forEach(p=> txt += "\n  • " + p);
+    if ((ev.skills||[]).length) txt += "\n✦ skills: " + ev.skills.join(", ");
+    corpo.textContent = txt; card.appendChild(corpo);
+    const ed = document.createElement("div"); ed.style.display = "none";
+    const obj = document.createElement("input"); obj.type = "text"; obj.className = "ed-obj"; obj.value = ev.objetivo || "";
+    const ps = document.createElement("textarea"); ps.className = "ed-passos"; ps.rows = 3; ps.value = (ev.passos||[]).join("\n");
+    ed.appendChild(obj); ed.appendChild(ps); card.appendChild(ed);
+    const acts = document.createElement("div"); acts.className = "acts";
+    acts.appendChild(mkBtn("✅ Aprovar", "primary", ()=>approveTask(card, "aprovar")));
+    acts.appendChild(mkBtn("✏️ Editar", "ghost", ()=>{
+      const aberto = ed.style.display !== "none";
+      ed.style.display = aberto ? "none" : "";
+      if (!aberto) obj.focus();
+    }));
+    acts.appendChild(mkBtn("⛔ Cancelar", "danger", ()=>approveTask(card, "cancelar")));
+    card.appendChild(acts);
+  }
+  const st = document.createElement("div"); st.className = "status";
+  st.textContent = "aguardando sua decisão…";
+  card.appendChild(st);
+  $("chatlog").appendChild(card); scrollChat();
+}
+async function approveTask(card, action){
+  const st = card.querySelector(".status");
+  let edit = null;
+  if (action === "editar"){
+    const ta = card.querySelector(".ed-txt");
+    edit = ta ? {texto: ta.value}
+              : {objetivo: card.querySelector(".ed-obj").value,
+                 passos: card.querySelector(".ed-passos").value.split("\n").map(s=>s.trim()).filter(Boolean)};
+  }
+  card.querySelectorAll("button").forEach(b=>b.disabled = true);
+  st.textContent = "enviando decisão…";
+  try{
+    const r = await api("/api/chat/approve", {method:"POST",
+      body: JSON.stringify({id: card.dataset.id, action: action, edit: edit})});
+    const j = await r.json().catch(()=>({msg:"sem resposta"}));
+    st.textContent = j.ok ? ("✓ " + j.msg) : ("✖ " + j.msg);
+    if (!j.ok) card.querySelectorAll("button").forEach(b=>b.disabled = false);
+  }catch(e){
+    st.textContent = "✖ " + e.message;
+    card.querySelectorAll("button").forEach(b=>b.disabled = false);
+  }
+}
+function renderBrain(ev){
+  const d = document.createElement("details"); d.className = "brain";
+  const s = document.createElement("summary"); s.textContent = ev.stage || "🔬";
+  const pre = document.createElement("pre");
+  try{ pre.textContent = JSON.stringify(ev.data, null, 2); }
+  catch(_){ pre.textContent = String(ev.data); }
+  d.appendChild(s); d.appendChild(pre);
+  $("chatlog").appendChild(d); scrollChat();
+}
+function toggleBrain(){
+  state.brain = !state.brain;
+  store("hermes_brain", state.brain ? "1" : "0");
+  $("btn-brain").classList.toggle("primary", state.brain);
+  toast(state.brain ? "🔬 por baixo dos panos: LIGADO — decisões do orquestrador, skills e revisor aparecem na conversa"
+                    : "🔬 por baixo dos panos: desligado (🧾 fluxo segue disponível)");
+}
+function openRawLog(){
+  if (LIVE_TIMER){ clearInterval(LIVE_TIMER); LIVE_TIMER = null; }
+  LIVE_ID = null;
+  $("live-modal").classList.add("show");
+  $("live-dot").style.display = "none";
+  $("live-title").textContent = "🧾 por baixo dos panos — fluxo bruto desta conversa";
+  const evs = state.rawLog || [];
+  $("live-meta").textContent = evs.length + " eventos";
+  $("live-box").textContent = evs.length
+    ? evs.map(e=>JSON.stringify(e)).join("\n")
+    : "(vazio — mande uma mensagem no chat e abra de novo)";
+}
 
 /* ═══════════════ boot ═══════════════ */
 state.token = store("hermes_token") || "";
+state.brain = store("hermes_brain") === "1";
+if (state.brain) $("btn-brain").classList.add("primary");
 if (state.token) $("tokenin").value = state.token;
 startLog();
 restoreLastConversation();   // a última conversa volta sozinha (nem F5 perde)

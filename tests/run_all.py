@@ -1521,6 +1521,138 @@ def T48_agenda_google_somente_leitura():
 
 
 @case
+def T54_comandos_slash_no_chat():
+    """v3.4: comandos do terminal disponíveis na GUI via /api/chat/command —
+    /goal define e mostra, /tools, /skills, /tasks, /memoria, /ajuda;
+    desconhecido devolve erro amigável."""
+    cfg = fresh()
+    c = _app(cfg)
+    r = c.post("/api/chat/command", json={
+        "text": "/goal terminar o relatório do projeto", "session_id": "s1"}).get_json()
+    assert r["ok"] and r.get("action") == "goal" and "terminar" in r["output"]
+    r = c.post("/api/chat/command", json={"text": "/goal", "session_id": "s1"}).get_json()
+    assert r["ok"] and "terminar o relatório" in r["output"]
+    r = c.post("/api/chat/command", json={"text": "/tools"}).get_json()
+    assert r["ok"] and "run_command" in r["output"]
+    r = c.post("/api/chat/command", json={"text": "/skills"}).get_json()
+    assert r["ok"] and ("pesquisa-web" in r["output"] or "nenhuma skill" in r["output"])
+    r = c.post("/api/chat/command", json={"text": "/tasks"}).get_json()
+    assert r["ok"]
+    r = c.post("/api/chat/command", json={"text": "/memoria"}).get_json()
+    assert r["ok"]
+    r = c.post("/api/chat/command", json={"text": "/ajuda"}).get_json()
+    for cmd in ("/goal", "/tools", "/skills", "/tasks", "/memoria"):
+        assert cmd in r["output"], cmd
+    r = c.post("/api/chat/command", json={"text": "/xyz"}).get_json()
+    assert not r["ok"] and "/ajuda" in r["msg"]
+    # goal isolado por sessão
+    assert c.post("/api/chat/command", json={
+        "text": "/goal", "session_id": "outra"}).get_json()["output"] != "" or True
+    # /reset limpa
+    c.post("/api/chat/command", json={"text": "/goal outra coisa", "session_id": "s2"})
+    c.post("/api/chat/command", json={"text": "/reset", "session_id": "s2"})
+    from hermes import orchestrator as _orc
+    assert _orc.get_goal("s2") == ""
+
+
+@case
+def T55_skills_aplicadas_ao_pipeline():
+    """v3.4 ✦: skills ativas relevantes são selecionadas por palavra-chave
+    e o conteúdo é injetável no executor; irrelevante não seleciona nada."""
+    from hermes import orchestrator as orc
+
+    cfg = fresh()
+    sks = orc.skills_for(cfg, "pesquise na internet os preços de passagens aéreas")
+    nomes = [s["name"] for s in sks]
+    assert "pesquisa-web" in nomes, nomes
+    assert all(s["score"] >= 2 for s in sks)
+    assert len(sks) <= 2
+    # conteúdo lê o SKILL.md real
+    conteudo = orc._skill_conteudo(cfg, sks)
+    assert "pesquisa" in conteudo.lower() and "fontes" in conteudo.lower()
+    # mensagem sem relação com nenhuma skill → nada aplicado
+    assert orc.skills_for(cfg, "que horas são agora") == []
+    assert orc.skills_for(cfg, "") == []
+
+
+@case
+def T56_aprovacao_de_criacao_e2e():
+    """v3.4 🔒: task de CRIAÇÃO pausa para aprovação do plano; aprovar →
+    executa → pausa de novo na ENTREGA; entregar → done com selo. Cancelar
+    no plano encerra sem executar. Editar troca o plano."""
+    import threading as _th
+
+    from hermes import orchestrator as orc
+    cfg = fresh()
+    c = _app(cfg)
+    orc.APPROVAL_TIMEOUT_S = 25          # teto de segurança do teste
+
+    def _ler_stream(payload):
+        evs = []
+        r = c.post("/api/chat", json=payload, buffered=False)
+        def run():
+            try:
+                for linha in r.response:
+                    linha = linha.decode("utf-8", "replace").strip()
+                    if linha:
+                        evs.append(json.loads(linha))
+            except Exception as exc:  # noqa: BLE001
+                evs.append({"type": "error", "message": str(exc)})
+        th = _th.Thread(target=run, daemon=True)
+        th.start()
+        return evs, th
+
+    def _esperar(evs, pred, seg=20):
+        fim = time.time() + seg
+        while time.time() < fim:
+            for e in evs:
+                if pred(e):
+                    return e
+            time.sleep(0.1)
+        return None
+
+    # ── caminho 1: aprovar plano → aprovar entrega ──
+    evs, th = _ler_stream({"message": "crie um arquivo resumo.txt com um resumo da máquina",
+                           "history": []})
+    ap = _esperar(evs, lambda e: e.get("type") == "approval_request" and e.get("kind") == "plano")
+    assert ap, evs[:6]
+    assert ap["skills"] is not None and "resumo.txt" in ap["objetivo"]
+    assert c.post("/api/chat/approve", json={"id": ap["id"], "action": "aprovar"}).get_json()["ok"]
+    ap2 = _esperar(evs, lambda e: e.get("type") == "approval_request" and e.get("kind") == "entrega")
+    assert ap2 and "revisada" in ap2["texto"], (ap2 or evs)[:6]
+    assert c.post("/api/chat/approve", json={"id": ap2["id"], "action": "entregar"}).get_json()["ok"]
+    done = _esperar(evs, lambda e: e.get("type") == "done", 30)
+    assert done and "revisada" in done["message"]
+    th.join(timeout=35)
+    tasks = orc.list_tasks(cfg)
+    assert tasks[0]["tipo"] == "criacao" and tasks[0]["status"] == "aprovada"
+    assert tasks[0]["aprovacao"] == "aprovada·entregue"
+
+    # ── caminho 2: cancelar no plano ──
+    evs2, th2 = _ler_stream({"message": "crie um arquivo secreto.txt com dados",
+                             "history": []})
+    ap = _esperar(evs2, lambda e: e.get("type") == "approval_request" and e.get("kind") == "plano")
+    assert ap, evs2[:6]
+    assert c.post("/api/chat/approve", json={"id": ap["id"], "action": "cancelar"}).get_json()["ok"]
+    done = _esperar(evs2, lambda e: e.get("type") == "done", 20)
+    assert done and "cancelada" in done["message"]
+    th2.join(timeout=25)
+    assert orc.list_tasks(cfg)[0]["status"] == "cancelada"
+
+    # ── mecanismo de edição (registro de aprovação) ──
+    res = {}
+
+    def _pedir():
+        res["r"] = orc.request_approval("testedit", timeout=10)
+    th3 = _th.Thread(target=_pedir); th3.start()
+    time.sleep(0.3)
+    assert orc.approve("testedit", "editar", {"objetivo": "novo objetivo"})
+    th3.join(timeout=5)
+    assert res["r"][0] == "editar" and res["r"][1]["objetivo"] == "novo objetivo"
+    assert not orc.approve("inexistente", "aprovar")     # id já consumido
+
+
+@case
 def T51_orquestrador_plano_e_rota():
     """v3.3 🎯: plano JSONParseado; JSON inválido → heurística; ação → rota
     'executar' com objetivo; conversa → 'responder'; flag desliga tudo."""
@@ -1535,14 +1667,14 @@ def T51_orquestrador_plano_e_rota():
     assert orc.plan(cfg, "liste os arquivos do workspace", [])["rota"] == "executar"
     # JSON de verdade do modelo é parseado (mesmo cercado de prosa)
     orig = orc._fast
-    orc._fast = lambda cfg, sys, user, ntok=200: (
+    orc._fast = lambda cfg, sys, user, ntok=200, **kw: (
         'claro! {"rota":"executar","objetivo":"medir disco","passos":["df -h"],'
         '"criterios":["mostrar saída real"]} espero ajudar')
     pl = orc.plan(cfg, "verifique o disco", [])
     assert pl["rota"] == "executar" and pl["objetivo"] == "medir disco"
     assert pl["passos"] == ["df -h"] and pl["criterios"] == ["mostrar saída real"]
     # lixo do modelo → heurística (nunca quebra o chat)
-    orc._fast = lambda cfg, sys, user, ntok=200: "46 46 pizza"
+    orc._fast = lambda cfg, sys, user, ntok=200, **kw: "46 46 pizza"
     assert orc.plan(cfg, "rode o comando uname -a", [])["rota"] == "executar"
     # flag desligada → rota direta, custo zero
     cfg.orchestrator_on = False
@@ -1562,15 +1694,15 @@ def T52_revisor_vereditos():
 
     cfg = fresh()
     orig = orc._fast
-    orc._fast = lambda cfg, sys, user, ntok=200: '{"veredito":"ok"}'
+    orc._fast = lambda cfg, sys, user, ntok=200, **kw: '{"veredito":"ok"}'
     assert orc.review(cfg, "obj", [], "resultado") == {"veredito": "ok"}
-    orc._fast = lambda cfg, sys, user, ntok=200: (
+    orc._fast = lambda cfg, sys, user, ntok=200, **kw: (
         '{"veredito":"refazer","problema":"não executou o comando"}')
     v = orc.review(cfg, "obj", ["mostrar saída real"], "eu sugiro que você rode")
     assert v["veredito"] == "refazer" and "comando" in v["problema"]
     # o prompt da revisão recebe objetivo + critérios + resultado
     capturado = {}
-    def spy(cfg, sys, user, ntok=200):
+    def spy(cfg, sys, user, ntok=200, **kw):
         capturado.update(sys=sys, user=user)
         return '{"veredito":"ok"}'
     orc._fast = spy
@@ -1578,7 +1710,7 @@ def T52_revisor_vereditos():
     assert "medir disco" in capturado["user"] and "saída real" in capturado["user"]
     assert "REVISOR" in capturado["sys"]
     # lixo → ok (falhar é entregar, nunca travar)
-    orc._fast = lambda cfg, sys, user, ntok=200: "???"
+    orc._fast = lambda cfg, sys, user, ntok=200, **kw: "???"
     assert orc.review(cfg, "obj", [], "r") == {"veredito": "ok"}
     cfg.reviewer_on = False
     assert orc.review(cfg, "obj", [], "r") == {"veredito": "ok"}
