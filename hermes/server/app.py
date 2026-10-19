@@ -606,11 +606,21 @@ def create_app(cfg: Config) -> Flask:
             return "".join(c for c in _ud.normalize("NFD", s)
                            if _ud.category(c) != "Mn").lower()
         popular = [
-            {"name": "llama3.2", "desc": "Meta — pequeno e rápido (1B/3B), bom p/ o dia a dia"},
-            {"name": "qwen2.5", "desc": "Alibaba — forte em código e raciocínio (0.5B a 72B)"},
-            {"name": "qwen2.5-coder", "desc": "especialista em programação"},
-            {"name": "gemma3", "desc": "Google — moderno e eficiente (1B a 27B), com visão"},
+            # ── leves (≤7B) — recomendados p/ máquinas com ~10 GB de RAM ──
+            {"name": "llama3.2:3b", "desc": "Meta 3B — excelente em português: organizar, categorizar e planejar (2.0 GB)"},
+            {"name": "deepseek-r1:7b", "desc": "🧮 raciocínio lógico passo a passo — topo da faixa ≤7B (4.7 GB)"},
+            {"name": "deepseek-r1:1.5b", "desc": "🧮 raciocínio lógico ultraleve e rápido (1.1 GB)"},
+            {"name": "qwen2.5-coder:7b", "desc": "💻 melhor em código na faixa ≤7B: gerar, depurar e explicar (4.7 GB)"},
+            {"name": "qwen2.5-coder:1.5b", "desc": "💻 scripts Python/Bash rapidíssimos (1 GB)"},
+            {"name": "phi3:3.8b", "desc": "🧮 Microsoft — matemática e lógica estáveis (2.2 GB)"},
+            {"name": "phi4-mini:3.8b", "desc": "📋 Microsoft — raciocínio, planejamento e instruções (2.5 GB)"},
+            {"name": "granite4.2:3b", "desc": "📅 IBM — estruturação de dados e rotinas (2.2 GB)"},
+            {"name": "llama3.2:1b", "desc": "Meta 1B — o mais leve p/ tarefas simples (1.3 GB)"},
+            # ── gerais ──
             {"name": "hermes3", "desc": "Nous Research — conversacional/agente (3B/8B/70B), o padrão do Hermes"},
+            {"name": "qwen2.5", "desc": "Alibaba — forte em código e raciocínio (0.5B a 72B)"},
+            {"name": "qwen2.5-coder", "desc": "especialista em programação (0.5B a 32B)"},
+            {"name": "gemma3", "desc": "Google — moderno e eficiente (1B a 27B), com visão"},
             {"name": "deepseek-r1", "desc": "raciocínio passo a passo (1.5B a 671B)"},
             {"name": "mistral", "desc": "Mistral AI — leve e equilibrado (7B)"},
             {"name": "phi4", "desc": "Microsoft — 14B compacto com bom raciocínio"},

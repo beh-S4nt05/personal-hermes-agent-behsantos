@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.0.2 — catálogo com curadoria "leves ≤7B" (máquinas com ~10 GB de RAM)
+
+- Curadoria da aba Ollama ganhou um bloco de modelos leves verificados na
+  biblioteca oficial, com tamanho de download em cada descrição:
+  `llama3.2:3b/1b`, `deepseek-r1:7b/1.5b`, `qwen2.5-coder:7b/1.5b`,
+  `phi3:3.8b`, `phi4-mini:3.8b` e `granite4.2:3b` — download com 1 clique.
+- Correções de nomes (tags verificadas na ollama.com): `phi3:4b` não existe
+  (é `phi3:3.8b`) e `qwen3-coder` não tem versão 7B (menor: 30b — pesada
+  p/ 10 GB; alternativa ≤7B: `qwen2.5-coder:7b`).
+
 ## v2.0.1 — Claude Code integrado ao Ollama por padrão
 
 - O Claude Code (2º agente) agora é lançado **apontado para o mesmo Ollama**

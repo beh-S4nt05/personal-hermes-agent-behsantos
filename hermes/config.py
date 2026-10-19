@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 APP_NAME = "hermes-agent"
-VERSION = "2.0.1"
+VERSION = "2.0.2"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
