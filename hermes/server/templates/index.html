@@ -513,6 +513,10 @@
           <textarea id="s-system_prompt_extra" placeholder="ex.: Esta máquina é um servidor de arquivos; prefira soluções não destrutivas…"></textarea></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-sandbox"><label for="s-sandbox" style="color:var(--txt)">sandbox de arquivos (restringe ao workspace)</label></div></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-confirm_dangerous"><label for="s-confirm_dangerous" style="color:var(--txt)">confirmar comandos arriscados no terminal</label></div></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-claude_use_ollama"><label for="s-claude_use_ollama" style="color:var(--txt)">🔌 Claude Code via Ollama (mesmo servidor do Hermes)</label></div></div>
+        <div class="field"><label>🔌 modelo do Claude Code (vazio = padrão dele)</label>
+          <input type="text" id="s-claude_model" list="modellist" placeholder="ex.: qwen3-coder · hermes3:8b">
+          <span class="hint">só funciona com modelos instalados no Ollama</span></div>
         <div class="field full" style="margin-top:6px">
           <button class="b primary" onclick="saveSettings()">💾 salvar configuração</button>
         </div>
@@ -1331,6 +1335,7 @@ async function loadSettings(){
     $("s-temperature").value = s.temperature; $("s-system_prompt_extra").value = s.system_prompt_extra;
     $("s-auth_token").value = s.auth_token || "";
     $("s-sandbox").checked = !!s.sandbox; $("s-confirm_dangerous").checked = !!s.confirm_dangerous;
+    $("s-claude_use_ollama").checked = !!s.claude_use_ollama; $("s-claude_model").value = s.claude_model || "";
     const dl = $("modellist"); dl.innerHTML = "";
     ((state.status&&state.status.ollama.models)||[]).forEach(m=>{
       const o = document.createElement("option"); o.value = m; dl.appendChild(o);
@@ -1345,6 +1350,7 @@ async function saveSettings(){
     system_prompt_extra: $("s-system_prompt_extra").value,
     auth_token: $("s-auth_token").value,
     sandbox: $("s-sandbox").checked, confirm_dangerous: $("s-confirm_dangerous").checked,
+    claude_use_ollama: $("s-claude_use_ollama").checked, claude_model: $("s-claude_model").value.trim(),
   };
   const r = await api("/api/settings", {method:"POST", body: JSON.stringify(body)});
   const j = await r.json().catch(()=>({msg:"sem resposta"}));

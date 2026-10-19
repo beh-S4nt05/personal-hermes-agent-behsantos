@@ -40,7 +40,7 @@ TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 ACTIVE_PULLS: dict = {}
 
 # nome de modelo válido para o Ollama: nome[/namespace][:tag] — sem espaços
-MODEL_RE = re.compile(r"^[A-Za-z0-9._]+(/[A-Za-z0-9._-]+)?(:[A-Za-z0-9._-]+)?$")
+MODEL_RE = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*(:[A-Za-z0-9._-]+)?$")
 
 
 def create_app(cfg: Config) -> Flask:
@@ -891,7 +891,7 @@ def create_app(cfg: Config) -> Flask:
         payload = request.get_json(silent=True) or {}
         allowed = {"model", "system_prompt_extra", "max_steps", "num_ctx",
                    "cmd_timeout", "sandbox", "confirm_dangerous", "temperature", "auth_token",
-                   "ollama_url", "auto_start_ollama"}
+                   "ollama_url", "auto_start_ollama", "claude_use_ollama", "claude_model"}
         changes = {k: v for k, v in payload.items() if k in allowed}
         if not changes:
             return jsonify({"ok": False, "msg": "nada para alterar"}), 400
@@ -909,6 +909,12 @@ def create_app(cfg: Config) -> Flask:
                 return jsonify({"ok": False,
                                 "msg": "endereço inválido — use http://host:porta"}), 400
             changes["ollama_url"] = url
+        if "claude_model" in changes:
+            cm = str(changes["claude_model"]).strip()
+            if cm and not MODEL_RE.fullmatch(cm):
+                return jsonify({"ok": False,
+                                "msg": f"modelo inválido para o Claude Code: '{cm}'"}), 400
+            changes["claude_model"] = cm
         cfg.update(changes)
         agents.clear()  # próximo chat usa a nova configuração
         return jsonify({"ok": True, "msg": f"configuração salva em {cfg.path}", "changes": changes})

@@ -178,16 +178,16 @@ terminal rápido (com a mesma denylist de segurança), arquivos do workspace
 No chat, o seletor no topo escolhe quem responde:
 
 - **◈ Hermes (Ollama)** — o agente padrão deste projeto;
-- **🔌 Claude Code** — a CLI `claude` instalada na sua máquina, com as
-  funções padrão do Claude (bash, leitura/edição de arquivos, busca…).
-  Requer o Claude Code instalado e as variáveis de ambiente ativas no
-  terminal onde o `hermes server` roda:
+- **🔌 Claude Code** — a CLI `claude` da sua máquina, com as funções padrão
+  do Claude (bash, leitura/edição de arquivos, busca…), **integrada ao
+  Ollama automaticamente**: o Hermes lança o `claude` apontando para o mesmo
+  servidor Ollama (variáveis `ANTHROPIC_*` aplicadas sozinhas — não é
+  preciso exportar nada). Ajustável em ⚙ Ajustes (`claude_use_ollama`,
+  `claude_model`).
 
   ```bash
-  export ANTHROPIC_BASE_URL=http://localhost:11434   # Claude Code via Ollama
-  export ANTHROPIC_AUTH_TOKEN=ollama
-  export ANTHROPIC_API_KEY=""
-  hermes server
+  curl -fsSL https://claude.ai/install.sh | bash   # instala a CLI (uma vez)
+  ollama launch claude --model hermes3:8b          # teste rodando via Ollama
   ```
 
 As tarefas agendadas também têm seletor de agente (Hermes ou Claude Code).

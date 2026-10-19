@@ -69,8 +69,10 @@ ollama pull hermes3:8b               # modelo padrão
 
 A GUI abre em **http://127.0.0.1:8080** (localhost apenas, por padrão).
 
-Para Claude Code como segundo agente (opcional), instale a CLI `claude` e rode
-o server num terminal com as variáveis ativas (veja a seção 5).
+Opcional — Claude Code como 2º agente: instale a CLI `claude`
+(`curl -fsSL https://claude.ai/install.sh | bash`) e confirme com
+`ollama launch claude --model hermes3:8b`. O Hermes faz a integração com o
+Ollama automaticamente (seção 5).
 
 Instalação permanente (inicia com o sistema): use `install.sh` e as units em
 `systemd/` (`hermes-server.service` para a GUI, `hermes-agent.service` para o
@@ -153,17 +155,29 @@ busca…). A saída em `stream-json` é traduzida para os mesmos eventos do chat
 você vê passos e ferramentas na hora, e a resposta fica gravada na conversa
 com a etiqueta "🔌 Claude Code".
 
-Requisitos: CLI instalada (`npm install -g @anthropic-ai/claude-code`) e o
-`hermes server` rodando no terminal com as variáveis de ambiente:
+**Instalação** (uma vez, fora do Hermes):
 
 ```bash
-export ANTHROPIC_BASE_URL=http://localhost:11434   # Claude Code via Ollama
-export ANTHROPIC_AUTH_TOKEN=ollama
-export ANTHROPIC_API_KEY=""                        # vazio é essencial
-export OLLAMA_CONTEXT_LENGTH=32768
-./.venv/bin/hermes server
+curl -fsSL https://claude.ai/install.sh | bash    # ou: npm install -g @anthropic-ai/claude-code
+ollama launch claude --model hermes3:8b           # teste rodando via Ollama
 ```
 
+**Integração automática com o Ollama** — como o Claude Code roda sobre o
+Ollama, o Hermes lança a CLI `claude` apontada para o **mesmo servidor
+Ollama** do agente Hermes: as variáveis (`ANTHROPIC_BASE_URL`,
+`ANTHROPIC_AUTH_TOKEN=ollama`, `ANTHROPIC_API_KEY=""`) são aplicadas
+automaticamente em cada execução — **não é preciso exportar nada** no
+terminal onde o `hermes server` roda.
+
+Ajustes opcionais (aba ⚙ Ajustes ou `config.yaml`):
+
+| Chave | Padrão | Efeito |
+|---|---|---|
+| `claude_use_ollama` | `true` | Claude Code fala com o Ollama local (automático) |
+| `claude_model` | vazio | modelo do Claude Code (ex.: `qwen3-coder`, `hermes3:8b`); vazio = padrão dele |
+
+Use `claude_use_ollama: false` se o seu Claude Code falar com a API real da
+Anthropic (login/assinatura) — nesse caso as variáveis não são aplicadas.
 Sem a CLI instalada, o agente responde com instruções de instalação.
 
 ## 6. Chat: como uma mensagem flui
@@ -399,6 +413,8 @@ ambiente: `HERMES_DATA_DIR` (pasta de dados) e `HERMES_MOCK=1` (demo).
 | `model` | `hermes3:8b` | modelo padrão (formato `nome:tag`) |
 | `num_ctx` / `temperature` | 8192 / 0.4 | contexto e criatividade |
 | `auto_start_ollama` | false | sobe o Ollama sozinho quando precisar |
+| `claude_use_ollama` | true | 🔌 Claude Code integrado ao Ollama (variáveis automáticas) |
+| `claude_model` | vazio | modelo do Claude Code (ex.: `qwen3-coder`) |
 | `host` / `port` | 127.0.0.1 / 8080 | onde a GUI escuta |
 | `auth_token` | vazio | senha da GUI (use se abrir para a rede) |
 | `max_steps` | 8 | ciclos modelo→ferramenta por tarefa |
@@ -470,8 +486,8 @@ agendamentos, configuração).
 | `invalid model name` | Modelo sem `:tag` — use `hermes3:8b` (Ajustes → modelo) |
 | Modelo não encontrado | `ollama pull <modelo>` ou aba Ollama → Models |
 | Resposta lenta na 1ª msg | modelo carregando na memória (normal; aguarde o `ping`) |
-| Claude Code "não encontrado" | `npm install -g @anthropic-ai/claude-code` e rode o server com as variáveis da seção 5 |
-| Claude Code vazio/erro | confira `ANTHROPIC_API_KEY=""` (vazio) e o `ANTHROPIC_BASE_URL` |
+| Claude Code "não encontrado" | instale com `curl -fsSL https://claude.ai/install.sh \| bash` (ou npm) e reinicie o `hermes server` |
+| Claude Code vazio/erro | já aponta para o Ollama por padrão; confira o `claude_model` (use um modelo instalado) ou, se usa a API real, desative `claude_use_ollama` |
 | PyYAML com erro no pip (Windows/NTFS) | `pip install --force-reinstall --no-cache-dir PyYAML` |
 | Tarefa agendada não disparou | server estava fechado no horário? once perdeu a janela de 10 min ("perdida"); as demais disparam no próximo ciclo |
 | Erro de YAML no config | confira indentação (2 espaços) e aspas |

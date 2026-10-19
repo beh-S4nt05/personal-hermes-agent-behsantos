@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.0.1 — Claude Code integrado ao Ollama por padrão
+
+- O Claude Code (2º agente) agora é lançado **apontado para o mesmo Ollama**
+  do Hermes: as variáveis `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` /
+  `ANTHROPIC_API_KEY=""` são aplicadas automaticamente — não precisa exportar
+  nada no terminal (antes eram obrigatórias).
+- Novas configurações: `claude_use_ollama` (padrão ligado) e `claude_model`
+  (modelo do Claude Code, ex.: `qwen3-coder`) — na aba ⚙ Ajustes e no
+  `config.yaml`.
+- Dica de instalação atualizada (`claude.ai/install.sh` + `ollama launch
+  claude`) e `docs.md` revisado para o fluxo via Ollama.
+
 ## v2.0.0 — ferramentas manuais, Claude Code, catálogo de LMMs e conversas completas
 
 - **🛠 Aba Ferramentas**: as funções padrão do agente direto na GUI — terminal

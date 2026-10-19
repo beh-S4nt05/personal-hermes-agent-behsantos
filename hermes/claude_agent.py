@@ -15,6 +15,7 @@ No modo demonstração (mock), simula uma resposta para a GUI continuar usável.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import threading
@@ -24,10 +25,36 @@ CLAUDE_TIMEOUT_S = 900  # teto de 15 min por execução
 
 _CLAUDE_INSTALL_HINT = (
     "Claude Code não encontrado neste computador. Instale com:\n"
-    "  npm install -g @anthropic-ai/claude-code\n"
-    "Depois configure as variáveis (ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN)\n"
-    "e reinicie o `hermes server` no mesmo terminal onde elas estão ativas."
+    "  curl -fsSL https://claude.ai/install.sh | bash\n"
+    "  (ou: npm install -g @anthropic-ai/claude-code)\n"
+    "Para usar via Ollama, teste no terminal: ollama launch claude --model hermes3:8b\n"
+    "Depois reinicie o `hermes server` e tente de novo."
 )
+
+
+def _claude_env(cfg) -> dict:
+    """Ambiente do subprocesso `claude` — Ollama por padrão.
+
+    Com claude_use_ollama=True (padrão), o Claude Code é apontado para o
+    MESMO servidor Ollama do agente Hermes, sem precisar exportar nada.
+    Variáveis já presentes no ambiente NÃO são sobrescritas.
+    """
+    env = os.environ.copy()
+    if getattr(cfg, "claude_use_ollama", True):
+        env.setdefault("ANTHROPIC_BASE_URL",
+                       str(getattr(cfg, "ollama_url", "http://127.0.0.1:11434")))
+        env.setdefault("ANTHROPIC_AUTH_TOKEN", "ollama")
+        env.setdefault("ANTHROPIC_API_KEY", "")
+    return env
+
+
+def _claude_cmd(exe: str, cfg, prompt: str) -> list[str]:
+    """Linha de comando do Claude Code (modo headless, stream JSON)."""
+    cmd = [exe, "-p", prompt, "--output-format", "stream-json", "--verbose"]
+    model = str(getattr(cfg, "claude_model", "") or "").strip()
+    if model:
+        cmd += ["--model", model]
+    return cmd
 
 
 def claude_path() -> str | None:
@@ -57,7 +84,7 @@ def _simulate(message: str, ev, cancel) -> str:
     ev({"type": "step", "step": 1})
     texto = (
         f"[Claude Code — simulado na demonstração] Recebi: “{message[:120]}”. "
-        "No modo real eu rodaria a CLI `claude` com todas as funções padrão "
+        "No modo real eu rodaria a CLI `claude` — conectada ao seu Ollama — com todas as funções padrão "
         "do Claude Code (bash, leitura/edição de arquivos, busca web…) dentro "
         "do workspace do Hermes, e você acompanharia tudo por esta mesma GUI."
     )
@@ -95,9 +122,9 @@ def run_claude(cfg, message: str, history: list[dict] | None = None,
     prompt = _build_prompt(message, history)
     try:
         proc = subprocess.Popen(
-            [exe, "-p", prompt, "--output-format", "stream-json", "--verbose"],
+            _claude_cmd(exe, cfg, prompt),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-            cwd=str(cfg.workdir),
+            cwd=str(cfg.workdir), env=_claude_env(cfg),
         )
     except OSError as exc:
         msg = f"não consegui executar o Claude Code: {exc}"
