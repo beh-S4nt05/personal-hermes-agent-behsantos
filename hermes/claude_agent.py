@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -51,31 +52,51 @@ def _claude_env(cfg) -> dict:
 # Diretiva curta que substitui o prompt gigante do Claude Code no modo local
 # (medido: prompt padrão 5.780 chars -> ~300 com --bare + isto).
 CLAUDE_LIGHT_PROMPT = (
-    "Você é um agente rodando LOCALMENTE via Ollama. Responda em português "
-    "do Brasil. Seja direto: faça exatamente o que foi pedido usando poucas "
-    "ferramentas (Bash, Read, Write, Edit), execute de verdade e responda "
-    "com o resultado REAL — nunca invente dados nem gere exemplos/template."
+    "Você é um agente prático rodando LOCALMENTE (Ollama). Responda em "
+    "português do Brasil, direto ao ponto. Você tem SOMENTE as ferramentas "
+    "Bash, Read e Edit. Para obter dados (sistema, arquivos, rede), EXECUTE "
+    "Bash (ex.: uname -a, free -h, df -h, ls) e responda com a saída REAL. "
+    "PROIBIDO escrever JSON Schema, XML, exemplos de chamada de ferramenta "
+    "ou qualquer explicação sobre como usar ferramentas. Nunca invente dados."
 )
 
 
-def _claude_cmd(exe: str, cfg, prompt: str) -> list[str]:
-    """Linha de comando do Claude Code (modo headless, stream JSON).
+_VERSION_CACHE: dict[str, str] = {}
 
-    Via Ollama (modelos locais pequenos) usamos o MODO LEVE: --bare (prompt
-    mínimo em vez dos ~5,8k chars padrão que fazem modelos 7B delirar),
-    diretiva curta em PT, ferramentas essenciais liberadas e limite de
-    turnos. Sem claude_model definido, usamos o modelo do agente Hermes.
+
+def _cli_version(exe: str) -> str:
+    """Versão da CLI claude (cacheada; '?' se não conseguir ler)."""
+    if exe not in _VERSION_CACHE:
+        try:
+            out = subprocess.run([exe, "--version"], capture_output=True,
+                                 text=True, timeout=20)
+            m = re.search(r"\d+\.\d+\.\d+", out.stdout or "")
+            _VERSION_CACHE[exe] = m.group(0) if m else "?"
+        except Exception:  # noqa: BLE001
+            _VERSION_CACHE[exe] = "?"
+    return _VERSION_CACHE[exe]
+
+
+def _claude_cmd(exe: str, cfg, prompt: str, light: bool = True) -> list[str]:
+    """Linha de comando do Claude Code (headless, stream JSON).
+
+    MODO LEVE (Ollama): --bare — o payload enviado ao modelo cai de 21
+    ferramentas/58k chars (o modelo pequeno delira ecoando os schemas, p.ex.
+    da ferramenta Workflow) para 3 ferramentas/3,5k chars + prompt mínimo +
+    diretiva curta em PT + limite de 4 turnos. CLIs antigas sem --bare caem
+    no modo completo pelo fallback de _run_impl.
     """
     cmd = [exe, "-p", prompt, "--output-format", "stream-json", "--verbose"]
+    ollama = bool(getattr(cfg, "claude_use_ollama", True))
     model = str(getattr(cfg, "claude_model", "") or "").strip()
-    if getattr(cfg, "claude_use_ollama", True):
-        if not model:
-            model = str(getattr(cfg, "model", "") or "").strip()
+    if ollama and not model:
+        model = str(getattr(cfg, "model", "") or "").strip()
+    if light:
         cmd += [
-            "--bare",                        # pula o prompt/agentes internos
+            "--bare",                        # payload enxuto p/ modelo local
             "--max-turns", "4",              # sem viagens infinitas
             "--append-system-prompt", CLAUDE_LIGHT_PROMPT,
-            "--allowedTools", "Bash", "Read", "Write", "Edit", "Glob", "Grep",
+            "--allowedTools", "Bash", "Read", "Edit",
         ]
     if model:
         cmd += ["--model", model]
@@ -130,9 +151,14 @@ def run_claude(cfg, message: str, history: list[dict] | None = None,
                on_event=None, cancel: threading.Event | None = None) -> str:
     """Executa o Claude Code e devolve a resposta final (texto).
 
-    Emite os mesmos eventos do chat: step, token, tool_start, tool_end,
-    done, error, cancelled.
+    Emite os mesmos eventos do chat: step, note, token, tool_start,
+    tool_end, done, error, cancelled. O rodapé da resposta indica o modo
+    (leve/completo) e a versão da CLI — autodiagnóstico para o usuário.
     """
+    return _run_impl(cfg, message, history, on_event, cancel, _light=None)
+
+
+def _run_impl(cfg, message, history, on_event, cancel, _light=None) -> str:
     ev = on_event or (lambda _e: None)
     history = history or []
 
@@ -145,9 +171,13 @@ def run_claude(cfg, message: str, history: list[dict] | None = None,
         return _CLAUDE_INSTALL_HINT
 
     prompt = _build_prompt(message, history)
+    ollama_mode = bool(getattr(cfg, "claude_use_ollama", True))
+    fell_back = _light is False            # veio do fallback (CLI antiga)
+    use_light = ollama_mode and (_light if _light is not None else True)
+    ver = _cli_version(exe)
     try:
         proc = subprocess.Popen(
-            _claude_cmd(exe, cfg, prompt),
+            _claude_cmd(exe, cfg, prompt, light=use_light),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
             cwd=str(cfg.workdir), env=_claude_env(cfg),
         )
@@ -160,10 +190,19 @@ def run_claude(cfg, message: str, history: list[dict] | None = None,
     final = ""
     t0 = time.time()
     ev({"type": "step", "step": 1})
+    if ollama_mode:
+        modo = ("modo leve (payload enxuto p/ modelo local)" if use_light
+                else "modo completo — CLI antiga, atualize com: claude update")
+        ev({"type": "note", "message": f"Claude Code · {modo} · CLI {ver}"})
 
     def _finish_ok() -> str:
-        ev({"type": "done", "message": final})
-        return final
+        texto = final
+        if ollama_mode:
+            texto += (f"\n\n─\n*🔌 Claude Code · "
+                      f"{'modo leve' if use_light else 'modo completo (CLI antiga — atualize com: claude update)'}"
+                      f" · CLI {ver}*")
+        ev({"type": "done", "message": texto})
+        return texto
 
     try:
         for line in proc.stdout:
@@ -220,6 +259,13 @@ def run_claude(cfg, message: str, history: list[dict] | None = None,
         if final:
             return _finish_ok()
         err = (proc.stderr.read() or "").strip()[:400] if proc.stderr else ""
+        if use_light and err and ("unknown option" in err.lower()
+                                  or "unrecognized" in err.lower()):
+            # CLI antiga sem --bare: repete uma vez em modo completo
+            ev({"type": "note",
+                "message": "esta CLI não suporta --bare — repetindo em modo completo"})
+            return _run_impl(cfg, message, history, on_event, cancel,
+                             _light=False)
         msg = f"Claude Code terminou sem resposta{(f': {err}' if err else '')}"
         ev({"type": "error", "message": msg})
         return msg

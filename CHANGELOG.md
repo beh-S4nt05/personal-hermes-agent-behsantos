@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.2.8 — Claude Code autodiagnóstico + fallback de CLI antiga
+
+- Toda resposta do agente 🔌 Claude Code agora termina com um rodapé
+  "*🔌 Claude Code · modo · versão da CLI*" (e emite nota na visão ao vivo)
+  — o print seguinte mostra exatamente o que está valendo na máquina.
+- Medido com a CLI real: modo leve = **3 ferramentas / 3,5k chars** contra
+  **21 ferramentas / 58k chars** do modo padrão (~16× menor). O texto
+  "workflow" que o modelo ecoava vinha literalmente do payload padrão.
+- CLI antiga sem `--bare`: cai automaticamente para o modo completo com
+  aviso "atualize com: claude update" — em vez de erro seco.
+- Diretiva do modo leve reforçada: proibido escrever JSON Schema/XML ou
+  exemplos de chamada; dados do sistema via Bash com saída real.
+
 ## v2.2.7 — guard anti-loop no agente
 
 - Modelos pequenos às vezes repetiam a mesma fala E a mesma chamada de

@@ -1164,6 +1164,7 @@ async function refreshLive(){
   const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   box.innerHTML = (L.events||[]).map(e=>{
     if (e.type==="step")        return '<span class="ln">── passo '+e.step+' ──</span>';
+    if (e.type==="note")        return '<span class="ln">ℹ '+esc(e.message||"")+'</span>';
     if (e.type==="tool_start")  return '⚙ <b>'+esc(e.name)+'</b> '+esc(JSON.stringify(e.args||{}).slice(0,160));
     if (e.type==="tool_end")    return '<span class="'+(e.ok?"ok":"err")+'">'+(e.ok?"✔":"✖")+" "+esc(e.name)+"</span>\n"+esc((e.output||"").slice(0,600));
     if (e.type==="done")        return '<span class="ok">✅ resposta final:</span>\n'+esc(e.message||"");
