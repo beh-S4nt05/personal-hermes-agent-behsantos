@@ -166,6 +166,28 @@ mcp_servers:
     url: https://gmailmcp.googleapis.com/mcp/v1   # requer OAuth (Google Cloud)
 ```
 
+## 👁 Acompanhando uma tarefa ao vivo
+
+Ao disparar uma tarefa agendada ("▶ agora" na aba Tarefas), a GUI abre um
+console que mostra a execução em tempo real: passos, comandos rodados com
+sucesso/erro, tokens sendo gerados e a resposta final. O mesmo botão "👁 ao
+vivo" aparece enquanto a tarefa roda — útil para conferir o agente trabalhando
+no horário agendado.
+
+## 📔 Memória do agente
+
+O Hermes lembra de você entre conversas, reinícios e tarefas agendadas.
+Na prática:
+
+- No chat, conte algo ("lembre que meu curso é X") e o agente salva com a
+  ferramenta `lembrar` — ou esquece com `esquecer`;
+- Na aba **📔 Memória** você vê, adiciona, edita e apaga fatos diretamente;
+- Tudo o que está lá é usado em **qualquer** conversa e nas tarefas agendadas
+  (ex.: o resumo diário de e-mail já sai do jeito que você prefere).
+
+Os fatos ficam em `data/memory.json` — é só backupar esse arquivo junto com o
+resto do `data/`.
+
 ## 🧠 Gerenciando o Ollama pela GUI (o "app desktop" do Linux)
 
 A aba **Ollama** dá a visibilidade de processo que no Windows fica na bandeja:

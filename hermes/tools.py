@@ -107,6 +107,43 @@ TOOLS: list[dict] = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "lembrar",
+            "description": (
+                "Salva um fato/preferência sobre o usuário na memória persistente "
+                "(ex.: 'meu curso é Engenharia de Produção', 'prefiro resumos curtos', "
+                "'aulas de cálculo às terças'). Use SEMPRE que o usuário contar algo "
+                "útil para o futuro — a memória vale para todas as conversas."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "texto": {"type": "string",
+                              "description": "o fato a guardar, em uma frase curta"},
+                },
+                "required": ["texto"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "esquecer",
+            "description": (
+                "Apaga um fato da memória persistente pelo id (os ids aparecem "
+                "entre colchetes na seção 'Memória' do seu prompt)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "id do fato (ex.: m1a2b3c4)"},
+                },
+                "required": ["id"],
+            },
+        },
+    },
 ]
 
 TOOL_NAMES = {t["function"]["name"] for t in TOOLS}
@@ -293,12 +330,33 @@ def sys_info(_args: dict, cfg) -> str:
     return "\n".join(f"{k.ljust(width)} : {v}" for k, v in info.items())
 
 
+def lembrar(args: dict, cfg) -> str:
+    from .memory import MemoryStore
+
+    texto = str(args.get("texto", "")).strip()
+    if not texto:
+        return "ERRO: texto vazio — diga o que devo lembrar."
+    fact = MemoryStore(cfg).add(texto)
+    return f"OK: gravado na memória permanente [{fact['id']}]: {fact['text']}"
+
+
+def esquecer(args: dict, cfg) -> str:
+    from .memory import MemoryStore
+
+    fid = str(args.get("id", "")).strip()
+    if MemoryStore(cfg).delete(fid):
+        return f"OK: fato {fid} apagado da memória."
+    return f"ERRO: não encontrei o fato {fid} na memória."
+
+
 EXECUTORS = {
     "run_command": run_command,
     "read_file": read_file,
     "write_file": write_file,
     "list_dir": list_dir,
     "sys_info": sys_info,
+    "lembrar": lembrar,
+    "esquecer": esquecer,
 }
 
 

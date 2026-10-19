@@ -157,6 +157,24 @@
   footer{margin-top:34px;color:var(--faint);font-size:11.5px;text-align:center;border-top:1px solid var(--border);padding-top:14px}
   .tokenbar{display:none;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
   .tokenbar.show{display:flex}
+
+  /* ---------- memória ---------- */
+  .fact{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)}
+  .fact .txt{flex:1;font-size:13px;white-space:pre-wrap;word-break:break-word}
+  .fact .meta{font-size:11px;color:var(--faint);margin-top:4px}
+
+  /* ---------- execução ao vivo (modal) ---------- */
+  .modalbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:50;align-items:center;justify-content:center;padding:20px}
+  .modalbg.show{display:flex}
+  .modal{background:#0b0f18;border:1px solid var(--border);border-radius:14px;max-width:860px;width:100%;max-height:86vh;display:flex;flex-direction:column}
+  .modal h3{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .livebox{background:#05070c;padding:14px 18px;font-family:ui-monospace,Menlo,Consolas,monospace;
+           font-size:12px;line-height:1.55;overflow:auto;white-space:pre-wrap;flex:1;min-height:220px;
+           border-radius:0 0 14px 14px;word-break:break-word}
+  .livebox .ln{color:var(--faint)}
+  .livebox .ok{color:var(--ok)} .livebox .err{color:var(--err)} .livebox .warn{color:var(--warn)}
+  .livedot{width:9px;height:9px;border-radius:50%;background:var(--ok);display:inline-block;animation:lv-pulse 1s infinite}
+  @keyframes lv-pulse{50%{opacity:.3}}
 </style>
 </head>
 <body>
@@ -196,6 +214,7 @@
     <button data-page="tarefas">☑ Tarefas</button>
     <button data-page="ollama">🧠 Ollama</button>
     <button data-page="skills">✦ Skills</button>
+    <button data-page="memoria">📔 Memória</button>
     <button data-page="ajustes">⚙ Ajustes</button>
   </nav>
 
@@ -394,6 +413,20 @@
     </div>
   </section>
 
+  <!-- ══════════════════════ MEMÓRIA ══════════════════════ -->
+  <section class="page" id="page-memoria">
+    <div class="card">
+      <h3><span class="ic">📔</span> Memória do agente <span id="mem-count" class="hint" style="margin-left:auto"></span></h3>
+      <div class="chatrow" style="margin-top:0">
+        <input type="text" id="mem-new" placeholder="algo para o agente lembrar — ex.: meu curso é Engenharia; prefiro resumos curtos" style="flex:1" onkeydown="if(event.key==='Enter')memAdd()">
+        <button class="b primary" onclick="memAdd()">🧠 lembrar</button>
+      </div>
+      <div class="hint" style="margin-top:8px">O agente também guarda fatos sozinho com a ferramenta <b>lembrar</b> quando
+        você conta algo no chat — e esquece com <b>esquecer</b>. A memória vale para o chat <b>e</b> para as tarefas agendadas.</div>
+      <div id="mem-list" style="margin-top:14px">carregando…</div>
+    </div>
+  </section>
+
   <!-- ══════════════════════ AJUSTES ══════════════════════ -->
   <section class="page" id="page-ajustes">
     <div class="card">
@@ -422,6 +455,17 @@
       </form>
     </div>
   </section>
+
+  <!-- ══ modal: execução ao vivo ══ -->
+  <div class="modalbg" id="live-modal" onclick="if(event.target===this)closeLive()">
+    <div class="modal">
+      <h3><span class="livedot" id="live-dot" style="display:none"></span>
+        <span id="live-title" style="flex:1">👁 execução ao vivo</span>
+        <span class="hint" id="live-meta"></span>
+        <button class="b small ghost" onclick="closeLive()">✕ fechar</button></h3>
+      <div class="livebox" id="live-box">…</div>
+    </div>
+  </div>
 
   <footer>hermes-agent <span id="footver"></span> · agente Linux local · Ollama + Hermes ·
     GUI de ligar/desligar · mantenha o acesso protegido por token</footer>
@@ -475,6 +519,7 @@ document.querySelectorAll("nav button").forEach(b=>{
     if (state.page==="tarefas"){ loadTasks(); loadSchedules(); }
     if (state.page==="ollama") loadOllamaPage();
     if (state.page==="skills") loadSkills();
+    if (state.page==="memoria") loadMemory();
     if (state.page==="ajustes") loadSettings();
   };
 });
@@ -876,6 +921,7 @@ async function loadSchedules(){
         <span class="input"><b>${esc(s.input.slice(0,110))}</b><br>
           <span class="hint">⏰ ${esc(s.human)} · próxima: ${esc(s.next_run||"—")} · ${s.run_count} execução(ões)${s.last_run?` · última: ${esc(s.last_run)} (${esc(s.last_duration_s)}s)`:''}</span></span>
         <span class="btnrow" style="margin:0">
+          ${s.running?`<button class="b small" onclick="openLive('${esc(s.id)}')">👁 ao vivo</button>`:""}
           <button class="b small" onclick="schedRun('${esc(s.id)}')">▶ agora</button>
           <button class="b small ghost" onclick="schedToggle('${esc(s.id)}',${!s.enabled})">${s.enabled?"⏸ pausar":"▶ ativar"}</button>
           <button class="b small danger" onclick="schedDel('${esc(s.id)}')">🗑</button>
@@ -901,6 +947,7 @@ async function schedRun(id){
   const r = await api("/api/schedules/run", {method:"POST", body: JSON.stringify({id})});
   const j = await r.json().catch(()=>({msg:"sem resposta"}));
   toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  if (j.ok) openLive(id);
   setTimeout(loadSchedules, 1500); setTimeout(loadTasks, 4000);
 }
 async function schedDel(id){
@@ -909,6 +956,100 @@ async function schedDel(id){
   loadSchedules();
 }
 setInterval(()=>{ if (state.page==="tarefas") loadSchedules(); }, 5000);
+
+/* ═══════════════ memória ═══════════════ */
+async function loadMemory(){
+  try{
+    const r = await api("/api/memory"); const d = await r.json();
+    const facts = d.facts || [];
+    const el = $("mem-list");
+    $("mem-count").textContent = facts.length ? facts.length+" fato(s) guardado(s)" : "";
+    if (!facts.length){
+      el.innerHTML = '<div class="hint">memória vazia — conte algo ao agente no chat, ou adicione um fato acima.</div>';
+      return;
+    }
+    el.innerHTML = facts.map(f=>`
+      <div class="fact">
+        <span class="ic">🔖</span>
+        <span class="txt">${esc(f.text)}
+          <div class="meta">desde ${esc(f.created)}${f.edited?` · editado ${esc(f.edited)}`:""} · id ${esc(f.id)}</div></span>
+        <span class="btnrow" style="margin:0">
+          <button class="b small ghost" onclick="memEdit('${esc(f.id)}')">✏</button>
+          <button class="b small danger" onclick="memDel('${esc(f.id)}')">🗑</button>
+        </span>
+      </div>`).join("");
+  }catch(e){}
+}
+async function memAdd(){
+  const t = $("mem-new").value.trim();
+  if (!t){ toast("escreva o que devo lembrar", true); return; }
+  const r = await api("/api/memory", {method:"POST", body: JSON.stringify({text:t})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  if (j.ok) $("mem-new").value="";
+  loadMemory();
+}
+async function memEdit(id){
+  let f = null;
+  try{ const d = await (await api("/api/memory")).json(); f = (d.facts||[]).find(x=>x.id===id); }catch(e){}
+  if (!f) return;
+  const nt = prompt("editar fato da memória:", f.text);
+  if (nt===null || !nt.trim()) return;
+  const j = await (await api("/api/memory/update", {method:"POST", body: JSON.stringify({id, text:nt.trim()})})).json();
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  loadMemory();
+}
+async function memDel(id){
+  if (!confirm("apagar este fato da memória?")) return;
+  await api("/api/memory/delete", {method:"POST", body: JSON.stringify({id})});
+  loadMemory();
+}
+
+/* ═══════════════ execução ao vivo ═══════════════ */
+let LIVE_TIMER = null, LIVE_ID = null;
+function fmtDur(s){ s = Math.max(0, s||0); return s>=60 ? Math.floor(s/60)+"m"+String(Math.round(s%60)).padStart(2,"0")+"s" : (Math.round(s*10)/10)+"s"; }
+async function openLive(id){
+  LIVE_ID = id;
+  $("live-modal").classList.add("show");
+  $("live-box").textContent = "conectando…";
+  await refreshLive();
+  if (LIVE_TIMER) clearInterval(LIVE_TIMER);
+  LIVE_TIMER = setInterval(refreshLive, 1500);
+}
+function closeLive(){
+  $("live-modal").classList.remove("show");
+  if (LIVE_TIMER){ clearInterval(LIVE_TIMER); LIVE_TIMER = null; }
+  LIVE_ID = null;
+}
+async function refreshLive(){
+  if (!LIVE_ID) return;
+  let d;
+  try{
+    const r = await api("/api/schedules/live?id="+encodeURIComponent(LIVE_ID));
+    d = await r.json();
+  }catch(e){ return; }
+  const box = $("live-box");
+  if (!d.ok){
+    $("live-dot").style.display = "none";
+    box.innerHTML = '<span class="err">'+esc(d.msg||"sem dados ao vivo")+"</span>";
+    return;
+  }
+  const L = d.live;
+  $("live-dot").style.display = L.running ? "inline-block" : "none";
+  $("live-title").textContent = "👁 " + (L.input||"").slice(0,90);
+  $("live-meta").textContent = (L.running ? "⏱ "+fmtDur(Date.now()/1000-L.t0) : "finalizada em ⏱ "+fmtDur(L.duration_s)) + " · " + (L.tokens||0) + " tokens";
+  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  box.innerHTML = (L.events||[]).map(e=>{
+    if (e.type==="step")        return '<span class="ln">── passo '+e.step+' ──</span>';
+    if (e.type==="tool_start")  return '⚙ <b>'+esc(e.name)+'</b> '+esc(JSON.stringify(e.args||{}).slice(0,160));
+    if (e.type==="tool_end")    return '<span class="'+(e.ok?"ok":"err")+'">'+(e.ok?"✔":"✖")+" "+esc(e.name)+"</span>\n"+esc((e.output||"").slice(0,600));
+    if (e.type==="done")        return '<span class="ok">✅ resposta final:</span>\n'+esc(e.message||"");
+    if (e.type==="error")       return '<span class="err">✖ '+esc(e.message||"")+"</span>";
+    if (e.type==="cancelled")   return '<span class="warn">⏹ interrompida</span>';
+    return "";
+  }).join("\n") + (L.running ? "\n\n<span class='ln'>✍ gerando… ("+(L.tokens||0)+" tokens)</span>" : "");
+  if (nearBottom) box.scrollTop = box.scrollHeight;
+}
 
 /* ═══════════════ página Ollama ═══════════════ */
 async function loadOllamaPage(){

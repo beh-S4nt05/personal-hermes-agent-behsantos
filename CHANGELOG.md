@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.5.0 — execução ao vivo + memória persistente
+
+- **👁 Execução ao vivo**: acompanhe uma tarefa agendada trabalhando em tempo
+  real — cada passo, comando executado e a resposta sendo gerada, num console
+  que abre sozinho ao clicar em "▶ agora" (ou no botão "👁 ao vivo" enquanto
+  roda). Buffer da última execução fica disponível para reabrir.
+- **🧠/📔 Memória persistente**: o agente agora lembra de você entre conversas
+  e reinícios. Fatos e preferências ficam em `data/memory.json`, são injetados
+  no prompt de TODAS as conversas e tarefas agendadas, e o agente grava/apaga
+  sozinho com as novas ferramentas `lembrar` e `esquecer`.
+- **GUI**: nova aba "📔 Memória" (adicionar, editar ✏, apagar 🗑) e modal de
+  execução ao vivo com cronômetro e contagem de tokens.
+- **API**: `GET/POST /api/memory`, `POST /api/memory/update|delete`,
+  `GET /api/schedules/live?id=`.
+
 ## v1.4.0 — tarefas agendadas (⏰)
 
 - **Agendador embutido no `hermes server`** (verifica a cada 15s): tarefas

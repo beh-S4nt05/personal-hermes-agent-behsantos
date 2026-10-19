@@ -649,6 +649,62 @@ def create_app(cfg: Config) -> Flask:
         result = sched.run_now(str(payload.get("id", "")))
         return jsonify(result), (200 if result["ok"] else 404)
 
+    @app.get("/api/schedules/live")
+    @protected
+    def schedules_live():
+        from ..scheduler import live_status
+
+        buf = live_status(str(request.args.get("id", "")))
+        if buf is None:
+            return jsonify({"ok": False,
+                            "msg": "sem dados ao vivo (tarefa nunca rodou neste server)"}), 404
+        return jsonify({"ok": True, "live": buf})
+
+    # ------------------------------------------------------------- memória
+    @app.get("/api/memory")
+    @protected
+    def memory_list():
+        from ..memory import MemoryStore
+
+        return jsonify({"facts": MemoryStore(cfg).list_all()})
+
+    @app.post("/api/memory")
+    @protected
+    def memory_add():
+        from ..memory import MemoryStore
+
+        payload = request.get_json(silent=True) or {}
+        text = str(payload.get("text", "")).strip()
+        if not text:
+            return jsonify({"ok": False, "msg": "fato vazio"}), 400
+        try:
+            fact = MemoryStore(cfg).add(text)
+        except ValueError as exc:
+            return jsonify({"ok": False, "msg": str(exc)}), 400
+        return jsonify({"ok": True, "msg": "lembrado!", "fact": fact})
+
+    @app.post("/api/memory/update")
+    @protected
+    def memory_update():
+        from ..memory import MemoryStore
+
+        payload = request.get_json(silent=True) or {}
+        fact = MemoryStore(cfg).update(str(payload.get("id", "")),
+                                       str(payload.get("text", "")))
+        if not fact:
+            return jsonify({"ok": False, "msg": "fato não encontrado"}), 404
+        return jsonify({"ok": True, "msg": "fato atualizado", "fact": fact})
+
+    @app.post("/api/memory/delete")
+    @protected
+    def memory_delete():
+        from ..memory import MemoryStore
+
+        payload = request.get_json(silent=True) or {}
+        if not MemoryStore(cfg).delete(str(payload.get("id", ""))):
+            return jsonify({"ok": False, "msg": "fato não encontrado"}), 404
+        return jsonify({"ok": True, "msg": "fato apagado"})
+
     # ------------------------------------------------------ configuração
     @app.get("/api/settings")
     @protected

@@ -299,8 +299,12 @@ class ScheduleStore:
 
 # ---------------------------------------------------------------- executor
 
-def execute_entry(cfg, entry: dict) -> dict:
-    """Roda a tarefa agendada de forma desassistida e devolve o resultado."""
+def execute_entry(cfg, entry: dict, on_event=None) -> dict:
+    """Roda a tarefa agendada de forma desassistida e devolve o resultado.
+
+    on_event (opcional) recebe os mesmos eventos do chat (step, token,
+    tool_start/tool_end, done...) — usado pela visão "ao vivo" da GUI.
+    """
     from .agent import Agent
 
     if getattr(cfg, "auto_start_ollama", False) and not cfg.mock:
@@ -314,9 +318,18 @@ def execute_entry(cfg, entry: dict) -> dict:
 
     agent = Agent(cfg)
     events: list[dict] = []
+    ev = on_event or (lambda _e: None)
+
+    def _collect(e: dict) -> None:
+        events.append(e)
+        try:
+            ev(e)
+        except Exception:
+            pass
+
     t0 = time.time()
     final = agent.run([{"role": "user", "content": entry["input"]}],
-                      on_event=events.append)
+                      on_event=_collect)
     return {
         "status": "ok",
         "output": final,
@@ -326,6 +339,62 @@ def execute_entry(cfg, entry: dict) -> dict:
         ],
         "duration_s": round(time.time() - t0, 1),
     }
+
+
+# ---------------------------------------------------------------------------
+# Visão "ao vivo": buffer em memória da execução corrente/última de cada tarefa
+# ---------------------------------------------------------------------------
+LIVE: dict[str, dict] = {}
+_LIVE_LOCK = threading.Lock()
+LIVE_MAX_EVENTS = 400
+
+
+def _live_begin(sid: str, input_text: str) -> None:
+    with _LIVE_LOCK:
+        LIVE[sid] = {"id": sid, "input": input_text, "running": True,
+                     "t0": time.time(), "events": [], "tokens": 0}
+
+
+def _live_push(sid: str, event: dict) -> None:
+    with _LIVE_LOCK:
+        buf = LIVE.get(sid)
+        if buf is None:
+            return
+        etype = event.get("type")
+        if etype == "token":
+            buf["tokens"] += 1
+            return  # tokens só contam (o console mostra o andamento)
+        e = dict(event)
+        if etype == "tool_end":
+            e["output"] = (e.get("output") or "")[:800]
+        if etype in ("done", "error", "cancelled"):
+            e["message"] = (e.get("message") or "")[:4000]
+        buf["events"].append(e)
+        if len(buf["events"]) > LIVE_MAX_EVENTS:
+            del buf["events"][:len(buf["events"]) - LIVE_MAX_EVENTS]
+
+
+def _live_end(sid: str, result: dict) -> None:
+    with _LIVE_LOCK:
+        buf = LIVE.get(sid)
+        if buf is None:
+            return
+        buf["running"] = False
+        buf["duration_s"] = result.get("duration_s")
+        buf["ended"] = time.strftime("%Y-%m-%d %H:%M")
+        last = buf["events"][-1] if buf["events"] else None
+        if not last or last.get("type") not in ("done", "error", "cancelled"):
+            buf["events"].append({
+                "type": "done" if result.get("status") == "ok" else "error",
+                "message": (result.get("output") or "")[:4000],
+            })
+
+
+def live_status(sid: str) -> dict | None:
+    """Snapshot do console ao vivo da tarefa (None se nunca rodou neste server)."""
+    with _LIVE_LOCK:
+        buf = LIVE.get(sid)
+        return dict(buf) if buf else None
 
 
 class Scheduler:
@@ -379,12 +448,15 @@ class Scheduler:
             return {"ok": False, "msg": "tarefa não encontrada ou já em execução"}
         entry["running"] = True
         self.store.save(entry)
+        _live_begin(sid, entry["input"])
         try:
-            result = execute_entry(self.cfg, entry)
+            result = execute_entry(self.cfg, entry,
+                                   on_event=lambda e: _live_push(sid, e))
         except Exception as exc:  # noqa: BLE001
             result = {"status": "error",
                       "output": f"[erro] {exc.__class__.__name__}: {exc}",
                       "tools": [], "duration_s": 0}
+        _live_end(sid, result)
 
         entry = self.store.load(sid) or entry
         entry.update({

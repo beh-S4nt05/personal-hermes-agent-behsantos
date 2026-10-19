@@ -136,6 +136,14 @@ class Agent:
                 prompt += "\n\n" + catalog
         except Exception:
             pass
+        # memória persistente: fatos sobre o usuário valem para todas as conversas
+        try:
+            from .memory import MemoryStore
+            mem = MemoryStore(self.cfg).prompt_section()
+            if mem:
+                prompt += mem
+        except Exception:
+            pass
         return prompt
 
     # ---------------------------------------------------------------- loop
