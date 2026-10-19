@@ -469,6 +469,20 @@
           <span class="hint" id="tool-filemsg"></span>
         </div>
       </div>
+
+      <div class="card">
+        <h3><span class="ic">🌐</span> Web <span class="hint" style="margin-left:auto">busca + leitura de páginas</span></h3>
+        <div class="chatrow" style="margin-top:0">
+          <input type="text" id="web-q" placeholder="pesquisar — ex.: previsão do tempo em Manaus" style="flex:1" onkeydown="if(event.key==='Enter')webSearch()">
+          <button class="b primary" onclick="webSearch()">🔍 buscar</button>
+        </div>
+        <div class="chatrow">
+          <input type="text" id="web-url" placeholder="abrir página — https://…" style="flex:1" onkeydown="if(event.key==='Enter')webFetch()">
+          <button class="b" onclick="webFetch()">📄 abrir</button>
+        </div>
+        <div class="hint" style="margin-top:6px">O agente usa as mesmas ferramentas (web_search / web_fetch) no chat — e cita as fontes.</div>
+        <pre id="web-out" style="display:none;background:#05070c;border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;max-height:340px;overflow:auto;white-space:pre-wrap;margin-top:10px"></pre>
+      </div>
     </div>
     <div class="card" style="margin-top:16px">
       <h3><span class="ic">✦</span> Funções do agente <span class="hint" style="margin-left:auto" id="tool-count"></span></h3>
@@ -514,6 +528,7 @@
         <div class="field"><div class="check"><input type="checkbox" id="s-sandbox"><label for="s-sandbox" style="color:var(--txt)">sandbox de arquivos (restringe ao workspace)</label></div></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-confirm_dangerous"><label for="s-confirm_dangerous" style="color:var(--txt)">confirmar comandos arriscados no terminal</label></div></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-claude_use_ollama"><label for="s-claude_use_ollama" style="color:var(--txt)">🔌 Claude Code via Ollama (mesmo servidor do Hermes)</label></div></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-web_access"><label for="s-web_access" style="color:var(--txt)">🌐 acesso à web (busca e leitura de páginas)</label></div></div>
         <div class="field"><label>🔌 modelo do Claude Code (vazio = padrão dele)</label>
           <input type="text" id="s-claude_model" list="modellist" placeholder="ex.: qwen3-coder · hermes3:8b">
           <span class="hint">só funciona com modelos instalados no Ollama</span></div>
@@ -1336,6 +1351,7 @@ async function loadSettings(){
     $("s-auth_token").value = s.auth_token || "";
     $("s-sandbox").checked = !!s.sandbox; $("s-confirm_dangerous").checked = !!s.confirm_dangerous;
     $("s-claude_use_ollama").checked = !!s.claude_use_ollama; $("s-claude_model").value = s.claude_model || "";
+    $("s-web_access").checked = !!s.web_access;
     const dl = $("modellist"); dl.innerHTML = "";
     ((state.status&&state.status.ollama.models)||[]).forEach(m=>{
       const o = document.createElement("option"); o.value = m; dl.appendChild(o);
@@ -1351,6 +1367,7 @@ async function saveSettings(){
     auth_token: $("s-auth_token").value,
     sandbox: $("s-sandbox").checked, confirm_dangerous: $("s-confirm_dangerous").checked,
     claude_use_ollama: $("s-claude_use_ollama").checked, claude_model: $("s-claude_model").value.trim(),
+    web_access: $("s-web_access").checked,
   };
   const r = await api("/api/settings", {method:"POST", body: JSON.stringify(body)});
   const j = await r.json().catch(()=>({msg:"sem resposta"}));
@@ -1459,6 +1476,28 @@ async function loadToolsPage(){
         <div class="hint" style="margin-top:4px">${esc((t.d||"").split("\n")[0].slice(0,150))}</div>
       </div>`).join("") || '<span class="hint">nenhuma</span>';
   }catch(e){}
+}
+
+/* ═══════════════ web (busca + páginas) ═══════════════ */
+async function webSearch(){
+  const q = $("web-q").value.trim();
+  if (!q){ toast("digite o que pesquisar", true); return; }
+  const out = $("web-out");
+  out.style.display = ""; out.textContent = "🔍 pesquisando…";
+  try{
+    const j = await (await api("/api/tools/web_search", {method:"POST", body: JSON.stringify({query:q})})).json();
+    out.textContent = j.output || "(sem resultados)";
+  }catch(e){ out.textContent = "✖ falha: "+e.message; }
+}
+async function webFetch(){
+  const u = $("web-url").value.trim();
+  if (!u){ toast("informe o endereço (https://…)", true); return; }
+  const out = $("web-out");
+  out.style.display = ""; out.textContent = "🌐 abrindo…";
+  try{
+    const j = await (await api("/api/tools/web_fetch", {method:"POST", body: JSON.stringify({url:u})})).json();
+    out.textContent = j.output || "(vazio)";
+  }catch(e){ out.textContent = "✖ falha: "+e.message; }
 }
 
 /* ═══════════════ catálogo de modelos (LMMs) ═══════════════ */

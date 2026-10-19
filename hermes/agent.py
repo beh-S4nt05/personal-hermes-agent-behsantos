@@ -35,6 +35,7 @@ Capacidades (ferramentas):
 - run_command: executa comandos bash (use para diagnosticar/gerenciar o sistema).
 - read_file / write_file / list_dir: manipulam arquivos no workspace.
 - sys_info: diagnóstico rápido da máquina.
+{webtools}- lembrar / esquecer: guarda e apaga fatos sobre o usuário (memória permanente).
 
 Boas práticas:
 - Sempre INSPECIONE antes de agir (ex.: `df -h`, `free -h`, `ls`, ler arquivos).
@@ -105,7 +106,17 @@ class Agent:
     # -------------------------------------------------------------- prompt
     def system_prompt(self) -> str:
         extra = self.cfg.system_prompt_extra.strip()
+        webtools = (
+            "- web_search / web_fetch: pesquisa na internet (DuckDuckGo) e lê "
+            "páginas.\n  Use SEMPRE que a resposta depender de informação atual "
+            "ou quando não tiver certeza de um fato — NUNCA invente dados;\n  "
+            "cite as fontes (endereços) na resposta. Em pesquisas e "
+            "monitoramentos,\n  siga a skill pesquisa-web (relatórios em "
+            "arquivo + fatos úteis na memória).\n"
+            if getattr(self.cfg, "web_access", True) else ""
+        )
         prompt = SYSTEM_PROMPT.format(
+            webtools=webtools,
             hostname=socket.gethostname(),
             workdir=self.cfg.workdir,
             sandbox="ATIVO (apenas o workspace)" if self.cfg.sandbox else "DESATIVADO (caminhos absolutos liberados)",
@@ -178,6 +189,9 @@ class Agent:
                 return final or "[interrompido pelo operador]"
             ev({"type": "step", "step": step})
             tools = list(TOOLS)
+            if not getattr(cfg, "web_access", True):
+                tools = [t for t in tools
+                         if t["function"]["name"] not in ("web_search", "web_fetch")]
             if self.native_tools:
                 try:
                     tools += self.mcp.openai_tools()  # ferramentas dos conectores MCP

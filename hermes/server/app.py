@@ -532,11 +532,13 @@ def create_app(cfg: Config) -> Flask:
             ]
         except Exception:
             pass
+        web_ok = bool(getattr(cfg, "web_access", True))
         return jsonify({
             "tools": [
                 {"name": t["function"]["name"],
                  "description": t["function"]["description"]}
                 for t in TOOLS
+                if web_ok or t["function"]["name"] not in ("web_search", "web_fetch")
             ],
             "mcp": mcp_tools,
         })
@@ -588,6 +590,24 @@ def create_app(cfg: Config) -> Flask:
         from ..tools import execute_tool
 
         return jsonify(execute_tool("sys_info", {}, cfg))
+
+    @app.post("/api/tools/web_search")
+    @protected
+    def tools_web_search():
+        from ..tools import execute_tool
+
+        payload = request.get_json(silent=True) or {}
+        return jsonify(execute_tool("web_search",
+                                    {"query": str(payload.get("query", ""))}, cfg))
+
+    @app.post("/api/tools/web_fetch")
+    @protected
+    def tools_web_fetch():
+        from ..tools import execute_tool
+
+        payload = request.get_json(silent=True) or {}
+        return jsonify(execute_tool("web_fetch",
+                                    {"url": str(payload.get("url", ""))}, cfg))
 
     # ------------------------------------------- catálogo de modelos (LMMs)
     @app.get("/api/ollama/library")
@@ -901,7 +921,7 @@ def create_app(cfg: Config) -> Flask:
         payload = request.get_json(silent=True) or {}
         allowed = {"model", "system_prompt_extra", "max_steps", "num_ctx",
                    "cmd_timeout", "sandbox", "confirm_dangerous", "temperature", "auth_token",
-                   "ollama_url", "auto_start_ollama", "claude_use_ollama", "claude_model"}
+                   "ollama_url", "auto_start_ollama", "claude_use_ollama", "claude_model", "web_access"}
         changes = {k: v for k, v in payload.items() if k in allowed}
         if not changes:
             return jsonify({"ok": False, "msg": "nada para alterar"}), 400

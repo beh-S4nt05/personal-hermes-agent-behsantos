@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 APP_NAME = "hermes-agent"
-VERSION = "2.0.2"
+VERSION = "2.1.0"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
@@ -23,6 +23,8 @@ DEFAULTS = {
     "temperature": 0.4,
     # Sobe o servidor Ollama automaticamente quando o agente precisar dele
     "auto_start_ollama": False,
+    # Acesso à web (ferramentas web_search / web_fetch do agente e da GUI)
+    "web_access": True,
     # Claude Code (2º agente): fala com o MESMO Ollama do Hermes (variáveis
     # ANTHROPIC_* aplicadas automaticamente ao rodar a CLI `claude`)
     "claude_use_ollama": True,
@@ -46,7 +48,7 @@ DEFAULTS = {
 
 _INT_KEYS = {"max_steps", "cmd_timeout", "port", "num_ctx"}
 _FLOAT_KEYS = {"temperature"}
-_BOOL_KEYS = {"sandbox", "confirm_dangerous", "auto_start_ollama", "claude_use_ollama"}
+_BOOL_KEYS = {"sandbox", "confirm_dangerous", "auto_start_ollama", "claude_use_ollama", "web_access"}
 _STR_KEYS = {"ollama_url", "model", "host", "auth_token", "system_prompt_extra", "claude_model"}
 
 

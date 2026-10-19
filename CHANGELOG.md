@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.1.0 — acesso à web (🌐 pesquisa e leitura de páginas)
+
+- Novas ferramentas nativas do agente: **`web_search`** (busca no DuckDuckGo,
+  sem chave de API — títulos, endereços e resumos) e **`web_fetch`** (abre
+  qualquer página http(s) e devolve o texto limpo, até 2 MB). O modelo é
+  instruído a citar as fontes.
+- Funciona no **chat**, nas **tarefas agendadas** (ex.: "pesquise as notícias
+  de tecnologia e resuma" às 08:00) e manualmente na nova seção **🌐 Web** da
+  aba 🛠 Ferramentas.
+- Interruptor de segurança: **⚙ Ajustes → "🌐 acesso à web"**
+  (`web_access`, padrão ligado) — desligado, as ferramentas somem do agente,
+  da GUI e da API.
+- Prompt de sistema atualizado (seção de capacidades condicional) com diretiva
+  forte: pesquisar SEMPRE que a resposta depender de informação atual, nunca
+  inventar dados e citar as fontes.
+- Nova skill **pesquisa-web**: fluxo de pesquisa (busca → escolher fontes →
+  ler → sintetizar com fontes), memorizar descobertas úteis (`lembrar`) e
+  rotina de **pesquisa agendada/monitoramento** com relatórios diários em
+  `relatorios/YYYY-MM-DD-<tema>.md` destacando "o que mudou".
+
 ## v2.0.2 — catálogo com curadoria "leves ≤7B" (máquinas com ~10 GB de RAM)
 
 - Curadoria da aba Ollama ganhou um bloco de modelos leves verificados na

@@ -9,6 +9,7 @@ Segurança:
 
 from __future__ import annotations
 
+import html as _html
 import os
 import platform
 import re
@@ -17,6 +18,9 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlparse
+
+import requests
 
 MAX_TOOL_OUTPUT = 6000
 
@@ -124,6 +128,42 @@ TOOLS: list[dict] = [
                               "description": "o fato a guardar, em uma frase curta"},
                 },
                 "required": ["texto"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": (
+                "Pesquisa na internet (DuckDuckGo) e devolve os principais "
+                "resultados com título, endereço e resumo. Use para obter "
+                "informações atuais, notícias, documentação e preços."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "o que pesquisar"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_fetch",
+            "description": (
+                "Baixa uma página da web (http/https) e devolve o texto limpo "
+                "(sem HTML). Use depois de web_search para ler o conteúdo de um "
+                "resultado, ou para abrir qualquer endereço fornecido pelo usuário."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "endereço http(s):// da página"},
+                },
+                "required": ["url"],
             },
         },
     },
@@ -330,6 +370,93 @@ def sys_info(_args: dict, cfg) -> str:
     return "\n".join(f"{k.ljust(width)} : {v}" for k, v in info.items())
 
 
+# ---------------------------------------------------------------- web
+def _web_enabled(cfg) -> bool:
+    return bool(getattr(cfg, "web_access", True))
+
+
+def _ddg_decode(url: str) -> str:
+    """O DuckDuckGo devolve links-rediretor .../l/?uddg=<url real>."""
+    if "uddg=" in url:
+        q = parse_qs(urlparse(url).query).get("uddg", [url])
+        return unquote(q[0])
+    return url
+
+
+def _html_to_text(page: str) -> str:
+    txt = re.sub(r"(?is)<(script|style|noscript|head|svg)[^>]*>.*?</\1>", " ", page)
+    txt = re.sub(r"(?i)<(br|/p|/div|/li|/h[1-6]|/tr|/section)[^>]*>", "\n", txt)
+    txt = re.sub(r"<[^>]+>", " ", txt)
+    txt = _html.unescape(txt)
+    txt = re.sub(r"[ \t]+", " ", txt)
+    txt = re.sub(r"\n\s*\n+", "\n\n", txt)
+    return txt.strip()
+
+
+WEB_HEADERS = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) hermes-agent",
+               "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.6"}
+
+
+def web_search(args: dict, cfg) -> str:
+    if not _web_enabled(cfg):
+        return "ERRO: acesso à web desativado nas configurações (Ajustes → 🌐 acesso à web)."
+    query = str(args.get("query", "")).strip()
+    if not query:
+        return "ERRO: busca vazia — diga o que pesquisar."
+    html = ""
+    for endpoint in ("https://html.duckduckgo.com/html/", "https://lite.duckduckgo.com/lite/"):
+        try:
+            r = requests.get(endpoint, params={"q": query}, headers=WEB_HEADERS, timeout=15)
+            if r.status_code == 200 and "result" in r.text.lower():
+                html = r.text
+                break
+        except requests.RequestException:
+            continue
+    if not html:
+        return "ERRO: não consegui consultar o DuckDuckGo (sem internet ou bloqueio temporário — tente de novo)."
+    raw = re.findall(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, re.S)
+    if not raw:  # formato do lite
+        raw = re.findall(r'href="([^"]+)"[^>]*class="result-link"[^>]*>(.*?)</a>', html, re.S)
+    snips = [_html.unescape(re.sub(r"<[^>]+>", "", s)).strip()
+             for s in re.findall(r'class="result__snippet"[^>]*>(.*?)</a>', html, re.S)]
+    if not raw:
+        return f"nenhum resultado para: {query}"
+    lines = [f"resultados da web para: {query}"]
+    for i, (url, title) in enumerate(raw[:6], 1):
+        title = _html.unescape(re.sub(r"<[^>]+>", "", title)).strip()
+        snip = snips[i - 1][:260] if i - 1 < len(snips) else ""
+        lines.append(f"{i}. {title}\n   {_ddg_decode(url)}\n   {snip}")
+    return _truncate("\n".join(lines))
+
+
+def web_fetch(args: dict, cfg) -> str:
+    if not _web_enabled(cfg):
+        return "ERRO: acesso à web desativado nas configurações (Ajustes → 🌐 acesso à web)."
+    url = str(args.get("url", "")).strip()
+    if not url.startswith(("http://", "https://")):
+        return "ERRO: informe um endereço começando com http:// ou https://"
+    try:
+        r = requests.get(url, headers=WEB_HEADERS, timeout=20, stream=True)
+        r.raise_for_status()
+        ctype = (r.headers.get("content-type") or "").lower()
+        if ctype and not any(x in ctype for x in ("text/", "json", "xml", "html")):
+            r.close()
+            return (f"ERRO: conteúdo não é texto ({ctype}) — "
+                    "use run_command com curl/wget para baixar arquivos.")
+        chunks, total = [], 0
+        for chunk in r.iter_content(65536):
+            chunks.append(chunk)
+            total += len(chunk)
+            if total > 2 * 1024 * 1024:
+                break
+        r.close()
+        page = b"".join(chunks).decode(r.encoding or "utf-8", errors="replace")
+    except requests.RequestException as exc:
+        return f"ERRO ao abrir {url}: {exc.__class__.__name__}: {exc}"
+    text = _html_to_text(page) if "html" in ctype or "<html" in page[:500].lower() else page
+    return _truncate(f"{url}\n{'─' * 60}\n{text}", 8000)
+
+
 def lembrar(args: dict, cfg) -> str:
     from .memory import MemoryStore
 
@@ -357,6 +484,8 @@ EXECUTORS = {
     "sys_info": sys_info,
     "lembrar": lembrar,
     "esquecer": esquecer,
+    "web_search": web_search,
+    "web_fetch": web_fetch,
 }
 
 

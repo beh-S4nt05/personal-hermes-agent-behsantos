@@ -45,6 +45,7 @@ Principais capacidades:
 | Capacidade | Onde |
 |---|---|
 | Conversar e executar ferramentas (loop agente) | Chat / CLI / TUI |
+| 🌐 Pesquisar na web e ler páginas | chat, tarefas e aba 🛠 Ferramentas |
 | Dois agentes: Hermes (Ollama) e Claude Code | Seletor no chat |
 | Tarefas agendadas em português ("diário 07:30") | Aba Tarefas / CLI |
 | Execução ao vivo (ver o agente trabalhando) | Modal 👁 na GUI |
@@ -129,7 +130,7 @@ Módulos (`hermes/`):
 | ◈ **Chat** | Conversa com seletor de agente, ＋ nova conversa, 🕘 histórico com 🔍 busca, cronômetro "A trabalhar…", badge ⏱ tempo · tokens · passos |
 | ☑ **Tarefas** | Fila do agente + resultados; **⏰ Tarefas agendadas** (criar, ▶ agora, 👁 ao vivo, ⏸ pausar, 🗑 apagar) |
 | 🧠 **Ollama** | Ligar/desligar/reiniciar, conexão, auto-start, **modelos: buscar catálogo, baixar com progresso, cancelar, apagar** |
-| 🛠 **Ferramentas** | Terminal rápido, arquivos do workspace (listar/ler/gravar), info do sistema, catálogo de funções |
+| 🛠 **Ferramentas** | Terminal rápido, arquivos do workspace (listar/ler/gravar), info do sistema, **🌐 web (busca DuckDuckGo + leitura de páginas)** e catálogo de funções |
 | ✦ **Skills** | Instalar do GitHub, ver conteúdo, ativar/desativar |
 | 📔 **Memória** | Fatos guardados: adicionar, editar, apagar |
 | ⚙ **Ajustes** | Modelo, prompt extra, limites, sandbox, token de acesso… |
@@ -285,10 +286,21 @@ CLI: `hermes schedule list | add "tarefa" "diário 08:30" | del <id> | run <id>`
 | `read_file` / `write_file` / `list_dir` | arquivos no workspace (leitura até 512 KB / 8 KB mostrados) |
 | `sys_info` | diagnóstico: SO, kernel, CPU, memória, disco, uptime, carga |
 | `lembrar` / `esquecer` | grava/apaga fatos da memória persistente |
+| `web_search` | pesquisa na internet (DuckDuckGo, sem chave de API) e devolve título + endereço + resumo dos resultados |
+| `web_fetch` | baixa uma página http(s) e devolve o texto limpo (sem HTML; até 2 MB) |
 
 Na **aba 🛠 Ferramentas** você usa essas funções manualmente: terminal rápido
 (mesma segurança do agente), navegador de arquivos com editor, info do
-sistema e o catálogo completo (nativas + MCP).
+sistema, **🌐 web (busca + abrir páginas)** e o catálogo completo (nativas +
+MCP).
+
+**Acesso à web** — feito **pelo próprio agente**: ele decide pesquisar quando
+a resposta depende de informação atual, lê as páginas e cita as fontes. As
+ferramentas `web_search` e `web_fetch` (DuckDuckGo, sem chave de API) valem
+no chat, nas tarefas agendadas e no Claude Code via `run_command`. Só http/https, conteúdo textual até 2 MB, com timeout —
+downloads binários seguem via `run_command` (curl/wget). Desative em
+⚙ Ajustes ("🌐 acesso à web") ou `web_access: false` no config: as ferramentas
+somem do agente e da GUI.
 
 ### Camadas de segurança
 
@@ -369,6 +381,7 @@ Autenticação: se `auth_token` estiver definido, envie header
 | `GET /api/tools` | catálogo (nativas + MCP) |
 | `POST /api/tools/run` | terminal rápido `{command}` (denylist ativa) |
 | `POST /api/tools/list_dir` / `read_file` / `write_file` / `sys_info` | arquivos e diagnóstico |
+| `POST /api/tools/web_search` / `web_fetch` | 🌐 `{query}` busca · `{url}` abre página |
 | **Ollama** | |
 | `GET /api/ollama/diagnose` · `POST /api/ollama/test` | diagnóstico · teste de conexão |
 | `GET /api/ollama/models` | modelos instalados |
@@ -415,6 +428,7 @@ ambiente: `HERMES_DATA_DIR` (pasta de dados) e `HERMES_MOCK=1` (demo).
 | `auto_start_ollama` | false | sobe o Ollama sozinho quando precisar |
 | `claude_use_ollama` | true | 🔌 Claude Code integrado ao Ollama (variáveis automáticas) |
 | `claude_model` | vazio | modelo do Claude Code (ex.: `qwen3-coder`) |
+| `web_access` | true | 🌐 ferramentas de web do agente e da GUI |
 | `host` / `port` | 127.0.0.1 / 8080 | onde a GUI escuta |
 | `auth_token` | vazio | senha da GUI (use se abrir para a rede) |
 | `max_steps` | 8 | ciclos modelo→ferramenta por tarefa |
@@ -461,7 +475,8 @@ agendamentos, configuração).
 - **Skill** = pasta com `SKILL.md` (instruções que entram no prompt quando
   relevantes). Instale pela aba Skills (owner/repo do GitHub + subpasta
   opcional) ou crie a sua em `data/skills/minha-skill/SKILL.md`;
-- Skills inclusas: `figma-design`, `ui-design-system`, `app-prototyping`
+- Skills inclusas: `pesquisa-web` (pesquisar, aprender e monitorar com
+  relatórios diários), `figma-design`, `ui-design-system`, `app-prototyping`
   (design com MCP do Figma) e `resumo-inbox` (relatório diário de e-mails +
   atividades do Google Classroom — Gmail via MCP oficial; Classroom via
   e-mails de notificação ou API com OAuth);
@@ -493,6 +508,7 @@ agendamentos, configuração).
 | Erro de YAML no config | confira indentação (2 espaços) e aspas |
 | GUI pedindo token | é o `auth_token`; defina/altere em Ajustes |
 | Sandbox bloqueou um caminho | desative `sandbox` em Ajustes (por sua conta e risco) |
+| Busca na web sem resultados | DuckDuckGo limita rajadas — espere uns segundos e tente de novo; confira se "🌐 acesso à web" está ativo em Ajustes |
 
 ## 19. Histórico de versões
 

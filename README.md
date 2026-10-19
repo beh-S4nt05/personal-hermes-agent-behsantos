@@ -192,6 +192,20 @@ No chat, o seletor no topo escolhe quem responde:
 
 As tarefas agendadas também têm seletor de agente (Hermes ou Claude Code).
 
+## 🌐 Acesso à web
+
+O **próprio agente** pesquisa na internet e lê páginas quando precisa — no
+chat e nas tarefas agendadas (a skill `pesquisa-web` o guia em pesquisas,
+monitoramentos e relatórios diários; uso manual opcional na aba
+**Ferramentas → 🌐 Web**):
+
+- `web_search`: busca no DuckDuckGo (sem chave de API) com títulos, endereços
+  e resumos;
+- `web_fetch`: abre qualquer endereço http(s) e devolve o texto limpo.
+
+O modelo é instruído a **citar as fontes**. Para desligar (agente offline):
+⚙ Ajustes → "🌐 acesso à web".
+
 ## 📚 Baixar modelos (LMMs) pela GUI
 
 Na aba **Ollama → Modelos**, busque na biblioteca oficial (ollama.com) ou na
