@@ -116,6 +116,15 @@ def cmd_doctor(args) -> None:
     else:
         _p("  • agente            desligado (ligue com: hermes agent start)")
 
+    # v3.0: checklist completo (voz, Claude Code, segurança…)
+    _p("─" * 58)
+    from .doctor import run_checks as _run_checks
+    for c in _run_checks(cfg):
+        mark = "✔" if c["ok"] else ("⚠" if c.get("optional") else "✖")
+        _p(f"  {mark} {c['name']:<20} {c['detail']}")
+        if not c["ok"]:
+            _p(f"      → corrigir: {c['fix']}")
+
     _p("─" * 58)
     if diag["ok"]:
         _p("  ✅ TUDO OK — conexão validada, pode trabalhar.\n")

@@ -468,15 +468,26 @@ def create_app(cfg: Config) -> Flask:
             finally:
                 result["duration_s"] = round(time.time() - t0, 1)
                 # estatísticas da resposta (tempo, tokens, passos) para a GUI
+                tok_s = None
                 if not cancel.is_set():
                     _d = result["duration_s"] or 0
+                    tok_s = round(result["tokens"] / _d, 1) if _d > 0.3 else None
                     q.put({
                         "type": "stats",
                         "duration_s": result["duration_s"],
                         "tokens": result["tokens"],
                         "steps": result["steps"],
-                        "tok_s": round(result["tokens"] / _d, 1) if _d > 0.3 else None,
+                        "tok_s": tok_s,
                     })
+                    # v3.0: métricas históricas (painel de desempenho)
+                    try:
+                        from .. import metrics as _metrics
+                        _metrics.record(cfg, chat_agent, cfg.model,
+                                        result["duration_s"], result["tokens"],
+                                        tok_s, result["steps"],
+                                        status="ok" if result["final"] else "vazia")
+                    except Exception:  # noqa: BLE001
+                        pass
                 q.put(None)
 
         def generate():
@@ -843,12 +854,31 @@ def create_app(cfg: Config) -> Flask:
         sched_agent = str(payload.get("agent") or "hermes")
         if sched_agent not in ("hermes", "claude"):
             sched_agent = "hermes"
-        entry = ScheduleStore(cfg).create(input_text, spec, agent=sched_agent)
-        return jsonify({
-            "ok": True,
-            "msg": f"tarefa agendada: {human_schedule(spec)}",
-            "schedule": entry["id"],
-        })
+        # v3.0: gatilhos (webhook/watch), retry e ociosidade
+        trigger = None
+        trig_raw = payload.get("trigger")
+        if isinstance(trig_raw, dict) and trig_raw.get("type") in ("webhook", "watch"):
+            trigger = {"type": trig_raw["type"]}
+            if trig_raw["type"] == "watch":
+                import os as _os
+                wpath = str(trig_raw.get("path") or "").strip()
+                if not wpath or not Path(wpath).expanduser().is_dir():
+                    return jsonify({"ok": False,
+                                    "msg": "gatilho watch exige um diretório válido em 'path'"}), 400
+                trigger["path"] = str(Path(wpath).expanduser())
+                trigger["glob"] = str(trig_raw.get("glob") or "*").strip() or "*"
+        retries = int(payload.get("retries") or 0)
+        only_idle = bool(payload.get("only_idle"))
+        entry = ScheduleStore(cfg).create(
+            input_text, spec, agent=sched_agent, trigger=trigger,
+            retries=retries, only_idle=only_idle)
+        if trigger and trigger["type"] == "webhook":
+            base = request.host_url.rstrip("/")
+            msg = (f"tarefa criada — dispare com: POST {base}/api/hooks/{entry['id']}"
+                   f" (adicione ?token=... se houver token)")
+        else:
+            msg = f"tarefa agendada: {human_schedule(spec)}"
+        return jsonify({"ok": True, "msg": msg, "schedule": entry["id"]})
 
     @app.post("/api/schedules/toggle")
     @protected
@@ -954,7 +984,9 @@ def create_app(cfg: Config) -> Flask:
         allowed = {"model", "system_prompt_extra", "max_steps", "num_ctx",
                    "cmd_timeout", "sandbox", "confirm_dangerous", "temperature", "auth_token",
                    "ollama_url", "auto_start_ollama", "claude_use_ollama", "claude_model", "web_access",
-                   "stt_model", "stt_language", "stt_autosend", "keep_alive", "num_predict"}
+                   "stt_model", "stt_language", "stt_autosend", "keep_alive", "num_predict",
+                   "max_tool_calls", "backups_keep", "mcp_autorestart", "tool_selector",
+                   "memory_top_k"}
         changes = {k: v for k, v in payload.items() if k in allowed}
         if not changes:
             return jsonify({"ok": False, "msg": "nada para alterar"}), 400
@@ -993,6 +1025,189 @@ def create_app(cfg: Config) -> Flask:
         cfg.update(changes)
         agents.clear()  # próximo chat usa a nova configuração
         return jsonify({"ok": True, "msg": f"configuração salva em {cfg.path}", "changes": changes})
+
+    # ============================================ v3.0 — novos endpoints ===
+    # ---------------------------------------------------------- auditoria
+    @app.get("/api/audit")
+    @protected
+    def audit_query():
+        from .. import audit as _audit
+
+        recs = _audit.query(
+            cfg,
+            agent=str(request.args.get("agent") or ""),
+            tool=str(request.args.get("tool") or ""),
+            limit=int(request.args.get("limit") or 80),
+            month=str(request.args.get("month") or ""),
+        )
+        return jsonify({"ok": True, "records": recs,
+                        "summary": _audit.tools_summary(cfg)})
+
+    # ------------------------------------------------------- backups (C2)
+    @app.get("/api/backups")
+    @protected
+    def backups_list():
+        from ..backups import list_backups
+
+        items = list_backups(cfg, str(request.args.get("path") or "") or None)[:60]
+        return jsonify({"ok": True, "backups": items})
+
+    @app.post("/api/backups/restore")
+    @protected
+    def backups_restore():
+        from ..backups import restore
+
+        payload = request.get_json(silent=True) or {}
+        res = restore(cfg, str(payload.get("id") or ""))
+        if res["ok"]:
+            from .. import audit as _audit
+            _audit.log(cfg, "operador", "backups.restore",
+                       {"id": payload.get("id")}, True, res["msg"], source="gui")
+        return jsonify(res), (200 if res["ok"] else 400)
+
+    # --------------------------------------------------------- métricas
+    @app.get("/api/metrics")
+    @protected
+    def metrics_view():
+        from .. import metrics as _metrics
+
+        return jsonify({"ok": True,
+                        "recent": _metrics.recent(cfg, limit=int(request.args.get("limit") or 30)),
+                        "summary": _metrics.summary(cfg)})
+
+    # ------------------------------------------------------ notificações
+    @app.get("/api/notifications")
+    @protected
+    def notifications_list():
+        from .. import notify
+
+        return jsonify({"ok": True, "items": notify.list_all(cfg),
+                        "unread": notify.unread_count(cfg)})
+
+    @app.post("/api/notifications/read")
+    @protected
+    def notifications_read():
+        from .. import notify
+
+        notify.mark_all_read(cfg)
+        return jsonify({"ok": True})
+
+    # ---------------------------------------------------------- receitas
+    @app.get("/api/recipes")
+    @protected
+    def recipes_list():
+        from ..recipes import RECIPES
+
+        return jsonify({"ok": True, "recipes": RECIPES})
+
+    # ------------------------------------------------------------ doctor
+    @app.get("/api/doctor")
+    @protected
+    def doctor_check():
+        from ..doctor import run_checks
+
+        return jsonify({"ok": True, "checks": run_checks(cfg)})
+
+    # ------------------------------------------------- webhook de tarefa
+    @app.post("/api/hooks/<sid>")
+    @protected
+    def hook_run(sid):
+        sched = app.config.get("HERMES_SCHEDULER")
+        if sched is None:
+            return jsonify({"ok": False, "msg": "agendador não está ativo"}), 409
+        entry = sched.store.load(sid)
+        if not entry:
+            return jsonify({"ok": False, "msg": "tarefa não encontrada"}), 404
+        if (entry.get("trigger") or {}).get("type") != "webhook":
+            return jsonify({"ok": False,
+                            "msg": "esta tarefa não é do tipo webhook"}), 400
+        return jsonify(sched.run_now(sid))
+
+    # ---------------------------------------------- exportar conversa (D7)
+    @app.get("/api/conversations/<sid>/export")
+    @protected
+    def conversation_export(sid):
+        from ..conversations import SESSION_ID_RE, ConversationStore
+
+        if not SESSION_ID_RE.fullmatch(sid or ""):
+            return jsonify({"ok": False, "msg": "id inválido"}), 400
+        session = ConversationStore(cfg).load(sid)
+        if not session:
+            return jsonify({"ok": False, "msg": "conversa não encontrada"}), 404
+        fmt = str(request.args.get("fmt") or "md")
+        if fmt == "json":
+            resp = Response(json.dumps(session, ensure_ascii=False, indent=1),
+                            mimetype="application/json")
+            resp.headers["Content-Disposition"] = f'attachment; filename="{sid}.json"'
+            return resp
+        lines = [f"# Conversa {sid}",
+                 f"_gerada em {time.strftime('%Y-%m-%d %H:%M')} pelo Hermes Agent_",
+                 ""]
+        for m in session.get("messages") or []:
+            role = m.get("role")
+            if role == "user":
+                lines.append(f"## 👤 Você\n\n{m.get('content','')}\n")
+            elif role == "assistant":
+                who = "🔌 Claude Code" if m.get("agent") == "claude" else "◈ Hermes"
+                dur = f" _({m.get('dur')}s)_" if m.get("dur") else ""
+                lines.append(f"## {who}{dur}\n\n{m.get('content','')}\n")
+        resp = Response("\n".join(lines), mimetype="text/markdown; charset=utf-8")
+        resp.headers["Content-Disposition"] = f'attachment; filename="{sid}.md"'
+        return resp
+
+    # ------------------------------------------------- MCP: add + test (M1)
+    @app.post("/api/mcp/add")
+    @protected
+    def mcp_add():
+        payload = request.get_json(silent=True) or {}
+        name = str(payload.get("name") or "").strip().lower()
+        name = re.sub(r"[^a-z0-9-]", "-", name)[:32]
+        if not name:
+            return jsonify({"ok": False, "msg": "informe o nome do servidor"}), 400
+        servers = list(cfg.mcp_servers or [])
+        if any(isinstance(s, dict) and s.get("name") == name for s in servers):
+            return jsonify({"ok": False, "msg": f"servidor '{name}' já existe"}), 400
+        url = str(payload.get("url") or "").strip()
+        command = str(payload.get("command") or "").strip()
+        entry: dict = {"name": name}
+        if url:
+            if not url.startswith(("http://", "https://")):
+                return jsonify({"ok": False, "msg": "url inválida"}), 400
+            entry["url"] = url
+        elif command:
+            entry["command"] = command
+            args = payload.get("args")
+            if isinstance(args, list) and args:
+                entry["args"] = [str(a) for a in args]
+        else:
+            return jsonify({"ok": False,
+                            "msg": "informe 'url' (http) ou 'command' (stdio)"}), 400
+        if payload.get("timeout"):
+            try:
+                entry["timeout"] = max(5, int(payload["timeout"]))
+            except (TypeError, ValueError):
+                pass
+        servers.append(entry)
+        cfg.update({"mcp_servers": servers})
+        agents.clear()
+        return jsonify({"ok": True,
+                        "msg": f"servidor '{name}' adicionado — ative no Painel"})
+
+    @app.post("/api/mcp/test")
+    @protected
+    def mcp_test():
+        payload = request.get_json(silent=True) or {}
+        tool = str(payload.get("tool") or "").strip()
+        if not tool:
+            return jsonify({"ok": False, "msg": "informe a ferramenta"}), 400
+        args = payload.get("args")
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except json.JSONDecodeError:
+                args = {}
+        res = get_manager(cfg).call(tool, args if isinstance(args, dict) else {})
+        return jsonify({"ok": res["ok"], "output": res["output"][:4000]})
 
     return app
 
@@ -1043,4 +1258,21 @@ def serve(cfg: Config, host: str, port: int) -> None:
     print(f"  ⏰ agendador ativo — {ativos} tarefa(s) agendada(s) "
           f"(verifica a cada 15s)")
 
-    app.run(host=host, port=port, threaded=True, debug=False)
+    # v3.0: supervisor MCP (renasce servidores mortos com backoff)
+    from ..supervisor import McpSupervisor
+
+    sup = McpSupervisor(cfg)
+    sup.start()
+    app.config["HERMES_SUPERVISOR"] = sup
+    n_mcp = len(get_manager(cfg)._entries())
+    if n_mcp and getattr(cfg, "mcp_autorestart", True):
+        print(f"  🩺 supervisor MCP ativo — {n_mcp} servidor(es) sob vigilância")
+
+    # v3.0: servidor de produção (waitress) com fallback para o dev server
+    try:
+        from waitress import serve as _wserve
+
+        print(f"  ⚙ servidor: waitress (produção)")
+        _wserve(app, host=host, port=port, threads=8)
+    except ImportError:
+        app.run(host=host, port=port, threaded=True, debug=False)

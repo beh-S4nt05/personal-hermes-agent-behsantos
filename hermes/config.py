@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 APP_NAME = "hermes-agent"
-VERSION = "2.2.8"
+VERSION = "3.0.0"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
@@ -50,11 +50,19 @@ DEFAULTS = {
     "mcp_timeout": 120,          # timeout (s) de inicialização/chamadas MCP
     # Skills
     "skills_disabled": [],       # nomes de skills desabilitadas pela GUI
+    # v3.0 — controle e automação
+    "max_tool_calls": 12,        # teto de chamadas de ferramenta por resposta
+    "backups_keep": 20,          # backups mantidos por arquivo (rotativo)
+    "mcp_autorestart": True,     # supervisor renasce servidores MCP mortos
+    "tool_selector": True,       # seleciona ferramentas MCP relevantes à pergunta
+    "memory_top_k": 8,           # fatos de memória injetados por relevância
 }
 
-_INT_KEYS = {"max_steps", "cmd_timeout", "port", "num_ctx", "num_predict"}
+_INT_KEYS = {"max_steps", "cmd_timeout", "port", "num_ctx", "num_predict",
+             "max_tool_calls", "backups_keep", "memory_top_k"}
 _FLOAT_KEYS = {"temperature"}
-_BOOL_KEYS = {"sandbox", "confirm_dangerous", "auto_start_ollama", "claude_use_ollama", "web_access", "stt_autosend"}
+_BOOL_KEYS = {"sandbox", "confirm_dangerous", "auto_start_ollama", "claude_use_ollama", "web_access", "stt_autosend",
+              "mcp_autorestart", "tool_selector"}
 _STR_KEYS = {"ollama_url", "model", "host", "auth_token", "system_prompt_extra", "claude_model", "stt_model", "stt_language", "keep_alive"}
 
 
@@ -132,7 +140,8 @@ class Config:
 
     # ------------------------------------------------------------ diretórios
     def ensure_dirs(self) -> None:
-        for sub in ("workspace", "logs", "tasks/done", "conversations"):
+        for sub in ("workspace", "logs", "tasks/done", "conversations",
+                    "audit", "backups"):
             (self.data_dir / sub).mkdir(parents=True, exist_ok=True)
 
     @property

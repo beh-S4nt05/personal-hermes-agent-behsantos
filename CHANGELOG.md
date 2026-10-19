@@ -1,5 +1,70 @@
 # Changelog
 
+## v3.0.0 — a grande atualização (confiança · poder · inteligência)
+
+Baseada no estudo técnico completo do código (19 módulos, ~7.2k linhas).
+Todas as melhorias respeitam a filosofia: local-first, modelos ≤8B,
+zero build-step, tarefas sem barreiras.
+
+**Controle (confiança)**
+- **Backups automáticos**: toda gravação do agente salva a versão anterior
+  em `data/backups/` (rotativo, 20/arquivo). Restauração pela GUI
+  (Ferramentas → Backups) ou pela nova ferramenta `backups` do agente.
+- **Auditoria**: TODA ação (nativa, MCP, Claude Code, GUI) vai para
+  `data/audit/audit-YYYY-MM.jsonl` com args, status e duração. Nova aba
+  🧾 Auditoria com filtros por agente/ferramenta.
+- **Orçamento de ferramentas**: teto de 12 chamadas por resposta
+  (`max_tool_calls`) — cadeias infinitas com ferramentas diferentes são
+  cortadas e o parcial é entregue.
+- Restauração de backup bloqueada fora do workspace (sandbox).
+
+**Automação (poder)**
+- **Histórico de execuções** por tarefa (últimas 20, na GUI).
+- **Retry com atraso**: "se falhar, tentar de novo" (0–3×, atraso
+  configurável) — falha de execução agora conta como falha (bug corrigido:
+  antes retornava sempre "ok").
+- **Gatilhos**: 🌐 webhook (`POST /api/hooks/<id>`) e 📂 watcher
+  ("quando chegar *.pdf em ~/Downloads → faça X").
+- **Notificações** 🔔 na GUI: falhas de tarefas e reinícios de MCP.
+- **Receitas prontas** 🍳: 6 automações úteis com ativação de 1 clique.
+- **Só quando ocioso**: tarefa pode esperar a máquina livrar (loadavg).
+
+**Performance**
+- **Cache do prompt de sistema** (invalida por memória/skills/config/minuto).
+- **Ferramentas em paralelo** (até 3 simultâneas no mesmo passo).
+- **Servidor de produção**: waitress no lugar do dev server do Flask.
+- **Painel de desempenho**: tok/s médio + sparkline das últimas 20 respostas.
+- **Memória por relevância**: com muitos fatos, injeta os top-k relevantes
+  à pergunta em vez de truncar.
+
+**Servers MCP**
+- **Supervisor de saúde**: servidor morto renasce sozinho (backoff
+  60s→10min) + notificação.
+- **Painel**: adicionar servidor pela GUI (sem editar YAML) e testar
+  ferramenta via API (`/api/mcp/add`, `/api/mcp/test`).
+- **Seleção dinâmica**: com muitas ferramentas MCP, só as 8 mais relevantes
+  à pergunta entram no payload (menos delírio de modelo pequeno).
+
+**Design**
+- **Markdown rico** nas respostas: títulos, listas, citações, links e
+  blocos de código com botão **copiar**.
+- **Tema claro/escuro** (🌙/☀ no cabeçalho, persistente).
+- **Visão ao vivo** com tempo por passo e tok/s ao vivo.
+- **Doctor** 🩺: wizard na primeira execução + `hermes doctor` estendido
+  (Ollama, modelo, voz, Claude Code, segurança).
+- **Exportar conversa** em .md/.json (⬇ no Chat).
+
+**Config novas**: `max_tool_calls` 12 · `backups_keep` 20 ·
+`mcp_autorestart` true · `tool_selector` true · `memory_top_k` 8.
+
+Testes: suíte formal em **tests/run_all.py** — 33 casos cobrindo módulos v3.0
+(backups, auditoria, métricas, notificações, memória, seletor, orçamento,
+paralelismo, cache), scheduler (histórico, retry, watcher, webhook,
+ociosidade), supervisor MCP, 8 endpoints novos, CLI e REGRESSÕES das v2.x
+(JSON solto, anti-loop, modo leve do Claude Code com CLIs falsas,
+keep_alive, denylist). Rode com: `./.venv/bin/python tests/run_all.py`
+(cada caso usa diretório temporário próprio — nada toca em ~/.hermes).
+
 ## v2.2.8 — Claude Code autodiagnóstico + fallback de CLI antiga
 
 - Toda resposta do agente 🔌 Claude Code agora termina com um rodapé

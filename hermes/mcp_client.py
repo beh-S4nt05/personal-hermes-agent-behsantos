@@ -421,6 +421,46 @@ class MCPManager:
         self.stop_all()
         self.start_all()
 
+    def restart_server(self, name: str) -> None:
+        """Reinicia UM servidor (usado pelo supervisor de saúde)."""
+        entry = next((e for e in self._entries() if str(e.get("name")) == name), None)
+        if entry is None:
+            raise MCPError(f"servidor MCP '{name}' não está no config")
+        srv = self._servers.pop(name, None)
+        if srv:
+            try:
+                srv.stop()
+            except Exception:
+                pass
+        # remove as ferramentas dele dos mapas
+        for mapped in list(self._map):
+            if self._map[mapped][0] == name:
+                self._map.pop(mapped, None)
+                self._meta.pop(mapped, None)
+        self._server_tools.pop(name, None)
+        # sobe de novo (mesmo caminho do start_all, sem placeholders)
+        target = " ".join(
+            [str(entry.get("command", ""))] + [str(a) for a in entry.get("args") or []]
+            + [str(entry.get("url", ""))]
+        )
+        if any(ph in target for ph in ("SEU-TOKEN", "YOUR-KEY", "SUA-CHAVE", "SUA-SENHA")):
+            raise MCPError("placeholder de token no config")
+        srv = self._make(entry)
+        srv.start()
+        raw_tools = srv.list_tools()
+        self._servers[name] = srv
+        mapped_names = []
+        for tool in raw_tools:
+            orig = str(tool.get("name") or "")
+            if not orig:
+                continue
+            mapped = map_tool_name(name, orig)
+            self._map[mapped] = (name, orig)
+            self._meta[mapped] = tool
+            mapped_names.append(mapped)
+        self._server_tools[name] = mapped_names
+        self._state[name] = {"state": "ativo", "error": None}
+
     # ------------------------------------------------------------- ferramentas
     def openai_tools(self) -> list[dict]:
         if not self._entries():

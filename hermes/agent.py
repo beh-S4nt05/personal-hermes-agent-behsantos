@@ -15,6 +15,7 @@ import json
 import re
 import socket
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from .config import Config
 from .mcp_client import get_manager
@@ -134,9 +135,79 @@ class Agent:
         self.mcp = get_manager(self.cfg)      # conectores MCP (Figma, etc.)
         self.skills = SkillLoader(self.cfg)   # catálogo de skills SKILL.md
         self.native_tools = True  # desliga automaticamente se o servidor não suportar
+        self._prompt_cache: tuple[str, str] | None = None  # v3.0: cache do prompt
+
+    # ------------------------------------------------- seleção de ferramentas
+    @staticmethod
+    def _score_tool(query: str, tool: dict) -> int:
+        """Similaridade barata (overlap de palavras) entre pergunta e ferramenta."""
+        import unicodedata
+
+        def words(s: str) -> set[str]:
+            s = unicodedata.normalize("NFKD", s.lower())
+            s = "".join(c for c in s if c.isascii())
+            stop = {"de", "da", "do", "para", "com", "que", "uma", "um", "os",
+                    "as", "em", "no", "na", "por", "e", "o", "a", "meu", "minha",
+                    "the", "of", "to", "for", "and", "a", "in"}
+            return {w for w in re.split(r"[^a-z0-9]+", s) if len(w) > 2 and w not in stop}
+
+        fn = tool.get("function") or {}
+        q = words(query or "")
+        if not q:
+            return 0
+        tgt = words((fn.get("name") or "") + " " + (fn.get("description") or ""))
+        return len(q & tgt)
+
+    def _select_mcp_tools(self, query: str, mcp_tools: list[dict]) -> list[dict]:
+        """v3.0: com muitas ferramentas MCP, injeta só as relevantes à pergunta
+        (payload menor = modelo pequeno menos confuso e mais rápido)."""
+        if (not getattr(self.cfg, "tool_selector", True)
+                or len(mcp_tools) <= 8):
+            return mcp_tools
+        ranked = sorted(mcp_tools,
+                        key=lambda t: self._score_tool(query, t), reverse=True)
+        return ranked[:8]
+
+    # ------------------------------------------------------- cache do prompt
+    def _prompt_key(self, query: str | None) -> str:
+        """Chave de invalidação do cache: muda só quando algo relevante muda."""
+        parts = [
+            str(getattr(self.cfg, "system_prompt_extra", "")),
+            str(getattr(self.cfg, "web_access", True)),
+            str(getattr(self.cfg, "sandbox", True)),
+            str(self.native_tools),
+            socket.gethostname(),
+            time.strftime("%Y-%m-%d %H:%M"),   # hora (o prompt mostra data/hora)
+            str(query or "")[:400],
+        ]
+        try:
+            for d in self.cfg.skills_dirs:
+                for f in sorted(d.glob("*/SKILL.md")):
+                    try:
+                        st = f.stat()
+                        parts.append(f"{f.name}:{st.st_mtime_ns}")
+                    except OSError:
+                        pass
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            mp = self.cfg.data_dir / "memory.json"
+            if mp.exists():
+                st = mp.stat()
+                parts.append(f"mem:{st.st_mtime_ns}:{st.st_size}")
+        except OSError:
+            pass
+        try:
+            parts.append("mcp:" + ",".join(sorted(self.mcp._map.keys())))
+        except Exception:  # noqa: BLE001
+            pass
+        return "|".join(parts)
 
     # -------------------------------------------------------------- prompt
-    def system_prompt(self) -> str:
+    def system_prompt(self, query: str | None = None) -> str:
+        key = self._prompt_key(query)
+        if self._prompt_cache and self._prompt_cache[0] == key:
+            return self._prompt_cache[1]           # cache: monta 1x, usa N vezes
         extra = self.cfg.system_prompt_extra.strip()
         webtools = (
             "- web_search / web_fetch: pesquisa na internet (DuckDuckGo) e lê "
@@ -152,7 +223,7 @@ class Agent:
             hostname=socket.gethostname(),
             workdir=self.cfg.workdir,
             sandbox="ATIVO (apenas o workspace)" if self.cfg.sandbox else "DESATIVADO (caminhos absolutos liberados)",
-            now=time.strftime("%Y-%m-%d %H:%M:%S %Z"),
+            now=time.strftime("%Y-%m-%d %H:%M"),
             extra=f"Instruções adicionais do operador:\n{extra}\n" if extra else "",
         )
         if not self.native_tools:
@@ -182,11 +253,12 @@ class Agent:
         # memória persistente: fatos sobre o usuário valem para todas as conversas
         try:
             from .memory import MemoryStore
-            mem = MemoryStore(self.cfg).prompt_section()
+            mem = MemoryStore(self.cfg).prompt_section(query)
             if mem:
                 prompt += mem
         except Exception:
             pass
+        self._prompt_cache = (key, prompt)
         return prompt
 
     # ---------------------------------------------------------------- loop
@@ -211,27 +283,38 @@ class Agent:
             except Exception:
                 pass
 
-        msgs: list[dict] = [{"role": "system", "content": self.system_prompt()}]
+        query = ""
+        for m in reversed(messages):
+            if m.get("role") == "user":
+                query = str(m.get("content") or "")
+                break
+        t0 = time.time()
+        msgs: list[dict] = [{"role": "system", "content": self.system_prompt(query)}]
         msgs += [m for m in messages if m.get("role") in ("user", "assistant", "tool")]
         final = ""
         last_sigs: list[tuple[str, str]] = []   # assinaturas do passo anterior
         nudged = False                           # já avisamos sobre repetição?
+        calls_used = 0                           # v3.0: orçamento de ferramentas
+        max_calls = int(getattr(cfg, "max_tool_calls", 12) or 12)
+        budget_strikes = False                    # já avisamos o orçamento?
 
         for step in range(1, cfg.max_steps + 1):
             if cancel is not None and cancel.is_set():
                 ev({"type": "cancelled", "message": final or ""})
                 return final or "[interrompido pelo operador]"
-            ev({"type": "step", "step": step})
+            ev({"type": "step", "step": step, "t": round(time.time() - t0, 1)})
             tools = list(TOOLS)
             if not getattr(cfg, "web_access", True):
                 tools = [t for t in tools
                          if t["function"]["name"] not in ("web_search", "web_fetch")]
             if self.native_tools:
                 try:
-                    tools += self.mcp.openai_tools()  # ferramentas dos conectores MCP
+                    # v3.0: só as ferramentas MCP relevantes à pergunta
+                    tools += self._select_mcp_tools(
+                        query, self.mcp.openai_tools())
                 except Exception:
                     pass
-            msgs[0] = {"role": "system", "content": self.system_prompt()}
+            msgs[0] = {"role": "system", "content": self.system_prompt(query)}
 
             content = ""
             calls: list[dict] = []
@@ -351,30 +434,75 @@ class Agent:
             last_sigs = sigs
             nudged = False
 
-            for call in calls:
-                if cancel is not None and cancel.is_set():
-                    break  # cancelado durante as ferramentas
-                fn = call.get("function") or {}
-                name = fn.get("name", "")
-                args = fn.get("arguments") or {}
-                ev({"type": "tool_start", "name": name, "args": args})
-
-                if allow_tool is not None and not allow_tool(name, args):
-                    result = "BLOQUEADO pelo operador (confirmação negada)."
-                    ev({"type": "tool_end", "name": name, "ok": False, "output": result})
-                elif self.mcp.handles(name):
-                    # ferramenta de um conector MCP (Figma, GitHub, ...)
+            def _exec_one(name: str, args):
+                """Executa UMA ferramenta (nativa ou MCP) — com auditoria."""
+                if self.mcp.handles(name):
                     res = self.mcp.call(name, args)
-                    ev({"type": "tool_end", "name": name, "ok": res["ok"],
-                        "output": res["output"][:4000]})
-                    result = res["output"]
-                else:
-                    res = execute_tool(name, args, cfg)
-                    ev({"type": "tool_end", "name": name, "ok": res["ok"],
-                        "output": res["output"][:4000]})
-                    result = res["output"]
+                    try:
+                        from . import audit
+                        audit.log(cfg, "hermes", name, args, res["ok"],
+                                  res["output"], source="agent")
+                    except Exception:  # noqa: BLE001
+                        pass
+                    return res["ok"], res["output"]
+                res = execute_tool(name, args, cfg)
+                return res["ok"], res["output"]
 
-                msgs.append({"role": "tool", "name": name, "content": result})
+            # ── v3.0: orçamento de ferramentas (cadeia infinita não passa) ──
+            runnable = calls
+            if calls_used >= max_calls:
+                for call in calls:
+                    fn = call.get("function") or {}
+                    msgs.append({
+                        "role": "tool", "name": fn.get("name", ""),
+                        "content": ("BLOQUEADO: orçamento de ferramentas esgotado "
+                                    f"({max_calls} chamadas). Responda ao usuário "
+                                    "com o que já coletou.")})
+                ev({"type": "note",
+                    "message": f"orçamento de ferramentas esgotado ({max_calls})"})
+                if budget_strikes:  # 2ª vez seguida: encerra e entrega o parcial
+                    final = (content or final or "").strip()
+                    final += ("\n\n*(encerrado: orçamento de ferramentas esgotado — "
+                              "o que foi coletado está acima)*")
+                    ev({"type": "done", "message": final})
+                    return final
+                budget_strikes = True
+                continue
+            budget_strikes = False
+            calls_used += len(runnable)
+
+            # ── v3.0: ferramentas em paralelo (2+ chamadas no mesmo passo) ──
+            if len(runnable) > 1 and allow_tool is None:
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    futs = []
+                    for call in runnable:
+                        fn = call.get("function") or {}
+                        name, args = fn.get("name", ""), fn.get("arguments") or {}
+                        ev({"type": "tool_start", "name": name, "args": args})
+                        futs.append((name, pool.submit(_exec_one, name, args)))
+                    for name, fut in futs:
+                        ok, result = fut.result()
+                        ev({"type": "tool_end", "name": name, "ok": ok,
+                            "output": result[:4000]})
+                        msgs.append({"role": "tool", "name": name, "content": result})
+            else:
+                for call in runnable:
+                    if cancel is not None and cancel.is_set():
+                        break  # cancelado durante as ferramentas
+                    fn = call.get("function") or {}
+                    name = fn.get("name", "")
+                    args = fn.get("arguments") or {}
+                    ev({"type": "tool_start", "name": name, "args": args})
+
+                    if allow_tool is not None and not allow_tool(name, args):
+                        result = "BLOQUEADO pelo operador (confirmação negada)."
+                        ev({"type": "tool_end", "name": name, "ok": False, "output": result})
+                    else:
+                        ok, result = _exec_one(name, args)
+                        ev({"type": "tool_end", "name": name, "ok": ok,
+                            "output": result[:4000]})
+
+                    msgs.append({"role": "tool", "name": name, "content": result})
 
         hint = f"Limite de {cfg.max_steps} passes atingido; aumente 'max_steps' se precisar."
         ev({"type": "error", "message": hint})

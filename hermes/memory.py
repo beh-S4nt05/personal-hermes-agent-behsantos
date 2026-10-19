@@ -95,8 +95,42 @@ class MemoryStore:
         return True
 
     # ----------------------------------------------------------- prompt
-    def prompt_section(self) -> str:
-        """Seção pronta para o prompt de sistema ('' se não houver fatos)."""
+    @staticmethod
+    def _score(query: str, text: str) -> int:
+        """Similaridade barata pergunta↔fato (overlap de palavras)."""
+        import unicodedata
+
+        def words(s: str) -> set[str]:
+            s = unicodedata.normalize("NFKD", s.lower())
+            s = "".join(c for c in s if c.isascii())
+            return {w for w in re.split(r"[^a-z0-9]+", s) if len(w) > 2}
+
+        q = words(query or "")
+        if not q:
+            return 0
+        t = words(text or "")
+        return len(q & t)
+
+    def relevant(self, query: str, k: int = 8) -> list[dict]:
+        """Top-k fatos por relevância à pergunta (mais os 2 mais recentes)."""
+        facts = self.list_all()
+        if not facts:
+            return []
+        scored = sorted(facts, key=lambda f: self._score(query, f.get("text", "")),
+                        reverse=True)
+        top = scored[:max(1, k)]
+        # os 2 mais recentes sempre entram (contexto vivo)
+        for f in facts[:2]:
+            if f not in top:
+                top.append(f)
+        return top
+
+    def prompt_section(self, query: str | None = None) -> str:
+        """Seção pronta para o prompt de sistema ('' se não houver fatos).
+
+        v3.0: com muitos fatos, injeta os mais RELEVANTES à pergunta em vez
+        de truncar — o agente lembra do que importa sem pagar tokens à toa.
+        """
         facts = self.list_all()
         if not facts:
             return ""
@@ -106,12 +140,19 @@ class MemoryStore:
             "com a ferramenta `lembrar`\ne remova o que ficou obsoleto com "
             "`esquecer`, usando o id entre colchetes):"
         ]
+        total_chars = sum(len(f.get("text", "")) for f in facts)
+        selected = facts
+        note = ""
+        if (query and total_chars > MAX_PROMPT_CHARS
+                and int(getattr(self.cfg, "memory_top_k", 8) or 8) > 0):
+            selected = self.relevant(
+                query, int(getattr(self.cfg, "memory_top_k", 8) or 8))
+            note = f"  … ({len(facts)} fatos no total; mostrando os mais relevantes)\n"
         total = 0
-        for f in facts:
+        for f in selected:
             line = f"  [{f.get('id')}] {f.get('text', '')}"
             if total + len(line) > MAX_PROMPT_CHARS:
-                lines.append("  … (memória truncada)")
                 break
             lines.append(line)
             total += len(line)
-        return "\n".join(lines)
+        return "\n".join(lines) + (("\n" + note.rstrip()) if note else "")

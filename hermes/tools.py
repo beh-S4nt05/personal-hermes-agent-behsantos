@@ -157,6 +157,26 @@ TOOLS: list[dict] = [
     {
         "type": "function",
         "function": {
+            "name": "backups",
+            "description": (
+                "Lista e restaura backups automáticos de arquivos (toda escrita "
+                "guarda a versão anterior). action=list (path opcional filtra) "
+                "ou action=restore com id."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "description": "list | restore"},
+                    "path": {"type": "string", "description": "arquivo de origem (filtro)"},
+                    "id": {"type": "string", "description": "id do backup (restore)"},
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "esquecer",
             "description": (
                 "Apaga um fato da memória persistente pelo id (os ids aparecem "
@@ -259,14 +279,18 @@ def read_file(args: dict, cfg) -> str:
 
 
 def write_file(args: dict, cfg) -> str:
+    from .backups import backup_file
+
     p = resolve_path(str(args.get("path", "")), cfg)
     content = str(args.get("content", ""))
     if len(content) > 512 * 1024:
         return "ERRO: conteúdo acima do limite de 512 KB."
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
+        backup = backup_file(cfg, p)  # v3.0: nada é sobrescrito sem volta
         p.write_text(content, encoding="utf-8")
-        return f"OK: {len(content)} caracteres gravados em {p}"
+        nota = f" (backup da versão anterior: {backup.name})" if backup else ""
+        return f"OK: {len(content)} caracteres gravados em {p}{nota}"
     except Exception as exc:
         return f"ERRO ao gravar {p}: {exc}"
 
@@ -463,6 +487,11 @@ def esquecer(args: dict, cfg) -> str:
     return f"ERRO: não encontrei o fato {fid} na memória."
 
 
+def _backups_tool(args: dict, cfg) -> str:
+    from .backups import tool_backups
+    return tool_backups(args, cfg)
+
+
 EXECUTORS = {
     "run_command": run_command,
     "read_file": read_file,
@@ -473,22 +502,38 @@ EXECUTORS = {
     "esquecer": esquecer,
     "web_search": web_search,
     "web_fetch": web_fetch,
+    "backups": _backups_tool,
 }
 
 
-def execute_tool(name: str, arguments: dict, cfg) -> dict:
-    """Executa uma ferramenta e devolve {'ok': bool, 'output': str}."""
+def execute_tool(name: str, arguments: dict, cfg, source: str = "agent",
+                 agent: str = "hermes") -> dict:
+    """Executa uma ferramenta e devolve {'ok': bool, 'output': str}.
+
+    v3.0: toda execução vai para a trilha de auditoria (data/audit/).
+    """
+    import time as _time
+    from . import audit as _audit
+
     if name not in EXECUTORS:
         return {"ok": False, "output": f"ERRO: ferramenta desconhecida: {name!r}"}
+    t0 = _time.time()
     try:
         args = dict(arguments or {})
         output = EXECUTORS[name](args, cfg)
         ok = not output.startswith(("ERRO", "BLOQUEADO"))
+        _audit.log(cfg, agent, name, args, ok, output,
+                   duration_ms=int((_time.time() - t0) * 1000), source=source)
         return {"ok": ok, "output": output}
     except ToolError as exc:
+        _audit.log(cfg, agent, name, arguments, False, str(exc),
+                   duration_ms=int((_time.time() - t0) * 1000), source=source)
         return {"ok": False, "output": f"ERRO: {exc}"}
     except Exception as exc:
-        return {"ok": False, "output": f"ERRO inesperado em {name}: {exc.__class__.__name__}: {exc}"}
+        msg = f"ERRO inesperado em {name}: {exc.__class__.__name__}: {exc}"
+        _audit.log(cfg, agent, name, arguments, False, msg,
+                   duration_ms=int((_time.time() - t0) * 1000), source=source)
+        return {"ok": False, "output": msg}
 
 
 def tool_summary() -> str:

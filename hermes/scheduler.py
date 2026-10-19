@@ -13,6 +13,14 @@ protegendo contra comandos destrutivos (rm -rf /, mkfs, shutdown…).
 O agendador vive no processo `hermes server` — mantenha a GUI rodando para
 que os horários disparem. Cada execução gera resultado completo em
 tasks/done/ e fica registrada na própria tarefa agendada.
+
+v3.0:
+- histórico das últimas 20 execuções por tarefa (entry["history"])
+- retry com atraso: campos `retries` (0-3) e `retry_delay_min`
+- gatilhos: trigger {"type": "webhook"} (POST /api/hooks/<id>) e
+  {"type": "watch", "path": dir, "glob": "*.pdf"} (arquivo novo → roda)
+- `only_idle`: adia a execução enquanto a máquina estiver ocupada (Linux)
+- falhas geram notificação para o operador (data/notifications.json)
 """
 
 from __future__ import annotations
@@ -220,7 +228,9 @@ class ScheduleStore:
     def _ensure(self) -> None:
         self.dir.mkdir(parents=True, exist_ok=True)
 
-    def create(self, input_text: str, spec: dict, agent: str = "hermes") -> dict:
+    def create(self, input_text: str, spec: dict, agent: str = "hermes",
+               trigger: dict | None = None, retries: int = 0,
+               retry_delay_min: int = 5, only_idle: bool = False) -> dict:
         self._ensure()
         entry = {
             "id": time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6],
@@ -236,6 +246,14 @@ class ScheduleStore:
             "last_duration_s": None,
             "last_output": None,
             "running": False,
+            # v3.0
+            "trigger": trigger or None,          # {"type":"webhook"|"watch",...}
+            "retries": max(0, min(int(retries or 0), 3)),
+            "retry_delay_min": max(1, int(retry_delay_min or 5)),
+            "only_idle": bool(only_idle),
+            "retries_used": 0,
+            "retry_at_ts": None,
+            "history": [],                       # últimas 20 execuções
         }
         self.save(entry)
         return entry
@@ -286,6 +304,12 @@ class ScheduleStore:
                 "last_run": e.get("last_run"),
                 "last_status": e.get("last_status"),
                 "last_duration_s": e.get("last_duration_s"),
+                "trigger": e.get("trigger"),
+                "retries": e.get("retries", 0),
+                "only_idle": bool(e.get("only_idle")),
+                "retries_used": e.get("retries_used", 0),
+                "history_n": len(e.get("history") or []),
+                "history": (e.get("history") or [])[:5],
             })
         return items
 
@@ -349,8 +373,10 @@ def execute_entry(cfg, entry: dict, on_event=None) -> dict:
     t0 = time.time()
     final = agent.run([{"role": "user", "content": entry["input"]}],
                       on_event=_collect)
+    # v3.0: erro de verdade conta como erro (habilita retry/notificação)
+    falhou = (not final) or final.startswith(("[erro]", "[interrompido"))
     return {
-        "status": "ok",
+        "status": "error" if falhou else "ok",
         "output": final,
         "tools": [
             {"name": e["name"], "ok": e["ok"], "output": (e.get("output") or "")[-1500:]}
@@ -449,7 +475,33 @@ class Scheduler:
         for entry in self.store.list_all():
             if not entry.get("enabled") or entry.get("running"):
                 continue
+            trigger = entry.get("trigger") or {}
+
+            # ── v3.0: retry pendente (falhou e tem tentativas restantes) ──
+            if entry.get("retry_at_ts"):
+                if time.time() >= float(entry["retry_at_ts"]):
+                    threading.Thread(target=self._execute, args=(entry["id"],),
+                                     kwargs={"is_retry": True}, daemon=True).start()
+                continue
+
+            # ── v3.0: gatilhos (webhook não dispara por tempo; watch sim) ──
+            if trigger.get("type") == "webhook":
+                continue  # só roda via POST /api/hooks/<id>
+            if trigger.get("type") == "watch":
+                novos = self._watch_new_files(entry)
+                if novos:
+                    threading.Thread(
+                        target=self._execute, args=(entry["id"],),
+                        kwargs={"extra_context": "Arquivos novos detectados: "
+                                 + ", ".join(novos[:10])}, daemon=True).start()
+                continue
+            if not trigger and not (entry.get("schedule") or {}):
+                continue
+
             if is_due(entry, now):
+                # ── v3.0: tarefa "só quando ocioso" espera a máquina livrar ──
+                if entry.get("only_idle") and _system_busy():
+                    continue
                 threading.Thread(target=self._execute, args=(entry["id"],),
                                  daemon=True).start()
             elif ((entry.get("schedule") or {}).get("type") == "once"
@@ -460,14 +512,49 @@ class Scheduler:
                 entry["last_status"] = "perdida"
                 self.store.save(entry)
 
+    # ---------------------------------------------------- watcher (gatilho)
+    def _watch_new_files(self, entry: dict) -> list[str]:
+        """Arquivos novos que casam com o padrão desde a última verificação."""
+        import glob as _glob
+        trig = entry.get("trigger") or {}
+        path = str(trig.get("path") or "").strip()
+        pattern = str(trig.get("glob") or "*").strip() or "*"
+        if not path:
+            return []
+        d = Path(path).expanduser()
+        if not d.is_dir():
+            return []
+        try:
+            atual = sorted(p.name for p in d.glob(pattern) if p.is_file())
+        except OSError:
+            return []
+        vistos = entry.get("watch_seen")
+        # primeira vez: apenas aprende o estado, não dispara
+        if vistos is None:
+            entry["watch_seen"] = atual
+            self.store.save(entry)
+            return []
+        novos = [f for f in atual if f not in set(vistos)]
+        if novos or len(vistos) != len(atual):
+            entry["watch_seen"] = atual
+            self.store.save(entry)
+        return novos
+
     # ---------------------------------------------------------- execução
-    def _execute(self, sid: str, force: bool = False) -> dict:
+    def _execute(self, sid: str, force: bool = False, is_retry: bool = False,
+                 extra_context: str = "") -> dict:
         entry = self.store.load(sid)
         if not entry or entry.get("running"):
             return {"ok": False, "msg": "tarefa não encontrada ou já em execução"}
         entry["running"] = True
+        entry["retry_at_ts"] = None
         self.store.save(entry)
         _live_begin(sid, entry["input"])
+        original_input = entry["input"]
+        if extra_context:
+            entry = dict(entry)
+            entry["input"] = f"{original_input}\n\n(Contexto do gatilho: {extra_context})"
+            _live_begin(sid, entry["input"])
         try:
             result = execute_entry(self.cfg, entry,
                                    on_event=lambda e: _live_push(sid, e))
@@ -478,6 +565,8 @@ class Scheduler:
         _live_end(sid, result)
 
         entry = self.store.load(sid) or entry
+        if extra_context:
+            entry["input"] = original_input  # contexto do gatilho é 1-shot
         entry.update({
             "running": False,
             "run_count": entry.get("run_count", 0) + 1,
@@ -487,9 +576,44 @@ class Scheduler:
             "last_duration_s": result["duration_s"],
             "last_output": (result["output"] or "")[:4000],
         })
+        # ── v3.0: histórico das últimas 20 execuções ──
+        hist = entry.get("history") or []
+        hist.insert(0, {
+            "ts": entry["last_run"],
+            "status": result["status"],
+            "duration_s": result["duration_s"],
+            "retries_used": entry.get("retries_used", 0) if is_retry else 0,
+            "output": (result["output"] or "")[:500],
+        })
+        entry["history"] = hist[:20]
+
         spec = entry.get("schedule") or {}
-        if spec.get("type") == "once" and not force:
+        trigger = entry.get("trigger") or {}
+        if spec.get("type") == "once" and not force and not trigger:
             entry["enabled"] = False  # única execução concluída
+
+        # ── v3.0: retry com atraso + notificação de falha ──
+        falhou = result["status"] != "ok"
+        if falhou:
+            from . import notify
+            usados = entry.get("retries_used", 0)
+            limite = entry.get("retries", 0)
+            if usados < limite:
+                delay = max(1, int(entry.get("retry_delay_min", 5)))
+                entry["retries_used"] = usados + 1
+                entry["retry_at_ts"] = time.time() + delay * 60
+                notify.push(self.cfg, "task_error",
+                            f"Tarefa falhou — nova tentativa em {delay} min",
+                            f"“{entry['input'][:80]}” · tentativa "
+                            f"{usados + 1}/{limite}")
+            else:
+                entry["retries_used"] = 0
+                notify.push(self.cfg, "task_error",
+                            "Tarefa agendada FALHOU",
+                            f"“{entry['input'][:80]}” — veja o resultado na "
+                            f"aba Tarefas")
+        else:
+            entry["retries_used"] = 0
         self.store.save(entry)
 
         # resultado completo vai para o histórico de tarefas (aba Tarefas)
@@ -519,3 +643,12 @@ class Scheduler:
         threading.Thread(target=self._execute, args=(sid,), kwargs={"force": True},
                          daemon=True).start()
         return {"ok": True, "msg": "executando agora — o resultado aparece em instantes"}
+
+
+def _system_busy(threshold: float = 2.0) -> bool:
+    """True se a máquina estiver ocupada (para tarefas marcadas 'only_idle')."""
+    try:
+        load1 = float(Path("/proc/loadavg").read_text().split()[0])
+        return load1 > threshold
+    except (OSError, ValueError, IndexError):
+        return False  # não-Linux ou leitura falhou: não bloqueia nunca

@@ -303,7 +303,29 @@ com o prefixo `⏰ [agendada]`.
 
 CLI: `hermes schedule list | add "tarefa" "diário 08:30" | del <id> | run <id>`.
 
+### v3.0 — gatilhos, retry, histórico e receitas
+
+- **Gatilhos** (⚙ opções avançadas no formulário de agendamento):
+  - 🌐 **webhook**: a tarefa roda quando qualquer sistema chamar
+    `POST /api/hooks/<id-da-tarefa>` (autentica com `?token=` se houver).
+    Ideal para Gmail/n8n/IFTTT dispararem o agente.
+  - 📂 **watcher**: informe uma pasta e um padrão (ex.: `~/Downloads` +
+    `*.pdf`) — quando um arquivo NOVO casar com o padrão, a tarefa roda
+    recebendo o nome dos arquivos como contexto.
+- **Retry**: "retry se falhar (0-3)" repete a tarefa com atraso
+  configurável (padrão 5 min). Falhas geram notificação 🔔 no cabeçalho.
+- **Só quando ociosa**: a tarefa espera a máquina livrar (load < 2).
+- **Histórico**: cada tarefa guarda as últimas 20 execuções (horário,
+  status, duração, início da saída) — visível na aba Tarefas.
+- **Receitas prontas** 🍳: 6 automações prontas (notícias diárias, saúde
+  semanal do sistema, limpeza de backups, backup do workspace, vigia de
+  disco, revisão da memória) — 1 clique para ativar.
+
 ## 9. Memória persistente (📔)
+
+v3.0: com muitos fatos, o agente injeta no prompt apenas os **mais
+relevantes à pergunta** (`memory_top_k`, padrão 8) em vez de truncar —
+lembra do que importa sem gastar tokens à toa.
 
 - Fatos sobre você ficam em `data/memory.json` (id `m########`, data, texto);
 - **Entram no prompt de sistema de TODAS as conversas e tarefas agendadas**
@@ -368,6 +390,22 @@ somem do agente e da GUI.
   `resumo-inbox`) ou instale do GitHub na aba Skills (qualquer repo com
   SKILL.md, ex.: `anthropics/skills`).
 
+### v3.0 — auditoria, backups e orçamento
+
+- **Auditoria** (aba 🧾): toda ação do agente (ferramenta nativa, MCP,
+  Claude Code, restauração pela GUI) fica registrada em
+  `data/audit/audit-YYYY-MM.jsonl` — quem fez, o quê, quando, quanto
+  tempo levou e a saída (truncada). Filtros por agente e ferramenta.
+- **Backups automáticos**: antes de qualquer gravação, a versão anterior
+  do arquivo é salva em `data/backups/AAAA-MM-DD/`. A GUI (Ferramentas)
+  lista e restaura; o agente tem a ferramenta `backups`
+  (`action=list|restore`). Retenção rotativa de 20 por arquivo
+  (`backups_keep`). Restaurar preserva o arquivo atual (também vira
+  backup) e é bloqueado fora do workspace.
+- **Orçamento de ferramentas**: no máx. `max_tool_calls` (12) execuções
+  por resposta; ao esgotar, o modelo é avisado para concluir com o que já
+  tem e, se insistir, o agente encerra entregando o parcial.
+
 ## 11. Ollama: gerenciamento e download de modelos
 
 A aba 🧠 Ollama mostra estado (versão, PID, uptime, memória), botões
@@ -419,6 +457,23 @@ CLI: `hermes models` (listar), `hermes ollama start|stop|status|test|pull <model
    #    Environment="OLLAMA_KV_CACHE_TYPE=q8_0"
    sudo systemctl restart ollama
    ```
+
+### v3.0 — painel e endpoints novos
+
+- **Painel**: card 📈 Desempenho (tok/s médio + sparkline das últimas 20
+  respostas); supervisor MCP vigia servidores (morto → renasce com
+  backoff + notificação).
+- **Endpoints novos**:
+  `GET /api/audit` · `GET /api/backups` · `POST /api/backups/restore` ·
+  `GET /api/metrics` · `GET /api/notifications` · `POST /api/notifications/read` ·
+  `GET /api/recipes` · `GET /api/doctor` · `POST /api/hooks/<id>` (webhook) ·
+  `GET /api/conversations/<id>/export?fmt=md|json` · `POST /api/mcp/add` ·
+  `POST /api/mcp/test`
+- **Servidor de produção**: o `hermes server` agora usa **waitress**
+  (threads=8) em vez do dev server do Flask.
+- **Markdown rico** nas respostas (títulos, listas, links, código com
+  botão copiar) · **tema claro/escuro** 🌙/☀ · **exportar conversa** ⬇ ·
+  wizard **doctor** 🩺 na primeira execução.
 
 ## 12. API REST (referência completa)
 
@@ -507,6 +562,11 @@ ambiente: `HERMES_DATA_DIR` (pasta de dados) e `HERMES_MOCK=1` (demo).
 | `max_steps` | 8 | ciclos modelo→ferramenta por tarefa |
 | `keep_alive` | 30m | mantém o modelo na RAM entre mensagens (anti cold-start) |
 | `num_predict` | 0 | máx. tokens por resposta (0 = sem limite; 512–768 = mais rápido) |
+| `max_tool_calls` | 12 | teto de chamadas de ferramenta por resposta (v3.0) |
+| `backups_keep` | 20 | backups mantidos por arquivo (rotativo, v3.0) |
+| `mcp_autorestart` | true | supervisor renasce servidores MCP mortos (v3.0) |
+| `tool_selector` | true | injeta só as ferramentas MCP relevantes à pergunta (v3.0) |
+| `memory_top_k` | 8 | fatos de memória injetados por relevância (v3.0) |
 | `cmd_timeout` | 60 | teto (s) por comando shell |
 | `sandbox` | true | arquivos restritos ao workspace |
 | `confirm_dangerous` | true | confirmação no terminal p/ comandos arriscados |
@@ -597,6 +657,8 @@ agendamentos, configuração).
 
 | Versão | Destaques |
 |---|---|
+| **3.0.0** | 🔐 backups automáticos + restauração · 🧾 auditoria de ações · orçamento de ferramentas · ⏰ retry/histórico/gatilhos (webhook + watcher) · 🔔 notificações · 🍳 receitas · ⚡ ferramentas em paralelo + cache de prompt + waitress · 📈 painel de desempenho · 🧠 memória por relevância · 🩺 supervisor MCP + doctor · 🎨 markdown rico + tema claro/escuro + exportar conversa |
+| 2.2.x | modo leve do Claude Code (payload 16× menor) · anti-loop · parser de JSON solto · tok/s no badge · keep_alive/num_predict |
 | **2.0.0** | 🛠 aba Ferramentas · 🔌 Claude Code como 2º agente (chat + agendadas) · 📚 catálogo de LMMs com busca + download cancelável · 💬 conversas completas (＋ nova, 🔍 busca) |
 | 1.5.0 | 👁 execução ao vivo das tarefas · 📔 memória persistente (tools `lembrar`/`esquecer`) |
 | 1.4.0 | ⏰ tarefas agendadas em PT-BR, execução desassistida, CLI `schedule`, skill resumo-inbox |
