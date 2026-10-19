@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.2.4 — prompt enxuto + indicador de modo real
+
+- **Painel mostra o modo**: "✔ modo real (Ollama)" ou "⚠ MODO DEMO (IA
+  simulada)" ao lado da versão — impossível ficar em dúvida.
+- **Prompt ~35% menor** (menos tempo de processamento por mensagem, o tal
+  "prefill" que domina em CPU): catálogo de skills compacto (descrições de 1
+  linha), descrições das ferramentas web/lembrar encurtadas e teto da memória
+  no prompt 4000→2000 caracteres.
+- Reminder: demo NÃO vem no zip — o modo demo só liga com HERMES_MOCK=1 ou
+  --mock, e o server imprime o banner gigante quando isso acontece.
+
 ## v2.2.3 — diagnóstico de velocidade na GUI
 
 - O badge do chat agora mostra **tok/s** (tokens por segundo) de cada resposta

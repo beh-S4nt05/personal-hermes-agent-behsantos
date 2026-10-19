@@ -115,12 +115,7 @@ TOOLS: list[dict] = [
         "type": "function",
         "function": {
             "name": "lembrar",
-            "description": (
-                "Salva um fato/preferência sobre o usuário na memória persistente "
-                "(ex.: 'meu curso é Engenharia de Produção', 'prefiro resumos curtos', "
-                "'aulas de cálculo às terças'). Use SEMPRE que o usuário contar algo "
-                "útil para o futuro — a memória vale para todas as conversas."
-            ),
+            "description": "Salva um fato sobre o usuário na memória permanente (vale para todas as conversas).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -135,11 +130,7 @@ TOOLS: list[dict] = [
         "type": "function",
         "function": {
             "name": "web_search",
-            "description": (
-                "Pesquisa na internet (DuckDuckGo) e devolve os principais "
-                "resultados com título, endereço e resumo. Use para obter "
-                "informações atuais, notícias, documentação e preços."
-            ),
+            "description": "Pesquisa na internet (DuckDuckGo): títulos, endereços e resumos. Use para informação atual.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -153,11 +144,7 @@ TOOLS: list[dict] = [
         "type": "function",
         "function": {
             "name": "web_fetch",
-            "description": (
-                "Baixa uma página da web (http/https) e devolve o texto limpo "
-                "(sem HTML). Use depois de web_search para ler o conteúdo de um "
-                "resultado, ou para abrir qualquer endereço fornecido pelo usuário."
-            ),
+            "description": "Abre uma página http(s) e devolve o texto limpo. Use para ler um resultado da busca.",
             "parameters": {
                 "type": "object",
                 "properties": {

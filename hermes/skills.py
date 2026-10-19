@@ -116,8 +116,8 @@ class SkillLoader:
             "PRIMEIRO leia o SKILL.md dela com a ferramenta read_file e siga as instruções:",
         ]
         for s in skills:
-            desc = s["description"] or "(sem descrição)"
-            lines.append(f"- {s['name']} [{s['source']}]: {desc} — instruções em: {s['skill_md']}")
+            desc = (s["description"] or "(sem descrição)").split(".")[0][:90]
+            lines.append(f"- {s['name']}: {desc} — ler: {s['skill_md']}")
         return "\n".join(lines)
 
     def read_skill_md(self, path: str) -> str:

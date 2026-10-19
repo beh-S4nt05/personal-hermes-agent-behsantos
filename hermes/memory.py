@@ -19,7 +19,7 @@ from pathlib import Path
 _LOCK = threading.Lock()
 FACT_ID_RE = re.compile(r"^m[a-f0-9]{6,12}$")
 MAX_FACTS = 300          # teto de fatos armazenados
-MAX_PROMPT_CHARS = 4000  # teto injetado no prompt
+MAX_PROMPT_CHARS = 2000  # teto injetado no prompt (menos prefill = mais rápido)
 
 
 class MemoryStore:
