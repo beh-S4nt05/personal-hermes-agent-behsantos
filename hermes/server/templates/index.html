@@ -120,6 +120,12 @@
   #chatin:focus{outline:none;border-color:var(--acc)}
   .cursor{display:inline-block;width:8px;height:15px;background:var(--acc2);vertical-align:-2px;
           animation:pulse 1s infinite;border-radius:2px;margin-left:2px}
+  .msg.working{display:flex;align-items:center;gap:10px;color:var(--acc2);font-style:italic}
+  .dots{display:inline-flex;gap:4px;flex:none}
+  .dots i{width:7px;height:7px;border-radius:50%;background:var(--acc);animation:blink 1.2s infinite}
+  .dots i:nth-child(2){animation-delay:.2s}
+  .dots i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,80%,100%{opacity:.2;transform:scale(.8)}40%{opacity:1;transform:scale(1.15)}}
 
   /* ---------- tarefas ---------- */
   .task{border:1px solid var(--border);border-radius:11px;background:var(--panel);padding:12px 15px;margin-bottom:10px}
@@ -267,6 +273,7 @@
       </div>
       <div class="chatrow">
         <textarea id="chatin" rows="1" placeholder="fale com o Hermes…  (Enter envia · Shift+Enter quebra linha)"></textarea>
+        <button class="b danger" id="btn-stop" style="display:none" onclick="stopChat()">⏹ parar</button>
         <button class="b primary" id="btn-send" onclick="sendChat()">enviar ➤</button>
       </div>
     </div>
@@ -595,14 +602,24 @@ async function sendChat(){
   bubble("user", esc(text), "");
   state.history.push({role:"user", content:text});
   state.sending = true; $("btn-send").disabled = true;
+  $("btn-stop").style.display = "";
 
-  let holder = null, cursors = [];
-  const turns = { texts: [], tools: [], cur: null };
+  // loading "A trabalhar…" — fica até o primeiro token/resultado da IA
+  const load = document.createElement("div");
+  load.className = "msg bot working";
+  load.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar…';
+  $("chatlog").appendChild(load); scrollChat();
+
+  const cursors = [];
+  const turns = { texts: [], tools: [], cur: null, loading: load };
+  let finalMsg = "", errorMsg = "", aborted = false;
 
   try{
-    const r = await api("/api/chat", {method:"POST", body: JSON.stringify({message:text, history: state.history.slice(0,-1)})});
+    state.abort = new AbortController();
+    const r = await api("/api/chat", {method:"POST", signal: state.abort.signal,
+      body: JSON.stringify({message:text, history: state.history.slice(0,-1)})});
     const reader = r.body.getReader(); const dec = new TextDecoder();
-    let buf = "", finalMsg = "", errorMsg = "";
+    let buf = "";
     while (true){
       const {done, value} = await reader.read(); if (done) break;
       buf += dec.decode(value, {stream:true});
@@ -616,19 +633,35 @@ async function sendChat(){
         if (ev.type === "error") errorMsg = ev.message;
       }
     }
-    cursors.forEach(c=>c.remove());
-    // renderiza markdown em cada segmento de texto
-    turns.texts.forEach(t=>{ if (t && t.textContent.trim()) t.innerHTML = miniMD(t.textContent); });
-    if (errorMsg && !finalMsg) bubble("bot", "⚠ "+esc(errorMsg), "waiting");
-    state.history.push({role:"assistant", content: finalMsg || errorMsg || ""});
   }catch(e){
-    cursors.forEach(c=>c.remove());
-    bubble("bot", "⚠ falha de conexão: "+esc(e.message), "waiting");
+    if (e.name === "AbortError"){ aborted = true; }
+    else { errorMsg = "falha de conexão: "+e.message; }
   }
-  state.sending = false; $("btn-send").disabled = false; scrollChat();
+  cursors.forEach(c=>c.remove());
+  if (turns.loading){ turns.loading.remove(); turns.loading = null; }
+  turns.texts.forEach(t=>{ if (t && t.textContent.trim()) t.innerHTML = miniMD(t.textContent); });
+  if (errorMsg && !finalMsg) bubble("bot", "⚠ "+esc(errorMsg), "waiting");
+  if (aborted) bubble("bot", "⏹ geração interrompida — texto parcial preservado", "waiting");
+  const said = turns.texts.some(t=>t && t.textContent.trim());
+  if (!finalMsg && !errorMsg && !aborted && !said) bubble("bot", "(a IA não retornou texto)","waiting");
+  state.history.push({role:"assistant", content: finalMsg || errorMsg || ""});
+  state.sending = false; state.abort = null;
+  $("btn-send").disabled = false; $("btn-stop").style.display = "none"; scrollChat();
 }
+function stopChat(){ if (state.abort) state.abort.abort(); }
 function handleEvent(ev, turns, cursors){
+  if (ev.type === "ping") return;  // keepalive do servidor enquanto a IA pensa
+  if (ev.type === "step"){
+    if (turns.loading)
+      turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar… <span class="hint">(passo '+ev.step+')</span>';
+    return;
+  }
+  if (ev.type === "cancelled"){
+    if (turns.loading){ turns.loading.remove(); turns.loading = null; }
+    return;
+  }
   if (ev.type === "token"){
+    if (turns.loading){ turns.loading.remove(); turns.loading = null; }
     if (!turns.cur){
       const d = document.createElement("div");
       d.className = "msg bot"; d.style.whiteSpace = "pre-wrap";
@@ -640,6 +673,8 @@ function handleEvent(ev, turns, cursors){
     turns.cur.insertBefore(document.createTextNode(ev.content), turns.cur._cursor);
     scrollChat();
   } else if (ev.type === "tool_start"){
+    if (turns.loading)
+      turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar… <span class="hint">(executando '+esc(ev.name)+')</span>';
     turns.cur = null;
     turns.tools.push(toolBlock(ev.name, ev.args));
   } else if (ev.type === "tool_end"){

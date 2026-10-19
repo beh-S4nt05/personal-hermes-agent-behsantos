@@ -139,11 +139,13 @@ class Agent:
         return prompt
 
     # ---------------------------------------------------------------- loop
-    def run(self, messages: list[dict], on_event=None, allow_tool=None) -> str:
+    def run(self, messages: list[dict], on_event=None, allow_tool=None, cancel=None) -> str:
         """Executa uma tarefa/conversa. `messages` sem o prompt de sistema.
 
         allow_tool(name, args) -> bool permite ao chamador vetar uma ferramenta
         (usado pela TUI para confirmar comandos arriscados).
+        cancel (threading.Event) interrompe a geração a qualquer momento —
+        o retorno preserva o texto parcial já gerado.
         """
         ev = on_event or (lambda _e: None)
         cfg = self.cfg
@@ -163,6 +165,9 @@ class Agent:
         final = ""
 
         for step in range(1, cfg.max_steps + 1):
+            if cancel is not None and cancel.is_set():
+                ev({"type": "cancelled", "message": final or ""})
+                return final or "[interrompido pelo operador]"
             ev({"type": "step", "step": step})
             tools = list(TOOLS)
             if self.native_tools:
@@ -174,12 +179,14 @@ class Agent:
 
             content = ""
             calls: list[dict] = []
+            cancelled = False
             try:
                 for chunk in self.client.chat_stream(
                     cfg.model,
                     msgs,
                     tools=tools,
                     options={"num_ctx": cfg.num_ctx, "temperature": cfg.temperature},
+                    cancel=cancel,
                 ):
                     m = chunk.get("message") or {}
                     token = m.get("content") or ""
@@ -189,6 +196,9 @@ class Agent:
                     for c in m.get("tool_calls") or []:
                         if c:
                             calls.append(c)
+                    if cancel is not None and cancel.is_set():
+                        cancelled = True
+                        break
             except OllamaError as exc:
                 msg = str(exc)
                 low = msg.lower()
@@ -223,6 +233,12 @@ class Agent:
                 ev({"type": "error", "message": msg})
                 return final or f"[erro] {msg}"
 
+            if cancelled:
+                if content:
+                    msgs.append({"role": "assistant", "content": content})
+                ev({"type": "cancelled", "message": content or ""})
+                return content or "[interrompido pelo operador]"
+
             assistant: dict = {"role": "assistant", "content": content}
             if calls:
                 assistant["tool_calls"] = calls
@@ -242,6 +258,8 @@ class Agent:
                 return final
 
             for call in calls:
+                if cancel is not None and cancel.is_set():
+                    break  # cancelado durante as ferramentas
                 fn = call.get("function") or {}
                 name = fn.get("name", "")
                 args = fn.get("arguments") or {}

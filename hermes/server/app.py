@@ -413,38 +413,57 @@ def create_app(cfg: Config) -> Flask:
         import threading
 
         q: "queue.Queue[dict | None]" = queue.Queue()
+        cancel = threading.Event()
         result = {"final": ""}
 
         def worker():
+            """A 'promise' da geração: roda em thread e publica eventos na fila."""
             try:
                 result["final"] = agent.run(
                     clean_history + [{"role": "user", "content": message}],
-                    on_event=q.put,
+                    on_event=lambda e: None if cancel.is_set() else q.put(e),
+                    cancel=cancel,
                 )
             except Exception as exc:  # noqa: BLE001
-                q.put({"type": "error",
-                       "message": f"falha interna: {exc.__class__.__name__}: {exc}"})
+                if not cancel.is_set():
+                    q.put({"type": "error",
+                           "message": f"falha interna: {exc.__class__.__name__}: {exc}"})
             finally:
                 q.put(None)
 
         def generate():
             t = threading.Thread(target=worker, daemon=True)
             t.start()
-            while True:
-                item = q.get()
-                if item is None:
-                    break
-                yield json.dumps(item, ensure_ascii=False) + "\n"
-            # registra a conversa em data/conversations/
             try:
-                day = time.strftime("%Y-%m-%d")
-                path = cfg.conversations_dir / f"chat-{day}.jsonl"
-                cfg.conversations_dir.mkdir(parents=True, exist_ok=True)
-                with open(path, "a", encoding="utf-8") as fh:
-                    fh.write(json.dumps({"ts": time.time(), "role": "user", "content": message}, ensure_ascii=False) + "\n")
-                    fh.write(json.dumps({"ts": time.time(), "role": "assistant", "content": result["final"]}, ensure_ascii=False) + "\n")
-            except OSError:
-                pass
+                while True:
+                    try:
+                        item = q.get(timeout=5.0)
+                    except queue.Empty:
+                        if not t.is_alive():
+                            break
+                        # keepalive enquanto a IA "pensa" (ex.: modelo carregando
+                        # na memória pela primeira vez) — mantém a conexão viva
+                        yield json.dumps({"type": "ping", "ts": time.time()},
+                                         ensure_ascii=False) + "\n"
+                        continue
+                    if item is None:
+                        break
+                    yield json.dumps(item, ensure_ascii=False) + "\n"
+            except GeneratorExit:
+                # navegador fechou/abortou a requisição: cancela a geração
+                cancel.set()
+                raise
+            finally:
+                cancel.set()  # nunca deixa thread órfã gerando sozinha
+                try:
+                    day = time.strftime("%Y-%m-%d")
+                    path = cfg.conversations_dir / f"chat-{day}.jsonl"
+                    cfg.conversations_dir.mkdir(parents=True, exist_ok=True)
+                    with open(path, "a", encoding="utf-8") as fh:
+                        fh.write(json.dumps({"ts": time.time(), "role": "user", "content": message}, ensure_ascii=False) + "\n")
+                        fh.write(json.dumps({"ts": time.time(), "role": "assistant", "content": result["final"]}, ensure_ascii=False) + "\n")
+                except OSError:
+                    pass
 
         resp = Response(stream_with_context(generate()), mimetype="application/x-ndjson")
         resp.headers["Cache-Control"] = "no-store"
@@ -524,6 +543,12 @@ def create_app(cfg: Config) -> Flask:
 
 def serve(cfg: Config, host: str, port: int) -> None:
     app = create_app(cfg)
+    if cfg.mock:
+        print("\n" + "!" * 64)
+        print("⚠  MODO DEMONSTRAÇÃO — IA SIMULADA (HERMES_MOCK=1 ou --mock)")
+        print("    Este NÃO é o modo de uso real. Encerre (Ctrl+C) e rode:")
+        print("        hermes server")
+        print("!" * 64)
     mock_note = " [MODO DEMONSTRAÇÃO — Ollama simulado]" if cfg.mock else ""
     auth_note = " 🔒 com token" if (cfg.auth_token or "").strip() else ""
     print(f"\n◈ Hermes Agent GUI v{VERSION}{mock_note}{auth_note}")

@@ -9,6 +9,7 @@ simulação — perfeito para testar a GUI e o loop do agente sem baixar modelos
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 import time
@@ -106,41 +107,65 @@ class OllamaClient:
         messages: list[dict],
         tools: list[dict] | None = None,
         options: dict | None = None,
+        cancel=None,
     ) -> Iterator[dict]:
-        """Gera chunks no formato da API /api/chat (stream=true)."""
+        """Gera chunks no formato da API /api/chat (stream=true).
+
+        - `cancel` (threading.Event): interrompe a geração a qualquer momento.
+        - Falhas transitórias de conexão são retentadas (2x) com backoff.
+        - Queda no meio do stream vira erro claro (resposta parcial preservada).
+        """
         payload: dict = {"model": model, "messages": messages, "stream": True}
         if tools:
             payload["tools"] = tools
         if options:
             payload["options"] = options
+
+        r = None
+        for attempt in range(3):
+            if cancel is not None and cancel.is_set():
+                return
+            try:
+                r = requests.post(
+                    f"{self.base_url}/api/chat",
+                    json=payload,
+                    stream=True,
+                    timeout=(15, self.timeout),
+                )
+                break
+            except requests.RequestException as exc:
+                # retenta apenas se o servidor segue de pé (falha transitória)
+                if attempt < 2 and self.is_running():
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+                raise OllamaError(
+                    f"não consegui falar com o Ollama em {self.base_url} "
+                    f"({exc.__class__.__name__}: {exc}). Verifique: hermes ollama status"
+                ) from exc
+        if r is None or r.status_code != 200:
+            detail = (r.text[:400] if r is not None else "sem resposta")
+            raise OllamaError(f"Ollama respondeu {getattr(r, 'status_code', '???')}: {detail}")
+
         try:
-            r = requests.post(
-                f"{self.base_url}/api/chat",
-                json=payload,
-                stream=True,
-                timeout=(10, self.timeout),
-            )
+            for line in r.iter_lines():
+                if cancel is not None and cancel.is_set():
+                    return
+                if not line:
+                    continue
+                try:
+                    chunk = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if chunk.get("error"):
+                    raise OllamaError(str(chunk["error"]))
+                yield chunk
+                if chunk.get("done"):
+                    return
         except requests.RequestException as exc:
             raise OllamaError(
-                f"não consegui falar com o Ollama em {self.base_url} ({exc.__class__.__name__}). "
-                "Verifique se ele está ligado: hermes ollama status"
+                f"a conexão com o Ollama caiu no meio da resposta "
+                f"({exc.__class__.__name__}) — o texto acima pode estar incompleto"
             ) from exc
-        if r.status_code != 200:
-            detail = r.text[:400]
-            raise OllamaError(f"Ollama respondeu {r.status_code}: {detail}")
-
-        for line in r.iter_lines():
-            if not line:
-                continue
-            try:
-                chunk = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if chunk.get("error"):
-                raise OllamaError(str(chunk["error"]))
-            yield chunk
-            if chunk.get("done"):
-                return
 
     def pull(self, model: str, on_progress: Callable[[dict], None] | None = None) -> None:
         """Baixa um modelo via /api/pull reportando progresso."""
@@ -201,14 +226,18 @@ class MockOllamaClient:
         return ["hermes3:8b", "hermes3:3b"]
 
     # ------------------------------------------------------------- chat
-    def chat_stream(self, model, messages, tools=None, options=None):
+    def chat_stream(self, model, messages, tools=None, options=None, cancel=None):
         msg = self._fake_message(messages, tools)
         if msg.get("tool_calls"):
             yield {"message": msg, "done": True, "done_reason": "stop"}
             return
         content = msg.get("content", "")
         words = content.split(" ")
+        if content:  # simula o tempo de o modelo "pensar" (deixa o loading visível)
+            time.sleep(float(os.environ.get("HERMES_MOCK_DELAY", "1.2")))
         for i, w in enumerate(words):
+            if cancel is not None and cancel.is_set():
+                return
             piece = w + (" " if i < len(words) - 1 else "")
             yield {"message": {"role": "assistant", "content": piece}, "done": False}
             time.sleep(0.012)

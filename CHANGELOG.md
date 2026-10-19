@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.2.0 — espera robusta + "A trabalhar…"
+
+### ⏳ Loading na GUI
+- Indicador animado **"A trabalhar…"** assim que a mensagem é enviada, com
+  contexto ao vivo: *(passo N)*, *(executando ferramenta)* — some no primeiro
+  token da IA.
+- Novo botão **⏹ parar** durante a geração (cancela no servidor; o texto
+  parcial já recebido é preservado).
+
+### 🔗 Espera robusta da resposta (o lado "promise" do fluxo)
+- Geração roda em thread com **evento de cancelamento** propagado até o
+  streaming do Ollama — abortar a página/parar não deixa thread órfã.
+- **Keepalive a cada 5s** (`ping`) enquanto a IA pensa (ex.: modelo carregando
+  na memória): a conexão não cai por inatividade e o front nunca fica preso.
+- **Retry automático** (2x com backoff) para falhas transitórias de conexão.
+- Queda no meio do stream vira erro claro ("a conexão caiu — texto pode estar
+  incompleto"), sem travar o chat.
+- Watchdog: se a thread morre, o stream termina ordenadamente em vez de pendurar.
+- Conversa (mesmo parcial) sempre registrada em `conversations/`.
+
 ## v1.1.1 — blindagem PyYAML
 
 - **Detecta PyYAML quebrado** (pacote incompleto, típico de venv em disco NTFS):
