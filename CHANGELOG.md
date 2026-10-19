@@ -1,5 +1,39 @@
 # Changelog
 
+## v3.8.0 — ✦ catálogo de 18 skills curadas · 🔍 4º papel de modelo · 🧪 bateria E2E/integração/performance/estresse
+
+**✦ Catálogo de skills curado (do material de pesquisa do operador):**
+13 skills novas, filtradas das melhores indicações (Ponytail, debug
+sistemático, análise de dados "números só do código", RAG com citação,
+segurança/anti-vazamento, testes/QA, PDF/OCR, Power BI/DAX, Excel/VBA,
+produção industrial/OEE, relatórios, memória com disciplina, criar-skill)
++ as 5 existentes = **18 ativas**, todas em PT-BR, no formato nativo e
+sem scripts executáveis (segurança). Casamento por palavra-chave com
+sinônimos — sem falso-positivo (o pedido de RAM não casa com nada, o de
+CSV/pandas casa com analise-dados, o de OEE com produção-industrial).
+
+**🔍 Quatro papéis de modelo (os "5-6 modelos, um para cada uso"):**
+chat (padrão) · 🎯 orquestrador · 🔍 revisor (novo campo, herda do
+orquestrador quando vazio) · ⚡ executor — + o Claude Code. Todos
+sequenciais (nunca paralelo). Campos em Ajustes com sugestões.
+
+**🧪 Bateria de testes ampliada (+12 casos, 74 no total):**
+- E2E: jornada completa (sessão → /goal → task com skill → selo → tudo
+  persistido em conversa/task/métricas) e o portão de criação com
+  EDIÇÃO de plano e de entrega;
+- Integração: skills×modelos×pipeline (skill certa injetada, modelo do
+  papel usado), uma rodada de chat deixa rastro em TODOS os módulos,
+  settings desligam o revisor AO VIVO (e o selo some — bug corrigido);
+- Performance: plano <0,5s, casamento de skills <1s, JSON em 40 KB de
+  lixo <0,4s, 100 tasks <0,5s, endpoints <0,5s, pipeline mock <8s/20s,
+  GUI <400 KB;
+- Estresse: 12 chats simultâneos (todos entregam 1 done, zero erros),
+  rajada de 60 comandos slash, histórico de 60 mensagens + payload de
+  8 KB, 30 skills extras no diretório do usuário + 50 fatos de memória.
+
+Correção de bug real encontrada pela bateria: selo "🔍 revisada" era
+aplicado mesmo com o revisor desligado.
+
 ## v3.7.0 — 🎭 modelos por papel (sem paralelismo) · 🗨 respostas entendíveis · 🧰 Ferramentas reconstruídas
 
 Três pedidos do operador:

@@ -703,7 +703,23 @@ com opção de ✏️ editar o plano — e pausam de novo na entrega, onde o
 resultado pode ser editado antes de você receber. Tasks de leitura
 (listar, verificar, resumir) seguem direto. Desligável em Ajustes.
 
-**🎭 Modelos por papel (v3.7.0):** em Ajustes, defina um modelo para o
+**✦ Catálogo de skills (v3.8.0 — 18 ativas):** pesquisa-web ·
+resumo-inbox · app-prototyping · figma-design · ui-design-system ·
+**codigo-minimalista** (Ponytail) · **debug-sistematico** ·
+**revisao-seguranca** (anti-vazamento) · **testes-qa** ·
+**analise-dados** (números só do código executado) · **relatorios** ·
+**doc-pdf** (pdftotext/tesseract) · **rag-citado** (fonte por afirmação) ·
+**memoria-contexto** · **powerbi-dax** · **excel-vba** ·
+**producao-industrial** (OEE) · **criar-skill**. Todas em PT-BR, sem
+scripts executáveis, aplicadas automaticamente quando a task casa com a
+descrição (máx. 2 por task). **Para adicionar skills externas:** leia
+TODO o conteúdo antes, desconfie de instruções que peçam ler segredos,
+acessar rede ou instalar pacotes (prompt injection) — o critério
+completo está dentro da skill `criar-skill`, que também ensina o formato
+para criar as suas (caminho até as ~100: melhor curadas e testadas do
+que um catálogo genérico que dispara fora de hora).
+
+**🎭 Modelos por papel (v3.7.0, ampliado na v3.8):** em Ajustes, defina um modelo para o
 🎯 orquestrador/revisor (raciocínio — ex.: `qwen3:8b`, `gemma3:12b`) e
 outro para o ⚡ executor (ferramentas — ex.: `qwen3-coder:8b`,
 `llama3.1:8b`). Vazio = o modelo padrão. **Por que não em paralelo:**

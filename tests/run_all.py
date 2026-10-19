@@ -1520,6 +1520,375 @@ def T48_agenda_google_somente_leitura():
     assert st["mcp_registered"]
 
 
+# ═══════════════════ v3.8 — E2E · INTEGRAÇÃO · PERFORMANCE · ESTRESSE ═══════════════════
+
+def _chat_evts(c, payload, seg=45):
+    """POST /api/chat e devolve (eventos, thread) — leitura em streaming."""
+    import threading as _th
+    evs = []
+    r = c.post("/api/chat", json=payload, buffered=False)
+    def run():
+        try:
+            for linha in r.response:
+                linha = linha.decode("utf-8", "replace").strip()
+                if linha:
+                    evs.append(json.loads(linha))
+        except Exception as exc:  # noqa: BLE001
+            evs.append({"type": "error", "message": str(exc)})
+    th = _th.Thread(target=run, daemon=True); th.start()
+    return evs, th
+
+
+def _esperar(evs, pred, seg=25):
+    fim = time.time() + seg
+    while time.time() < fim:
+        for e in evs:
+            if pred(e):
+                return e
+        time.sleep(0.1)
+    return None
+
+
+@case
+def T63_e2e_jornada_completa():
+    """E2E: sessão nova → conversa → task com skill → selo → tudo persistido
+    (conversa, task, goal por sessão) — a jornada real do operador."""
+    from hermes import orchestrator as orc
+    cfg = fresh()
+    c = _app(cfg)
+    # 1. conversa comum cria sessão
+    evs, th = _chat_evts(c, {"message": "oi, tudo bem?", "history": []})
+    th.join(timeout=30)
+    sid = next((e.get("id") for e in evs if e.get("type") == "session"), None)
+    assert sid, evs[:4]
+    # 2. goal da sessão via comando
+    r = c.post("/api/chat/command", json={"text": "/goal acompanhar meus estudos",
+                                          "session_id": sid}).get_json()
+    assert r["ok"]
+    # 3. task de leitura com skill aplicada
+    evs, th = _chat_evts(c, {"message": "analise o arquivo vendas.csv e calcule "
+                                        "indicadores de vendas", "history": [],
+                             "session_id": sid})
+    th.join(timeout=45)
+    notas = [e.get("message", "") for e in evs if e.get("type") == "note"]
+    assert any("✦ skills aplicadas" in n and "analise-dados" in n for n in notas), notas
+    done = next((e for e in evs if e.get("type") == "done"), None)
+    assert done and done["message"].strip()
+    brain = next((e for e in evs if e.get("type") == "brain"
+                  and e.get("stage") == "⚡ executor"), None)
+    assert brain and "OBJETIVO DA SESSÃO" in brain["data"]["prompt_injetado"]
+    # 4. persistência: conversa guardou as duas rodadas
+    sess = c.get(f"/api/conversations/{sid}").get_json()
+    assert sess["ok"]
+    msgs = sess["session"].get("messages", [])
+    assert sum(1 for m in msgs if m.get("role") == "user") >= 2
+    assert sum(1 for m in msgs if m.get("role") == "assistant") >= 2
+    # 5. task registrada com skill
+    tasks = orc.list_tasks(cfg)
+    assert tasks and tasks[0].get("skills") == ["analise-dados"]
+    # 6. goal isolado por sessão (outra sessão não vê)
+    assert orc.get_goal(sid) == "acompanhar meus estudos"
+    assert orc.get_goal("sessao-que-nao-existe") == ""
+
+
+@case
+def T64_e2e_criacao_editar_plano_e_entrega():
+    """E2E do portão de criação com EDIÇÃO dos dois lados: plano editado
+    muda o objetivo; entrega editada entrega o texto do operador."""
+    from hermes import orchestrator as orc
+    cfg = fresh()
+    c = _app(cfg)
+    orc.APPROVAL_TIMEOUT_S = 25
+    evs, th = _chat_evts(c, {"message": "crie um arquivo plano.txt com o plano semanal",
+                             "history": []})
+    ap = _esperar(evs, lambda e: e.get("type") == "approval_request" and e.get("kind") == "plano")
+    assert ap, evs[:5]
+    r = c.post("/api/chat/approve", json={
+        "id": ap["id"], "action": "editar",
+        "edit": {"objetivo": "criar plano.txt com cronograma de estudos diário",
+                 "passos": ["escrever o arquivo com 7 dias"]}}).get_json()
+    assert r["ok"]
+    ap2 = _esperar(evs, lambda e: e.get("type") == "approval_request" and e.get("kind") == "entrega")
+    assert ap2 and "revisada" in ap2["texto"]
+    assert c.post("/api/chat/approve", json={
+        "id": ap2["id"], "action": "editar",
+        "edit": {"texto": "PLANO EDITADO PELO OPERADOR — versão final aprovada por mim."}}).get_json()["ok"]
+    done = _esperar(evs, lambda e: e.get("type") == "done", 30)
+    th.join(timeout=35)
+    assert done and "PLANO EDITADO PELO OPERADOR" in done["message"]
+    assert "entrega editada pelo operador" in done["message"]
+    tasks = orc.list_tasks(cfg)
+    tk = tasks[0]
+    assert tk["objetivo"] == "criar plano.txt com cronograma de estudos diário"
+    assert tk["aprovacao"] == "editada·editada"
+
+
+@case
+def T65_integracao_skills_injecao_e_modelos():
+    """Integração orquestrador×skills×modelos: skill relevante entra no
+    prompt do executor; modelo do papel é usado; irrelevante não entra."""
+    from hermes import orchestrator as orc
+    cfg = fresh()
+    cfg.orchestrator_model = "qwen3:8b"
+    cfg.executor_model = "qwen3-coder:8b"
+    cfg.reviewer_model = "gemma3:12b"
+    capturado = {}
+
+    class _Ag:
+        model_override = None
+        def run(self, msgs, on_event=None, cancel=None):
+            capturado["override"] = self.model_override
+            capturado["prompt"] = msgs[-1]["content"]
+            on_event({"type": "done", "message": "análise com pandas: total R$ 1.234,00 (comando executado)"})
+            return "análise com pandas: total R$ 1.234,00 (comando executado)"
+    ag = _Ag()
+    final = orc.run_pipeline(ag, cfg, "analise o arquivo vendas.csv e calcule "
+                                 "indicadores de vendas", [], on_event=lambda e: None)
+    assert capturado["override"] == "qwen3-coder:8b"          # papel executor
+    assert "SKILL analise-dados" in capturado["prompt"]        # skill injetada
+    assert "números só vêm do código" in capturado["prompt"].lower()
+    assert "análise" in final
+    # _fast usa o modelo do papel certo (revisor ≠ orquestrador)
+    orig = orc._fast
+    def _spy(cfg, system, user, ntok=200, stage="", model=""):
+        capturado.setdefault("models", []).append((stage, model))
+        return '{"veredito":"ok"}' if "REVISOR" in system else '{"rota":"responder"}'
+    orc._fast = _spy
+    try:
+        orc.plan(cfg, "oi", [])
+        orc.review(cfg, "obj", [], "res")
+    finally:
+        orc._fast = orig
+    pares = dict(capturado["models"])
+    assert pares.get("🎯 orquestrador") == "qwen3:8b"
+    assert pares.get("🔍 revisor") == "gemma3:12b"
+
+
+@case
+def T66_integracao_chat_grava_tudo():
+    """Integração: uma rodada de chat deixa rastro em TODOS os módulos —
+    conversa (store), atividade (agent.log), auditoria e métricas."""
+    from hermes import orchestrator as orc
+    cfg = fresh()
+    c = _app(cfg)
+    metrics_antes = c.get("/api/metrics").get_json()
+    n_a = (metrics_antes.get("summary") or {}).get("count")
+    if n_a is None and not (metrics_antes.get("recent") or []):
+        pass  # summary opcional — o recent cobre abaixo
+    evs, th = _chat_evts(c, {"message": "verifique o uso de memória da máquina",
+                             "history": []})
+    th.join(timeout=45)
+    assert any(e.get("type") == "done" and e["message"].strip() for e in evs)
+    sid = next((e.get("id") for e in evs if e.get("type") == "session"), None)
+    # conversa
+    sess = c.get(f"/api/conversations/{sid}").get_json()
+    assert sess["ok"] and len(sess["session"].get("messages", [])) >= 2
+    # atividade
+    log = cfg.logfile.read_text(encoding="utf-8") if cfg.logfile.exists() else ""
+    assert "[chat]" in log and "🎯" in log
+    # auditoria (ferramenta executada pelo agente)
+    audit = c.get("/api/audit").get_json()
+    assert audit["ok"] and audit["records"]
+    # métricas (summary/recent — v3.0 shape)
+    metrics_depois = c.get("/api/metrics").get_json()
+    n0 = (metrics_antes.get("summary") or {}).get("count") or len(metrics_antes.get("recent") or [])
+    n1 = (metrics_depois.get("summary") or {}).get("count") or len(metrics_depois.get("recent") or [])
+    assert n1 >= n0 + 1, (n0, n1)
+    # task
+    assert orc.list_tasks(cfg)
+
+
+@case
+def T67_integracao_settings_desliga_revisor():
+    """Integração settings×pipeline ao vivo: reviewer_on=false via API →
+    próxima resposta vem SEM selo de revisão; religar traz o selo de volta."""
+    from hermes import orchestrator as orc
+    cfg = fresh()
+    c = _app(cfg)
+    r = c.post("/api/settings", json={"reviewer_on": False}).get_json()
+    assert r["ok"] and cfg.reviewer_on is False
+    evs, th = _chat_evts(c, {"message": "verifique o uso de disco", "history": []})
+    th.join(timeout=45)
+    done = next((e for e in evs if e.get("type") == "done"), None)
+    assert done and done["message"].strip()
+    assert "revisada" not in done["message"] and "revisão" not in done["message"]
+    # religa
+    assert c.post("/api/settings", json={"reviewer_on": True}).get_json()["ok"]
+    evs, th = _chat_evts(c, {"message": "verifique o uso de memoria", "history": []})
+    th.join(timeout=45)
+    done = next((e for e in evs if e.get("type") == "done"), None)
+    assert done and "revisada" in done["message"]
+
+
+@case
+def T68_perf_orquestrador_e_skills():
+    """Performance dos componentes do pipeline (orçamentos generosos p/ CI)."""
+    from hermes import orchestrator as orc
+    cfg = fresh()
+    t0 = time.time(); orc.plan(cfg, "verifique o uso de disco", [])
+    assert time.time() - t0 < 0.5                       # plano heurístico
+    t0 = time.time()
+    for msg in ("analise vendas.csv com pandas", "debug do script python",
+                "pesquise preços na internet", "oee da produção"):
+        orc.skills_for(cfg, msg)
+    assert time.time() - t0 < 1.0                       # casamento de skills
+    t0 = time.time()
+    orc._extract_json("x" * 20000 + '{"a":1}' + "y" * 20000)
+    assert time.time() - t0 < 0.4                       # JSON em lixo longo
+    # 100 tasks no jsonl → lista rápida e id segue a sequência
+    from hermes.orchestrator import record, list_tasks, _next_id
+    for i in range(100):
+        record(cfg, {"objetivo": f"t{i}", "status": "ok", "tentativas": 1,
+                     "dur_s": 1, "veredito": "ok", "problema": ""})
+    t0 = time.time(); ts = list_tasks(cfg, limit=200); dt = time.time() - t0
+    assert len(ts) >= 100 and dt < 0.5, dt
+    assert _next_id(cfg).startswith("T0")
+
+
+@case
+def T69_perf_api_em_mock():
+    """Performance dos endpoints principais (mock local)."""
+    cfg = fresh()
+    c = _app(cfg)
+    for rota, limite in (("/api/status", 0.5), ("/", 0.5),
+                         ("/api/orchestrator/tasks", 0.4),
+                         ("/api/settings", 0.4), ("/manifest.webmanifest", 0.3)):
+        t0 = time.time(); r = c.get(rota); dt = time.time() - t0
+        assert r.status_code == 200 and dt < limite, (rota, dt)
+    html = c.get("/").get_data()
+    assert len(html) < 400_000                           # GUI continua enxuta
+
+
+@case
+def T70_perf_pipeline_completo_mock():
+    """Performance do pipeline ponta a ponta em mock: conversa < 8s e
+    task de leitura completa (com revisão e selo) < 20s."""
+    cfg = fresh()
+    c = _app(cfg)
+    t0 = time.time()
+    evs, th = _chat_evts(c, {"message": "oi, tudo bem?", "history": []})
+    th.join(timeout=30)
+    assert any(e.get("type") == "done" for e in evs)
+    assert time.time() - t0 < 8, time.time() - t0
+    t0 = time.time()
+    evs, th = _chat_evts(c, {"message": "verifique o uso de memória", "history": []})
+    th.join(timeout=45)
+    done = next((e for e in evs if e.get("type") == "done"), None)
+    assert done and "revisada" in done["message"]
+    assert time.time() - t0 < 20, time.time() - t0
+
+
+@case
+def T71_estresse_chats_paralelos():
+    """Estresse: 12 chats simultâneos (misto conversa/task) — todos entregam
+    exatamente 1 done não vazio, sem erros, tasks registradas."""
+    import threading as _th
+    from hermes import orchestrator as orc
+    from hermes.server.app import create_app
+    cfg = fresh()
+    app = create_app(cfg)          # cada thread usa o PRÓPRIO client
+    antes = len(orc.list_tasks(cfg, limit=500))
+    resultados = []
+
+    def _um(i):
+        try:
+            # buffered=True: o stream é consumido NA PRÓRIA thread (o
+            # stream_with_context não atravessa threads sob concorrência)
+            cl = app.test_client()
+            r = cl.post("/api/chat", json={
+                "message": (f"oi, tudo bem? teste {i}" if i % 2 else
+                            f"verifique o uso de disco teste {i}"),
+                "history": []})
+            evs = [json.loads(l) for l in r.get_data(as_text=True).splitlines()
+                   if l.strip()]
+            dones = [e for e in evs if e.get("type") == "done"]
+            erros = [e for e in evs if e.get("type") == "error"]
+            resultados.append((i, len(dones), bool(dones and dones[0]["message"].strip()),
+                               len(erros)))
+        except Exception as exc:  # noqa: BLE001
+            resultados.append((i, -1, False, str(exc)[:80]))
+
+    ths = [_th.Thread(target=_um, args=(i,)) for i in range(12)]
+    t0 = time.time()
+    for x in ths: x.start()
+    for x in ths: x.join(timeout=90)
+    assert time.time() - t0 < 90
+    assert len(resultados) == 12
+    for i, nd, ok, ne in resultados:
+        assert nd == 1 and ok and ne == 0, (i, nd, ok, ne)
+    # 6 tasks de leitura registradas (ímpares foram conversa)
+    depois = len(orc.list_tasks(cfg, limit=500))
+    assert depois >= antes + 6, (antes, depois)
+
+
+@case
+def T72_estresse_comandos_rapidos():
+    """Estresse: rajada de 60 comandos slash via API — todos respondem ok."""
+    cfg = fresh()
+    c = _app(cfg)
+    cmds = ["/goal teste de estresse", "/tools", "/skills", "/tasks",
+            "/memoria", "/ajuda"]
+    t0 = time.time()
+    for i in range(60):
+        r = c.post("/api/chat/command", json={"text": cmds[i % len(cmds)],
+                                              "session_id": "stress"}).get_json()
+        assert r.get("ok"), (i, r)
+    assert time.time() - t0 < 30, time.time() - t0
+
+
+@case
+def T73_estresse_historico_e_mensagem_grande():
+    """Estresse: histórico de 60 mensagens + mensagem de 8 KB — o chat
+    sobrevive (histórico truncado no servidor) e entrega resposta."""
+    cfg = fresh()
+    c = _app(cfg)
+    hist = []
+    for i in range(30):
+        hist.append({"role": "user", "content": f"mensagem antiga número {i} " + "x" * 50})
+        hist.append({"role": "assistant", "content": f"resposta antiga número {i}"})
+    grande = "verifique o sistema. " + ("contexto relevante. " * 600)  # ~8 KB
+    assert len(grande) > 8000
+    evs, th = _chat_evts(c, {"message": grande, "history": hist})
+    th.join(timeout=60)
+    done = next((e for e in evs if e.get("type") == "done"), None)
+    assert done and done["message"].strip(), [e.get("type") for e in evs][:8]
+    # memória com 50 fatos continua usável
+    from hermes.memory import MemoryStore
+    mem = MemoryStore(cfg)
+    for i in range(50):
+        mem.add(f"fato de estresse {i} para o agente lembrar")
+    r = c.post("/api/chat/command", json={"text": "/memoria"}).get_json()
+    assert r["ok"] and "fato de estresse" in r["output"]
+
+
+@case
+def T74_estresse_skills_30_diretorio_usuario():
+    """Estresse do casamento de skills: 30 skills a mais no diretório do
+    usuário continuam casando rápido e SEM falso-positivo em RAM."""
+    from hermes import orchestrator as orc
+    from hermes.skills import SkillLoader
+    cfg = fresh()
+    userdir = cfg.data_dir / "skills"
+    for i in range(30):
+        d = userdir / f"skill-stress-{i:02d}"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "SKILL.md").write_text(
+            f"---\nname: skill-stress-{i:02d}\ndescription: domínio "
+            f"fictício {i} com termos raros zebra{i} unicórnio{i}.\n---\n\n# S\nRegras.\n",
+            encoding="utf-8")
+    ativas = SkillLoader(cfg).enabled()
+    assert len(ativas) >= 45, len(ativas)          # 18 do projeto + 30 novas
+    t0 = time.time()
+    sks = orc.skills_for(cfg, "analise o arquivo vendas.csv e calcule indicadores")
+    dt = time.time() - t0
+    assert "analise-dados" in [s["name"] for s in sks] and dt < 1.0, dt
+    assert orc.skills_for(cfg, "quero um resumo do uso de memória ram") == []
+    # skills do usuário aparecem no /skills da GUI
+    c = _app(cfg)
+    r = c.post("/api/chat/command", json={"text": "/skills"}).get_json()
+    assert r["ok"] and "skill-stress-00" in r["output"]
+
+
 @case
 def T61_modelos_por_papel_sequenciais():
     """v3.7: um modelo por PAPEL (orquestrador × executor), troca SEQUENCIAL

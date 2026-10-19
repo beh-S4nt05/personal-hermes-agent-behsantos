@@ -131,11 +131,18 @@ def model_for(cfg, role: str) -> str:
     Um modelo por vez: o pipeline é SEQUENCIAL — o Ollama carrega cada
     modelo sob demanda (swap de alguns segundos), nunca dois em paralelo
     (RAM/VRAM não permite em máquina local)."""
-    return str(getattr(cfg, f"{role}_model", "") or "").strip() or str(cfg.model)
+    m = str(getattr(cfg, f"{role}_model", "") or "").strip()
+    if m:
+        return m
+    if role == "reviewer":                    # revisor vazio → do orquestrador
+        m = str(getattr(cfg, "orchestrator_model", "") or "").strip()
+        if m:
+            return m
+    return str(cfg.model)
 
 
 def _fast(cfg, system: str, user: str, ntok: int = 200,
-          stage: str = "chamada") -> str:
+          stage: str = "chamada", model: str = "") -> str:
     """Chamada rápida e curta ao modelo (orquestrador/revisor). Nunca lança;
     em modo mock devolve '' (o chamador cai na heurística/fallback)."""
     if getattr(cfg, "mock", False):
@@ -145,7 +152,7 @@ def _fast(cfg, system: str, user: str, ntok: int = 200,
         client = get_client(cfg)
         out = []
         for chunk in client.chat_stream(
-                model_for(cfg, "orchestrator"),
+                model or model_for(cfg, "orchestrator"),
                 [{"role": "system", "content": system},
                  {"role": "user", "content": user[:1800]}],
                 options={"num_predict": ntok, "temperature": 0}):
@@ -255,7 +262,7 @@ def plan(cfg, message: str, history: list[dict] | None = None) -> dict:
                 pass
         partes.append("MENSAGEM ATUAL: " + (message or ""))
         texto = _fast(cfg, _PLANO_JSON, "\n".join(partes), ntok=220,
-                      stage="🎯 orquestrador")
+                      stage="🎯 orquestrador", model=model_for(cfg, "orchestrator"))
         obj = _extract_json(texto)
         if obj and obj.get("rota") in ("responder", "executar"):
             if obj["rota"] == "executar":
@@ -285,7 +292,7 @@ def review(cfg, objetivo: str, criterios: list[str], resultado: str) -> dict:
         user = (f"OBJETIVO: {objetivo}\nCRITÉRIOS:\n{crit}\n\n"
                 f"RESULTADO (trecho):\n{resultado[:1800]}")
         texto = _fast(cfg, _REVISAO_JSON, user, ntok=140,
-                      stage="🔍 revisor")
+                      stage="🔍 revisor", model=model_for(cfg, "reviewer"))
         obj = _extract_json(texto)
         if obj and obj.get("veredito") == "refazer":
             return {"veredito": "refazer",
@@ -632,9 +639,12 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
 
     # ── 🔒 portão 2: entrega editável (só criação aprovada) ──
     entregue = "direta"
-    selo = ("\n\n─\n🔍 *revisada pelo revisor — veredito: aprovada*"
-            if veredito == "ok" else
-            f"\n\n─\n⚠ *revisão: reprovada* — {problema[:200]}")
+    if not getattr(cfg, "reviewer_on", True):
+        selo = ""            # revisor desligado: sem selo de revisão
+    elif veredito == "ok":
+        selo = "\n\n─\n🔍 *revisada pelo revisor — veredito: aprovada*"
+    else:
+        selo = f"\n\n─\n⚠ *revisão: reprovada* — {problema[:200]}"
     if (exige_aprovacao and aprovacao in ("aprovada", "editada")
             and veredito == "ok" and not _cancelado()):
         texto_entrega = (caixa["done"] or resultado) + selo

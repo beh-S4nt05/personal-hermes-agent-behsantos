@@ -832,6 +832,9 @@
         <div class="field"><label>🎯 modelo do orquestrador/revisor <span class="hint">(vazio = o mesmo do agente)</span></label>
           <input type="text" id="s-orchestrator_model" list="modellist" placeholder="ex.: qwen3:8b · gemma3:12b">
           <span class="hint">pensa o plano e cobra a revisão — forte em raciocínio/instrução</span></div>
+        <div class="field"><label>🔍 modelo do revisor <span class="hint">(vazio = o do orquestrador)</span></label>
+          <input type="text" id="s-reviewer_model" list="modellist" placeholder="ex.: gemma3:12b · qwen3:8b">
+          <span class="hint">o cobrador que assina embaixo — quanto mais forte, mais dura a revisão</span></div>
         <div class="field"><label>⚡ modelo do executor <span class="hint">(vazio = o mesmo do agente)</span></label>
           <input type="text" id="s-executor_model" list="modellist" placeholder="ex.: qwen3-coder:8b · llama3.1:8b">
           <span class="hint">roda as ferramentas — forte em function calling. Um modelo por vez: troca sequencial (nada em paralelo)</span></div>
@@ -1948,7 +1951,8 @@ async function loadSettings(){
     $("s-reviewer_on").checked = s.reviewer_on !== false;
     $("s-creation_approval").checked = s.creation_approval !== false;
     $("s-orchestrator_model").value = s.orchestrator_model || "";
-    $("s-executor_model").value = s.executor_model || ""; $("s-claude_model").value = s.claude_model || "";
+    $("s-executor_model").value = s.executor_model || "";
+    $("s-reviewer_model").value = s.reviewer_model || ""; $("s-claude_model").value = s.claude_model || "";
     $("s-web_access").checked = !!s.web_access;
     $("s-stt_model").value = s.stt_model || "base"; $("s-stt_language").value = s.stt_language || "pt";
     $("s-stt_autosend").checked = !!s.stt_autosend; window.STT_AUTOSEND = !!s.stt_autosend;
@@ -1970,6 +1974,7 @@ async function saveSettings(){
     claude_use_ollama: $("s-claude_use_ollama").checked, claude_model: $("s-claude_model").value.trim(),
     orchestrator_on: $("s-orchestrator_on").checked, reviewer_on: $("s-reviewer_on").checked,
     orchestrator_model: $("s-orchestrator_model").value.trim(), executor_model: $("s-executor_model").value.trim(),
+    reviewer_model: $("s-reviewer_model").value.trim(),
     creation_approval: $("s-creation_approval").checked,
     web_access: $("s-web_access").checked,
     stt_model: $("s-stt_model").value, stt_language: $("s-stt_language").value.trim(),
