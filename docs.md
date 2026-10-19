@@ -380,7 +380,10 @@ CLI: `hermes models` (listar), `hermes ollama start|stop|status|test|pull <model
    paga o carregamento de novo (vários segundos). Use `1h` ou `-1` (sempre)
    se sobrar RAM — agora todo pedido do agente já envia esse valor.
 2. **num_predict** (⚙ Ajustes, `0` = sem limite): `512`–`768` tokens deixam as
-   respostas mais concisas e chegam bem antes.
+   respostas mais concisas e chegam bem antes. O botão **"⚡ aplicar modo
+   rápido"** em Ajustes aplica num_predict 512 + contexto 4096 + keep_alive 1h
+   de uma vez. O badge do chat mostra **tok/s** — abaixo de ~5 tok/s o modelo
+   está pesado demais para a máquina (troque para um 3B).
 3. **Modelo certo para cada tarefa**: um 3B (`llama3.2:3b`, `hermes3:3b`,
    `qwen2.5:3b` ≈ 2 GB) responde em cerca de metade do tempo de um 8B, com
    qualidade suficiente para o dia a dia; deixe o 8B para tarefas difíceis.
@@ -558,6 +561,7 @@ agendamentos, configuração).
 | `invalid model name` | Modelo sem `:tag` — use `hermes3:8b` (Ajustes → modelo) |
 | Modelo não encontrado | `ollama pull <modelo>` ou aba Ollama → Models |
 | Resposta lenta na 1ª msg | modelo carregando na memória (normal; aguarde o `ping`) |
+| **>100s para coisas simples** | modelo grande na CPU: rode `ollama ps` DURANTE uma resposta (PROCESSOR `100% CPU` → troque para um 3B); veja o tok/s no badge do chat (< 5 tok/s = pesado); confira `nvidia-smi` (GPU disponível/VRAM) e `free -h` (swap?) |
 | Claude Code "não encontrado" | instale com `curl -fsSL https://claude.ai/install.sh \| bash` (ou npm) e reinicie o `hermes server` |
 | Claude Code vazio/erro | já aponta para o Ollama por padrão; confira o `claude_model` (use um modelo instalado) ou, se usa a API real, desative `claude_use_ollama` |
 | ⚠ "There's an issue with the selected model (claude-opus-…)" | o Claude Code tentou o modelo padrão da nuvem Anthropic, que não existe no Ollama — rode com `--model <modelo local>` (ex.: `claude --model llama3.2:3b`) ou defina o modelo na GUI (⚙ Ajustes); pelo Ollama: `ollama launch claude --model llama3.2:3b` |

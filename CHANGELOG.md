@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.2.3 — diagnóstico de velocidade na GUI
+
+- O badge do chat agora mostra **tok/s** (tokens por segundo) de cada resposta
+  — abaixo de ~5 tok/s o modelo está pesado para a máquina.
+- Botão **"⚡ aplicar modo rápido"** em ⚙ Ajustes: num_predict 512 + num_ctx
+  4096 + keep_alive 1h em um clique.
+- docs.md: troubleshooting "respostas >100s" com o passo a passo de diagnóstico
+  (`ollama ps` durante a resposta, tok/s, GPU, swap).
+
 ## v2.2.2 — Claude Code: fallback de modelo local
 
 - No agente 🔌 Claude Code via Ollama, deixar o modelo vazio agora usa **o

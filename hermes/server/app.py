@@ -467,11 +467,13 @@ def create_app(cfg: Config) -> Flask:
                 result["duration_s"] = round(time.time() - t0, 1)
                 # estatísticas da resposta (tempo, tokens, passos) para a GUI
                 if not cancel.is_set():
+                    _d = result["duration_s"] or 0
                     q.put({
                         "type": "stats",
                         "duration_s": result["duration_s"],
                         "tokens": result["tokens"],
                         "steps": result["steps"],
+                        "tok_s": round(result["tokens"] / _d, 1) if _d > 0.3 else None,
                     })
                 q.put(None)
 

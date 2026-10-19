@@ -526,6 +526,8 @@
         <div class="field"><label>⚡ máx. tokens por resposta (0 = sem limite)</label>
           <input type="number" id="s-num_predict" min="0" step="64">
           <span class="hint">512–768 deixam as respostas mais rápidas</span></div>
+        <div class="field"><button class="b small ghost" onclick="fastMode()">⚡ aplicar modo rápido</button>
+          <span class="hint">512 tokens · contexto 4096 · modelo sempre carregado</span></div>
         <div class="field"><label>temperatura</label><input type="number" id="s-temperature" min="0" max="2" step="0.1"></div>
         <div class="field"><label>token de acesso (senha da GUI/API)</label>
           <input type="password" id="s-auth_token" placeholder="(vazio = sem senha)">
@@ -923,7 +925,9 @@ async function sendChat(){
   const lastText = [...turns.texts].reverse().find(t=>t && t.textContent.trim());
   if (lastText){
     const dur = turns.stats ? turns.stats.duration_s : ((performance.now()-t0)/1000).toFixed(1);
-    const extra = turns.stats ? " · " + turns.stats.tokens + " tokens · " + turns.stats.steps + " passo(s)" : "";
+    const extra = turns.stats ? " · " + turns.stats.tokens + " tokens · " +
+      (turns.stats.tok_s ? turns.stats.tok_s + " tok/s · " : "") +
+      turns.stats.steps + " passo(s)" : "";
     const badge = document.createElement("div");
     badge.className = "hint"; badge.style.margin = "-8px 0 10px";
     badge.textContent = "⏱ " + dur + "s" + extra;
@@ -1360,6 +1364,11 @@ async function installSkill(){
 }
 
 /* ═══════════════ ajustes ═══════════════ */
+function fastMode(){
+  $("s-num_predict").value = 512; $("s-num_ctx").value = 4096; $("s-keep_alive").value = "1h";
+  saveSettings();
+  toast("⚡ modo rápido aplicado — e use um modelo 3B (ex.: llama3.2:3b) no campo 'modelo' para o maior ganho");
+}
 async function loadSettings(){
   try{
     const r = await api("/api/settings"); const d = await r.json();
