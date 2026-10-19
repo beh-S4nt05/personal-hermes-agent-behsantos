@@ -44,6 +44,15 @@ def is_dangerous(command: str) -> bool:
     return any(re.search(p, command, re.IGNORECASE) for p in DANGEROUS_PATTERNS)
 
 
+# credenciais do e-mail (v3.1): o agente jamais pode ler/vazar o arquivo
+SECRETS_RE = re.compile(
+    r"secrets?[/\\~]|email\.json|\.hermes[/\\]+secrets", re.IGNORECASE)
+
+
+def touches_secrets(command: str) -> bool:
+    return bool(SECRETS_RE.search(command))
+
+
 TOOLS: list[dict] = [
     {
         "type": "function",
@@ -231,6 +240,12 @@ def run_command(args: dict, cfg) -> str:
     command = str(args.get("command", "")).strip()
     if not command:
         return "ERRO: comando vazio."
+    if touches_secrets(command):
+        return (
+            "BLOQUEADO: este comando acessa o arquivo de credenciais (secrets). "
+            "As senhas NUNCA passam pelo agente — para ler/responder e-mails, "
+            "use as ferramentas mcp_email_* (email_list, email_read, email_send)."
+        )
     if is_dangerous(command):
         return (
             "BLOQUEADO por segurança: o comando coincide com um padrão perigoso "

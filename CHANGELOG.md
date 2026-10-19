@@ -1,5 +1,33 @@
 # Changelog
 
+## v3.1.0 — 📧 MCP de e-mail (leitura + envio, credenciais à prova de vazamento)
+
+Servidor MCP `mcp-servers/email_server.py` (stdlib pura: imaplib/smtplib)
+com 5 ferramentas para o agente: `email_list`, `email_read`, `email_search`,
+`email_send`, `email_accounts` — mapeadas como `mcp_email_*`.
+
+**Arquitetura anti-vazamento das credenciais** (requisito do operador):
+- senhas em `<data>/secrets/email.json` — permissão **600** (diretório 700),
+  FORA do workspace do agente (sandbox de arquivos já bloqueava leitura);
+- **denylist nova**: `run_command` que tente acessar `secrets/`/`email.json`
+  é bloqueado com aviso apontando para as ferramentas `mcp_email_*`;
+- as credenciais **nunca passam pelo modelo**: o servidor MCP lê o arquivo
+  direto (caminho via env `HERMES_EMAIL_SECRETS`); nada em config.yaml,
+  logs, auditoria ou histórico — só o CONTEÚDO dos e-mails trafega;
+- teste T41 prova: cat/grep no arquivo → bloqueado; read_file → sandbox;
+  senha ausente do config.yaml; arquivo 600.
+
+**Setup em 1 comando**: `hermes email setup` (interativo, testa e descobre
+os servidores IMAP/SMTP sozinho — Gmail usa app password de 16 caracteres;
+auto-registra o servidor MCP no config). `hermes email test` valida logins;
+`hermes email status` mostra o resumo. Envio fica desativado se o SMTP não
+validar (conta em modo somente leitura).
+
+**Testes T40**: E2E contra IMAP/SMTP **falsos com protocolo real** (login,
+SEARCH, FETCH com literal, AUTH PLAIN): listar 3 mensagens, buscar "prazo",
+ler mensagem com assunto UTF-8 codificado, enviar (chega ao SMTP) — tudo
+via o conector MCP REAL do Hermes (subprocesso stdio). Suíte: **41/41**.
+
 ## v3.0.2 — guard de execução (fim do "escreve o comando e não roda")
 
 Incidente real: o agente 🔌 Claude Code respondia pedidos como "mostre

@@ -632,6 +632,37 @@ agendamentos, configuração).
   (processo local via `command`/`args` ou servidor via `url`). As ferramentas
   MCP aparecem para o agente como qualquer outra ferramenta.
 
+### 📧 E-mail (v3.1.0) — leitura e envio pelo agente
+
+**Setup (uma vez, no terminal do servidor):**
+
+```bash
+hermes email setup
+# informe: breno0s1s6@gmail.com  + senha de app (não a senha normal)
+# informe: breno.239941@fmm.org.br + a senha usada no webmail da FMM
+hermes email test      # valida os logins
+# reinicie o hermes server
+```
+
+- **Gmail**: exige 2FA ativado → crie a senha de app em
+  `myaccount.google.com/apppasswords` (16 caracteres) — é ELA que se usa
+  no setup, nunca a senha principal da conta.
+- **FMM/_outros domínios**: o setup testa sozinho `imap.`/`mail.` do
+  domínio; se o servidor da instituição for diferente, edite
+  `<data>/secrets/email.json` (campos `imap_host`/`smtp_host`).
+
+**Depois, no chat**: *"liste meus e-mails não lidos"*, *"resuma as últimas
+10 mensagens"*, *"procure e-mails sobre a reunião"*, *"responda ao Prof.
+Silva dizendo que…"* — as ferramentas `mcp_email_*` entram no agente
+automaticamente (e o seletor v3.0 injeta só as relevantes à pergunta).
+
+**Onde ficam as senhas (e por que não vazam):**
+`<data>/secrets/email.json` com permissão 600, fora do workspace do agente.
+O sandbox bloqueia `read_file`; a denylist bloqueia `cat/grep` em `secrets`;
+o servidor MCP lê o arquivo direto — **as credenciais nunca passam pelo
+modelo**, nem aparecem em config.yaml, logs ou auditoria. Se o SMTP falhar
+na validação, a conta fica em modo somente leitura (não envia).
+
 ## 17. Modo demonstração vs modo real
 
 - **Modo real** (uso): `hermes server` com Ollama verdadeiro;
@@ -656,6 +687,12 @@ agendamentos, configuração).
   léxica (overlap de palavras), não embeddings.
 
 ## 18. Solução de problemas
+
+| Problema | Solução |
+|---|---|
+| E-mail: login recusado no Gmail | ative a 2FA e use **senha de app** (myaccount.google.com/apppasswords) — a senha normal não funciona via IMAP |
+| E-mail: "SMTP indisponível" no setup | a conta fica em modo somente leitura (leitura ✔, envio ✖); verifique se a senha de app tem permissão de SMTP |
+| E-mail: ferramentas não aparecem no agente | rode `hermes email setup` (auto-registra o MCP) e reinicie o `hermes server`; confira o card MCP no Painel |
 
 | Sintoma | Causa/procedimento |
 |---|---|

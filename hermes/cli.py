@@ -91,6 +91,35 @@ def cmd_agent(args) -> None:
     (_ok if result["ok"] else _fail)(result["msg"])
 
 
+def cmd_email(args) -> None:
+    """Configura contas de e-mail para o servidor MCP (credenciais locais)."""
+    from .emailcfg import _imap_login, load, setup_interactive, status
+
+    cfg = _cfg(args)
+    action = getattr(args, "email_action", "status")
+    if action == "setup":
+        setup_interactive(cfg)
+        return
+    if action == "test":
+        data = load(cfg)
+        if not data.get("accounts"):
+            _p("  nenhuma conta — rode: hermes email setup")
+            return
+        for a in data["accounts"]:
+            ok, detail = _imap_login(a)
+            _p(f"  {'✔' if ok else '✖'} {a.get('user')} [{a.get('id')}] — {detail}")
+        return
+    st = status(cfg)
+    _p("\n📧 E-mail do Hermes Agent")
+    _p(f"  arquivo de credenciais: {st['secrets_file']} "
+       f"({'✔ existe, permissão ' + st['mode'] if st['exists'] else '✖ não configurado'})")
+    for a in st["accounts"]:
+        envio = "envio ✔" if a["smtp_ok"] else "só leitura"
+        _p(f"  · {a['user']} [{a['id']}] — {a['imap_host']} · {envio}")
+    _p(f"  servidor MCP 'email' no config: "
+       f"{'✔' if st['mcp_registered'] else '✖ (rode hermes email setup)'}")
+
+
 def cmd_doctor(args) -> None:
     """Diagnóstico completo: config -> Ollama (com geração real) -> agente."""
     from .manager import DaemonManager, OllamaManager
@@ -327,6 +356,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("doctor", help="diagnostica a conexão Ollama↔Python (com geração de teste)")
     p.set_defaults(fn=cmd_doctor)
+
+    p = sub.add_parser("email", help="configura contas de e-mail (MCP email_*)")
+    p.add_argument("email_action", nargs="?", default="status",
+                   choices=["setup", "test", "status"],
+                   help="setup = adicionar contas · test = validar logins · status = ver")
+    p.set_defaults(fn=cmd_email)
 
     p = sub.add_parser("status", help="status do agente e do Ollama")
     p.set_defaults(fn=cmd_status)

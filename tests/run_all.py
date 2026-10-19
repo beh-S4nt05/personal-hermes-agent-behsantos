@@ -923,6 +923,228 @@ def T39_guard_teimoso_hermes_executa_no_lugar():
         os.environ["PATH"] = os.environ["PATH"].replace(str(d) + os.pathsep, "", 1)
 
 
+# ════════════════════ v3.1.0 — MCP de e-mail (anti-vazamento) ════════════════════
+
+import socket as _socket
+import threading as _threading
+
+
+class _FakeImap(_threading.Thread):
+    """IMAP mínimo (protocolo real) para testar o servidor MCP de e-mail."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.sock = _socket.socket()
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(4)
+        self.port = self.sock.getsockname()[1]
+        self.logins: list[list[str]] = []
+        self.messages = [
+            b"From: Prof. Silva <prof@fmm.org.br>\r\n"
+            b"To: t@x.com\r\n"
+            b"Subject: Prazo de entrega do trabalho\r\n"
+            b"Date: Sat, 18 Oct 2026 09:00:00 -0400\r\n"
+            b"\r\n"
+            b"O prazo final e sexta que vem. Envie o PDF.\r\n",
+            b"From: Newsletter <news@exemplo.com>\r\n"
+            b"To: t@x.com\r\n"
+            b"Subject: Newsletter semanal\r\n"
+            b"Date: Fri, 17 Oct 2026 18:00:00 -0400\r\n"
+            b"\r\n"
+            b"As 10 noticias da semana em uma linha cada.\r\n",
+            b"From: Coordenacao <coord@fmm.org.br>\r\n"
+            b"To: t@x.com\r\n"
+            b"Subject: =?utf-8?B?UmV1bsOjbyBhbWHDow==?=\r\n"
+            b"Date: Thu, 16 Oct 2026 14:00:00 -0400\r\n"
+            b"\r\n"
+            b"Reuniao de coordenacao amanha as 10h.\r\n",
+        ]
+
+    def run(self):
+        while True:
+            conn, _ = self.sock.accept()
+            _threading.Thread(target=self._serve, args=(conn,), daemon=True).start()
+
+    def _serve(self, conn):
+        f = conn.makefile("rb")
+        try:
+            conn.sendall(b"* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] fake ready\r\n")
+            for line in f:
+                parts = line.decode(errors="replace").strip().split(" ", 2)
+                if len(parts) < 2:
+                    continue
+                tag, cmd = parts[0], parts[1].upper()
+                rest = parts[2] if len(parts) > 2 else ""
+                if cmd == "CAPABILITY":
+                    conn.sendall(f"* CAPABILITY IMAP4rev1 AUTH=PLAIN\r\n"
+                                 f"{tag} OK CAPABILITY done\r\n".encode())
+                elif cmd == "LOGIN":
+                    creds = rest.split()
+                    self.logins.append([c.strip('"') for c in creds])
+                    if len(creds) == 2 and creds[0].strip('"') == "t@x.com" \
+                            and creds[1].strip('"') == "pw":
+                        conn.sendall(f"{tag} OK LOGIN done\r\n".encode())
+                    else:
+                        conn.sendall(f"{tag} NO LOGIN failed\r\n".encode())
+                elif cmd in ("SELECT", "EXAMINE"):
+                    n = len(self.messages)
+                    conn.sendall(f"* {n} EXISTS\r\n* 0 RECENT\r\n"
+                                 f"{tag} OK [READ-WRITE] SELECT done\r\n".encode())
+                elif cmd == "SEARCH":
+                    if "UNSEEN" in rest.upper():
+                        nums = "1"
+                    else:
+                        nums = " ".join(str(i + 1) for i in range(len(self.messages)))
+                    conn.sendall(f"* SEARCH {nums}\r\n{tag} OK SEARCH done\r\n".encode())
+                elif cmd == "FETCH":
+                    num = rest.strip().split(" ", 1)[0]
+                    idx = int(num) - 1
+                    raw = self.messages[idx]
+                    conn.sendall(
+                        f"* {num} FETCH (BODY[] {{{len(raw)}}}\r\n".encode()
+                        + raw + b")\r\n" + f"{tag} OK FETCH done\r\n".encode())
+                elif cmd == "LOGOUT":
+                    conn.sendall(f"* BYE\r\n{tag} OK LOGOUT done\r\n".encode())
+                    conn.close()
+                    return
+                else:
+                    conn.sendall(f"{tag} OK {cmd} done\r\n".encode())
+        except OSError:
+            pass
+
+
+class _FakeSmtp(_threading.Thread):
+    """SMTP mínimo (com AUTH PLAIN) para testar o envio."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.sock = _socket.socket()
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(4)
+        self.port = self.sock.getsockname()[1]
+        self.received: list[bytes] = []
+
+    def run(self):
+        while True:
+            conn, _ = self.sock.accept()
+            _threading.Thread(target=self._serve, args=(conn,), daemon=True).start()
+
+    def _serve(self, conn):
+        f = conn.makefile("rb")
+        in_data = False
+        buf: list[bytes] = []
+        try:
+            conn.sendall(b"220 fake ESMTP ready\r\n")
+            for line in f:
+                if in_data:
+                    if line in (b".\r\n", b".\n"):
+                        conn.sendall(b"250 queued\r\n")
+                        in_data = False
+                        self.received.append(b"".join(buf))
+                        buf = []
+                    else:
+                        buf.append(line)
+                    continue
+                cmd = line.decode(errors="replace").strip()
+                c = cmd.split(" ", 1)[0].upper()
+                if c in ("EHLO", "HELO"):
+                    conn.sendall(b"250-fake\r\n250 AUTH PLAIN LOGIN\r\n")
+                elif c == "AUTH":
+                    conn.sendall(b"235 ok\r\n")
+                elif c == "DATA":
+                    conn.sendall(b"354 go\r\n")
+                    in_data = True
+                elif c == "QUIT":
+                    conn.sendall(b"221 bye\r\n")
+                    conn.close()
+                    return
+                else:
+                    conn.sendall(b"250 ok\r\n")
+        except OSError:
+            pass
+
+
+@case
+def T40_email_mcp_e2e_imap_smtp_reais():
+    """Servidor MCP de e-mail via protocolo REAL (stdio) contra IMAP/SMTP
+    falsos: listar, buscar, ler (assunto UTF-8) e enviar."""
+    from hermes import emailcfg
+    from hermes.mcp_client import get_manager, map_tool_name
+
+    cfg = fresh()
+    imap = _FakeImap()
+    imap.start()
+    smtp = _FakeSmtp()
+    smtp.start()
+    emailcfg.save(cfg, {"accounts": [{
+        "id": "teste", "user": "t@x.com", "password": "pw",
+        "imap_host": "127.0.0.1", "imap_port": imap.port, "imap_tls": "none",
+        "smtp_host": "127.0.0.1", "smtp_port": smtp.port, "smtp_tls": "none",
+        "smtp_ok": True}], "default": "teste"})
+    emailcfg.register_mcp(cfg)
+    try:
+        mgr = get_manager(cfg)
+        mgr.start_all()
+        nomes = [t["function"]["name"] for t in mgr.openai_tools()]
+        assert map_tool_name("email", "email_list") in nomes, nomes
+
+        res = mgr.call(map_tool_name("email", "email_list"), {})
+        assert res["ok"] and "Prazo de entrega" in res["output"], res["output"][:200]
+        assert "3 mensagens" in res["output"]
+
+        res = mgr.call(map_tool_name("email", "email_search"), {"query": "prazo"})
+        assert res["ok"] and "Prazo" in res["output"] and "Newsletter" not in res["output"]
+
+        res = mgr.call(map_tool_name("email", "email_read"), {"number": 3})
+        assert res["ok"] and "Reuni" in res["output"] and "10h" in res["output"]
+
+        res = mgr.call(map_tool_name("email", "email_send"),
+                       {"to": "dest@exemplo.com", "subject": "Teste MCP",
+                        "body": "enviado pelo teste"})
+        assert res["ok"] and "enviado" in res["output"], res["output"][:200]
+        assert any(b"Subject: Teste MCP" in r for r in smtp.received)
+        # as credenciais foram parar no IMAP (login), não em nenhuma saída
+        assert imap.logins and imap.logins[0] == ["t@x.com", "pw"]
+        enviado = b"\n".join(smtp.received).decode("utf-8", "replace")
+        assert "Subject: Teste MCP" in enviado
+        assert "pw" not in enviado  # a senha nunca aparece no e-mail enviado
+        mgr.stop_all()
+    finally:
+        imap.sock.close()
+        smtp.sock.close()
+
+
+@case
+def T41_secrets_protegidos_contra_o_agente():
+    """Credenciais: arquivo 600 fora do sandbox; run_command bloqueado;
+    nada de senhas no config.yaml."""
+    import stat as _stat
+
+    from hermes import emailcfg
+    from hermes.tools import execute_tool
+
+    cfg = fresh()
+    emailcfg.save(cfg, {"accounts": [{
+        "id": "x", "user": "u@x.com", "password": "SUPER-SECRETA-123",
+        "imap_host": "127.0.0.1", "imap_port": 993, "imap_tls": "ssl",
+        "smtp_ok": False}]})
+    p = emailcfg.secrets_path(cfg)
+    assert oct(_stat.S_IMODE(p.stat().st_mode)) == "0o600"      # só o dono lê
+    # run_command tentando ler o arquivo → bloqueado com aviso claro
+    r = execute_tool("run_command", {"command": f"cat {p}"}, cfg)
+    assert not r["ok"] and "credenciais" in r["output"], r["output"][:150]
+    r2 = execute_tool("run_command",
+                      {"command": "grep -i senha ~/.hermes/secrets/email.json"}, cfg)
+    assert not r2["ok"] and "credenciais" in r2["output"]
+    # read_file fora do workspace → sandbox bloqueia
+    r3 = execute_tool("read_file", {"path": str(p)}, cfg)
+    assert not r3["ok"] and "workspace" in r3["output"]
+    # e a senha NUNCA vai para o config.yaml (que a GUI exporta em /api/settings)
+    cfg.save()
+    yaml_txt = cfg.path.read_text(encoding="utf-8")
+    assert "SUPER-SECRETA-123" not in yaml_txt
+
+
 if __name__ == "__main__":
     print("◈ Hermes Agent — suíte de testes (v3.0)\n")
     sys.exit(run_all())
