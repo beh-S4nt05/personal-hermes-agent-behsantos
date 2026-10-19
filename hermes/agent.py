@@ -51,10 +51,15 @@ Contexto da máquina:
 - hostname: {hostname}
 - workspace: {workdir}
 - sandbox de arquivos: {sandbox}
-- data/hora local: {now}
 
 {extra}\
 """
+
+def _now_line() -> str:
+    """Data/hora fresca — entra NO FINAL do prompt, fora do cache, para o
+    prefixo (parte cacheada) ficar estável entre mensagens."""
+    return f"\n\nData/hora local: {time.strftime('%Y-%m-%d %H:%M')}"
+
 
 # Guard anti-loop: modelos pequenos às vezes repetem a mesma chamada/fala
 _ANTILOOP_NUDGE = (
@@ -177,7 +182,6 @@ class Agent:
             str(getattr(self.cfg, "sandbox", True)),
             str(self.native_tools),
             socket.gethostname(),
-            time.strftime("%Y-%m-%d %H:%M"),   # hora (o prompt mostra data/hora)
             str(query or "")[:400],
         ]
         try:
@@ -207,7 +211,7 @@ class Agent:
     def system_prompt(self, query: str | None = None) -> str:
         key = self._prompt_key(query)
         if self._prompt_cache and self._prompt_cache[0] == key:
-            return self._prompt_cache[1]           # cache: monta 1x, usa N vezes
+            return self._prompt_cache[1] + _now_line()   # cache + hora fresca
         extra = self.cfg.system_prompt_extra.strip()
         webtools = (
             "- web_search / web_fetch: pesquisa na internet (DuckDuckGo) e lê "
@@ -223,7 +227,6 @@ class Agent:
             hostname=socket.gethostname(),
             workdir=self.cfg.workdir,
             sandbox="ATIVO (apenas o workspace)" if self.cfg.sandbox else "DESATIVADO (caminhos absolutos liberados)",
-            now=time.strftime("%Y-%m-%d %H:%M"),
             extra=f"Instruções adicionais do operador:\n{extra}\n" if extra else "",
         )
         if not self.native_tools:
@@ -259,7 +262,7 @@ class Agent:
         except Exception:
             pass
         self._prompt_cache = (key, prompt)
-        return prompt
+        return prompt + _now_line()
 
     # ---------------------------------------------------------------- loop
     def run(self, messages: list[dict], on_event=None, allow_tool=None, cancel=None) -> str:

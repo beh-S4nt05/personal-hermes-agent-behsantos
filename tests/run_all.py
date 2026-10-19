@@ -253,11 +253,19 @@ def T10_cache_do_prompt():
 
     ag = Agent(cfg, client=Fala())
     p1 = ag.system_prompt("pergunta A")
-    assert ag.system_prompt("pergunta A") is p1          # cache reutiliza
+    nuc = ag._prompt_cache[1]                             # núcleo cacheado
+    id_antes = id(ag._prompt_cache)
+    p2_ = ag.system_prompt("pergunta A")
+    assert id(ag._prompt_cache) == id_antes                # cache NÃO remontou
+    assert p2_.startswith(nuc) and "Data/hora local:" in p2_
     MemoryStore(cfg).add("fato novo importante")
     p3 = ag.system_prompt("pergunta A")
-    assert p3 is not p1 and "fato novo importante" in p3  # memória invalida
-    assert ag.system_prompt("pergunta B") is not p3       # pergunta invalida
+    assert id(ag._prompt_cache) != id_antes                # memória invalida
+    assert "fato novo importante" in p3
+    chave_a = ag._prompt_key("pergunta A")
+    ag.system_prompt("pergunta B")
+    assert ag._prompt_key("pergunta A") == chave_a          # chave estável
+    assert "fato novo importante" in ag._prompt_cache[1]
 
 
 @case
@@ -754,6 +762,84 @@ def T33_cli_versao_e_doctor():
                        text=True, env=env, timeout=120, cwd=str(ROOT))
     texto = r.stdout + r.stderr
     assert "Doctor" in texto and "Ollama" in texto, texto[:200]
+
+
+# ══════════════════════════════ v3.0.1 — hardening ══════════════════════════════
+
+@case
+def T34_anti_csrf_post_cross_origin():
+    """POST de origem estranha sem token = 403; mesma origem/null/curl passam."""
+    cfg = fresh()
+    c = _app(cfg)
+    ok_body = {"input": "x", "when": "diário 07:00"}
+    # sem Origin (curl/webhooks) → passa
+    assert c.post("/api/schedules", json=ok_body).status_code == 200
+    # Origin same-origin (a GUI legítima) → passa
+    r = c.post("/api/schedules", json=ok_body,
+               headers={"Origin": "http://localhost"})
+    assert r.status_code == 200
+    # Origin null (iframe sandbox/preview) → passa
+    assert c.post("/api/schedules", json=ok_body,
+                  headers={"Origin": "null"}).status_code == 200
+    # Origin de site malicioso → 403
+    assert c.post("/api/schedules", json=ok_body,
+                  headers={"Origin": "https://evil.com"}).status_code == 403
+    # ...mas passa com token válido (integração externa legítima)
+    cfg.update({"auth_token": "segredo"})
+    r = c.post("/api/schedules", json=ok_body,
+               headers={"Origin": "https://evil.com", "X-Hermes-Token": "segredo"})
+    assert r.status_code == 200
+    # GET não é afetado pelo guard (só pelo token, se houver)
+    assert c.get("/api/status", headers={"Origin": "https://evil.com",
+                                         "X-Hermes-Token": "segredo"}).status_code == 200
+
+
+@case
+def T35_webhook_sem_when():
+    """Gatilho webhook/watch não exige horário (bug v3.0.0)."""
+    cfg = fresh()
+    c = _app(cfg)
+    r = c.post("/api/schedules", json={"input": "por hook",
+                                       "trigger": {"type": "webhook"}})
+    assert r.status_code == 200 and r.json["ok"], r.json
+    assert "/api/hooks/" in r.json["msg"]
+
+
+@case
+def T36_prompt_prefixo_estavel_sem_hora():
+    """A data/hora sai da chave do cache: prefixo estável entre minutos."""
+    from unittest.mock import patch
+
+    from hermes.agent import Agent
+
+    cfg = fresh()
+    ag = Agent(cfg)
+    with patch("hermes.agent.time.strftime", return_value="2026-01-01 10:00"):
+        k1 = ag._prompt_key("pergunta")
+        p1 = ag.system_prompt("pergunta")
+    with patch("hermes.agent.time.strftime", return_value="2026-01-01 10:59"):
+        k2 = ag._prompt_key("pergunta")
+        p2 = ag.system_prompt("pergunta")
+    assert k1 == k2, "chave ainda depende do relógio"
+    assert p1 != p2                                  # hora fresca no final
+    assert p1.rstrip().endswith("10:00") and p2.rstrip().endswith("10:59")
+
+
+@case
+def T37_system_busy_relativo_a_nucleos():
+    """Load 3.5: ocioso em 16 núcleos, ocupado em 2."""
+    from unittest.mock import patch
+
+    import hermes.scheduler as S
+    with patch.object(S.Path, "read_text", return_value="3.50 1 1 1/1 1"), \
+         patch.object(S.os, "cpu_count", return_value=16):
+        assert S._system_busy() is False
+    with patch.object(S.Path, "read_text", return_value="3.50 1 1 1/1 1"), \
+         patch.object(S.os, "cpu_count", return_value=2):
+        assert S._system_busy() is True
+    # limiar manual continua honrado (compat)
+    with patch.object(S.Path, "read_text", return_value="99.0 1 1 1/1 1"):
+        assert S._system_busy(threshold=2.0) is True
 
 
 if __name__ == "__main__":

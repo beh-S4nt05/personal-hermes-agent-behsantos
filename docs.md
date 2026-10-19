@@ -390,6 +390,14 @@ somem do agente e da GUI.
   `resumo-inbox`) ou instale do GitHub na aba Skills (qualquer repo com
   SKILL.md, ex.: `anthropics/skills`).
 
+### v3.0.1 — proteção anti-CSRF
+
+POSTs vindos de origem diferente da GUI (cabeçalho `Origin` ≠ endereço do
+painel) **sem token válido são rejeitados (403)** — isso impede que um site
+malicioso aberto no seu navegador commande o agente local. Funcionam
+normalmente: a própria GUI, a preview em iframe, `curl`/webhooks (sem
+Origin) e qualquer cliente com o token correto.
+
 ### v3.0 — auditoria, backups e orçamento
 
 - **Auditoria** (aba 🧾): toda ação do agente (ferramenta nativa, MCP,
@@ -627,6 +635,20 @@ agendamentos, configuração).
   gigante "MODO DEMONSTRAÇÃO — IA SIMULADA". Ferramentas, tarefas, memória,
   conversas e downloads simulados funcionam de verdade; o Claude Code
   responde com um texto explicando o modo.
+
+### Limitações conhecidas (dívida honesta)
+
+- **GUI em arquivo único** (`index.html`, ~2 mil linhas): dividir em
+  `static/app.js` + `app.css` é a melhoria D2 do estudo — ficou para a
+  próxima major para não arriscar regressão agora.
+- **MCP via formulário**: argumentos são separados por espaço (aspas não
+  são parseadas) — args com espaço exigem editar o config.yaml.
+- **Auditoria** cresce sem teto (um arquivo JSONL por mês, append-only) —
+  arquive `data/audit/` se ficar grande.
+- **Timezone implícita** (a do sistema) nos agendamentos; `only_idle` usa
+  loadavg (Linux).
+- **Memória vetorial** (P3 do estudo): a seleção por relevância atual é
+  léxica (overlap de palavras), não embeddings.
 
 ## 18. Solução de problemas
 

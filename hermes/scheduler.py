@@ -26,6 +26,7 @@ v3.0:
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import time
@@ -645,10 +646,15 @@ class Scheduler:
         return {"ok": True, "msg": "executando agora — o resultado aparece em instantes"}
 
 
-def _system_busy(threshold: float = 2.0) -> bool:
-    """True se a máquina estiver ocupada (para tarefas marcadas 'only_idle')."""
+def _system_busy(threshold: float | None = None) -> bool:
+    """True se a máquina estiver ocupada (para tarefas 'only_idle').
+
+    v3.0.1: o load é comparado RELATIVO ao número de núcleos — load 3 num
+    Ryzen de 16 threads é ocioso; num Atom de 2, é sobrecarga.
+    """
     try:
         load1 = float(Path("/proc/loadavg").read_text().split()[0])
-        return load1 > threshold
+        limiar = threshold if threshold is not None else (os.cpu_count() or 2) * 0.75
+        return load1 > limiar
     except (OSError, ValueError, IndexError):
         return False  # não-Linux ou leitura falhou: não bloqueia nunca

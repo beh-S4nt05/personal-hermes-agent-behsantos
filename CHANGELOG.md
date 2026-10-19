@@ -1,5 +1,26 @@
 # Changelog
 
+## v3.0.1 — revisão crítica (segurança + correções)
+
+Revisão de código pós-v3.0.0 com correções encontradas pela própria suíte:
+
+- 🔴 **Anti-CSRF**: qualquer site na web podia dirigir o agente de quem
+  roda a GUI sem token (CORS `*` + POST liberado — o navegador da vítima
+  fazia o pedido). Agora POSTs cross-origin (Origin ≠ Host) sem token
+  válido são **rejeitados com 403**. A GUI legítima (same-origin), a
+  preview em iframe sandbox (Origin null), curl e webhooks com token
+  continuam funcionando.
+- 🟠 **Bug**: criar tarefa com gatilho webhook/watch sem campo "when"
+  retornava 400 indevido — gatilhos não dependem de horário.
+- 🟠 **Cache do prompt**: a data/hora estava DENTRO do texto cacheado (e
+  da chave) — o prefixo estável durava 1 minuto. Agora a hora vai no
+  FINAL do prompt, fora do cache: prefixo estável de verdade.
+- 🟡 **Load relativo**: "só quando ociosa" comparava load com 2.0 fixo —
+  agora é relativo ao nº de núcleos (load 3 num 16-core = ocioso).
+- 🟡 waitress: 8 → 16 threads (SSE de log/chat + tarefas simultâneas).
+- Testes: suíte ampliada 33 → **37 casos** (anti-CSRF, webhook sem when,
+  estabilidade do prefixo, load por núcleo).
+
 ## v3.0.0 — a grande atualização (confiança · poder · inteligência)
 
 Baseada no estudo técnico completo do código (19 módulos, ~7.2k linhas).

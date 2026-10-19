@@ -48,6 +48,41 @@ def create_app(cfg: Config) -> Flask:
     app.config["HERMES_CFG"] = cfg
     agents: dict[str, object] = {}
 
+    # --------------------------------------------- anti-CSRF (v3.0.1)
+    def _same_origin(origin: str) -> bool:
+        """Origin confere com o Host? ('null' = iframe sandbox/preview)."""
+        if not origin or origin == "null":
+            return True
+        try:
+            from urllib.parse import urlparse
+            o = urlparse(origin)
+            return (o.netloc or "").lower() == (request.host or "").lower()
+        except ValueError:
+            return False
+
+    @app.before_request
+    def guard_cross_origin_posts():
+        """POST de outra origem sem token = site malicioso dirigindo o agente.
+
+        O navegador SEMPRE envia Origin em POSTs cross-origin; a GUI legítima
+        é same-origin (Origin == Host) ou roda em iframe sandbox (Origin null).
+        curl/webhooks não enviam Origin — passam; quem usa token, passa.
+        """
+        if request.method != "POST" or not request.path.startswith("/api/"):
+            return None
+        origin = request.headers.get("Origin", "")
+        if _same_origin(origin):
+            return None
+        token = (app.config["HERMES_CFG"].auth_token or "").strip()
+        supplied = (request.headers.get("X-Hermes-Token")
+                    or request.args.get("token")
+                    or (request.get_json(silent=True) or {}).get("token")
+                    or "")
+        if token and supplied == token:
+            return None
+        return jsonify({"ok": False,
+                        "msg": "origem não permitida (cross-origin sem token)"}), 403
+
     # ------------------------------------------------------------- auth
     def protected(fn):
         @wraps(fn)
@@ -847,10 +882,6 @@ def create_app(cfg: Config) -> Flask:
         when = str(payload.get("when", "")).strip()
         if not input_text:
             return jsonify({"ok": False, "msg": "descreva o que o agente deve fazer"}), 400
-        try:
-            spec = parse_schedule(when)
-        except ValueError as exc:
-            return jsonify({"ok": False, "msg": str(exc)}), 400
         sched_agent = str(payload.get("agent") or "hermes")
         if sched_agent not in ("hermes", "claude"):
             sched_agent = "hermes"
@@ -860,13 +891,20 @@ def create_app(cfg: Config) -> Flask:
         if isinstance(trig_raw, dict) and trig_raw.get("type") in ("webhook", "watch"):
             trigger = {"type": trig_raw["type"]}
             if trig_raw["type"] == "watch":
-                import os as _os
                 wpath = str(trig_raw.get("path") or "").strip()
                 if not wpath or not Path(wpath).expanduser().is_dir():
                     return jsonify({"ok": False,
                                     "msg": "gatilho watch exige um diretório válido em 'path'"}), 400
                 trigger["path"] = str(Path(wpath).expanduser())
                 trigger["glob"] = str(trig_raw.get("glob") or "*").strip() or "*"
+            # gatilho não depende de horário — spec placeholder (o tick pula
+            # entradas com trigger, então nunca dispara por tempo)
+            spec = {"type": "interval", "minutes": 60}
+        else:
+            try:
+                spec = parse_schedule(when)
+            except ValueError as exc:
+                return jsonify({"ok": False, "msg": str(exc)}), 400
         retries = int(payload.get("retries") or 0)
         only_idle = bool(payload.get("only_idle"))
         entry = ScheduleStore(cfg).create(
@@ -1273,6 +1311,6 @@ def serve(cfg: Config, host: str, port: int) -> None:
         from waitress import serve as _wserve
 
         print(f"  ⚙ servidor: waitress (produção)")
-        _wserve(app, host=host, port=port, threads=8)
+        _wserve(app, host=host, port=port, threads=16)
     except ImportError:
         app.run(host=host, port=port, threaded=True, debug=False)
