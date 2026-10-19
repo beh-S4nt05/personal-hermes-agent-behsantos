@@ -84,8 +84,8 @@ class SkillLoader:
                 folder = skill_md.parent
                 try:
                     meta, _body = parse_skill_md(skill_md.read_text(encoding="utf-8"))
-                except OSError:
-                    continue
+                except Exception:  # arquivo ilegível: ignora sem derrubar nada
+                    meta = {}
                 name = str(meta.get("name") or folder.name).strip()
                 if not name or name in seen:
                     continue

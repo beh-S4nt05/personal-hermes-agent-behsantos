@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.1 — blindagem PyYAML
+
+- **Detecta PyYAML quebrado** (pacote incompleto, típico de venv em disco NTFS):
+  o `hermes doctor` e o auto-diagnóstico do `hermes server` mostram o problema
+  e o comando exato de correção (`pip install --force-reinstall PyYAML`).
+- `/api/status` e o carregamento de skills **não travam mais** com yaml quebrado
+  (frontmatter inválido vira skill sem metadados, em vez de erro 500).
+- Salvar configuração com yaml quebrado retorna mensagem clara (não mais 500).
+
 ## v1.1.0 — "Visão completa" (a versão da demo online)
 
 ### 🧠 Nova aba Ollama na GUI (o "app desktop" do Linux)

@@ -29,7 +29,7 @@ from flask import Flask, Response, jsonify, request, stream_with_context
 
 from ..config import VERSION, Config
 from ..daemon import enqueue, list_tasks
-from ..manager import DaemonManager, OllamaManager
+from ..manager import DaemonManager, OllamaManager, python_env_check
 from ..mcp_client import get_manager
 from ..ollama_client import get_client
 from ..skills import SkillLoader
@@ -532,9 +532,11 @@ def serve(cfg: Config, host: str, port: int) -> None:
     print(f"  ➜ config: {cfg.path}")
 
     # ---- auto-diagnóstico: falhas óbvias aparecem AQUI, no início ----
+    env = python_env_check()
+    print(f"  {'✔' if env['ok'] else '✖'} {env['name']}: {env['detail']}")
     if not cfg.mock:
         diag = OllamaManager(cfg).diagnose(deep=False)
-        for s in diag["steps"]:
+        for s in diag["steps"][1:]:  # ambiente python já foi mostrado acima
             mark = "✔" if s["ok"] else "✖"
             print(f"  {mark} ollama: {s['name']} — {s['detail']}")
         try:

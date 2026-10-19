@@ -54,6 +54,43 @@ def _run(cmd: list[str], timeout: int = 15) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
+def python_env_check() -> dict:
+    """Confere se as dependências Python estão íntegras.
+
+    Detecta o caso do PyYAML 'quebrado': `import yaml` funciona mas o pacote
+    está incompleto (sem safe_load/YAMLError) — típico de venv em disco
+    NTFS/Windows ou instalação interrompida. Sem isso, /api/status vira 500.
+    """
+    import importlib
+
+    missing = []
+    for mod in ("flask", "requests", "yaml"):
+        try:
+            importlib.import_module(mod)
+        except Exception as exc:  # noqa: BLE001
+            missing.append(f"{mod} ({exc.__class__.__name__})")
+    if missing:
+        return {
+            "name": "ambiente python",
+            "ok": False,
+            "detail": "não importou: " + ", ".join(missing)
+                      + " — rode: ./.venv/bin/pip install -e .",
+        }
+    import yaml
+    if not (hasattr(yaml, "safe_load") and hasattr(yaml, "YAMLError")):
+        return {
+            "name": "ambiente python",
+            "ok": False,
+            "detail": (
+                f"PyYAML quebrado em {getattr(yaml, '__file__', '?')} — instalação "
+                "incompleta (comum com projeto em disco NTFS). Conserte com: "
+                "./.venv/bin/pip install --force-reinstall --no-cache-dir PyYAML"
+            ),
+        }
+    return {"name": "ambiente python", "ok": True,
+            "detail": "dependências íntegras (flask, requests, PyYAML)"}
+
+
 class DaemonManager:
     """Controla o processo do agente (o 'coração' que executa tarefas)."""
 

@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 APP_NAME = "hermes-agent"
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
@@ -99,10 +99,15 @@ class Config:
 
     def save(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            yaml.safe_dump(self._d, allow_unicode=True, sort_keys=True),
-            encoding="utf-8",
-        )
+        try:
+            text = yaml.safe_dump(self._d, allow_unicode=True, sort_keys=True)
+        except AttributeError as exc:
+            raise RuntimeError(
+                "PyYAML está quebrado neste ambiente (instalação incompleta — comum "
+                "quando o projeto fica em disco NTFS). Conserte com: "
+                "pip install --force-reinstall --no-cache-dir PyYAML"
+            ) from exc
+        self.path.write_text(text, encoding="utf-8")
 
     def update(self, changes: dict) -> None:
         for k, v in changes.items():
