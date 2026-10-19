@@ -1,5 +1,30 @@
 # Changelog
 
+## v3.0.2 — guard de execução (fim do "escreve o comando e não roda")
+
+Incidente real: o agente 🔌 Claude Code respondia pedidos como "mostre
+informações do sistema" ESCREVENDO os comandos em blocos de código (ou
+dizendo "você pode verificar com lscpu") — sem nunca chamar a ferramenta
+Bash — e às vezes colava saídas INVENTADAS. O usuário tinha que executar
+e colar de volta. Correção em 3 camadas:
+
+1. **Diretiva endurecida**: "escrever comando em bloco de código é ERRO;
+   quem executa é VOCÊ; resposta sem execução = resposta errada".
+2. **Guard de execução**: se a resposta terminar com ZERO chamadas de
+   ferramenta E contiver blocos ```bash (ou "pedidos" ao usuário tipo
+   "execute o comando", "verifique você"), o Hermes **repete a chamada
+   com ordem direta** de usar a ferramenta Bash — o modelo quase sempre
+   obedece na 2ª vez.
+3. **Último recurso**: se ainda assim não executar, o Hermes **executa os
+   comandos ele mesmo** (denylist + timeout + sandbox + auditoria, fonte
+   "guard-claude") e entrega a saída REAL — o usuário nunca fica na mão.
+   Blocos que não parecem comandos (ex.: saída alucinada colada como
+   `PRETTY_NAME="..."`) e comandos com sudo são pulados com aviso.
+
+Testes: T38 (modelo recupera na 2ª chamada e entrega saída real) e
+T39 (teimoso: Hermes executa no lugar, saída real + auditoria + bloco
+alucinado pulado). Suíte: 39/39.
+
 ## v3.0.1 — revisão crítica (segurança + correções)
 
 Revisão de código pós-v3.0.0 com correções encontradas pela própria suíte:

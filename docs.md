@@ -185,6 +185,11 @@ português (proibido escrever schemas/exemplos; dados reais via Bash) +
 máximo de 4 turnos. Medido com a CLI real: **3 ferramentas (Bash, Read,
 Edit), 3,5 mil chars — payload ~16× menor**. CLIs antigas sem `--bare`
 caem no modo completo automaticamente, com aviso para atualizar.
+**Guard de execução** (v3.0.2): se a resposta vier SEM chamadas de
+ferramenta mas COM comandos em blocos de código (ou instruções para o
+usuário executar), o Hermes repete a chamada com ordem direta; persistindo,
+executa os comandos ele mesmo (denylist + auditoria) e entrega a saída
+real — marcada como "⚙ guard de execução do Hermes".
 **Autodiagnóstico**: toda resposta do agente 🔌 termina com um rodapé como
 "*🔌 Claude Code · modo leve · CLI 2.1.301*" — se o rodapé não aparecer,
 o `hermes server` em execução é antigo (reinicie após atualizar).
@@ -660,6 +665,7 @@ agendamentos, configuração).
 | Resposta lenta na 1ª msg | modelo carregando na memória (normal; aguarde o `ping`) |
 | Modelo repetiu a mesma resposta/ferramenta e a saída cortou | guard anti-loop da v2.2.7: chamada idêntica não é re-executada — o modelo é avisado para responder; se insistir, o agente encerra e entrega o resultado já obtido. Com um modelo melhor (`qwen2.5:3b`) o loop nem começa |
 | Modelo respondeu com um JSON em vez de executar a ferramenta (ou "dados" errados) | corrigido na v2.2.5: o agente intercepta o JSON solto e executa a ferramenta REAL; se persistir, troque para um modelo melhor com ferramentas (`qwen2.5:3b`, `hermes3:8b`) — `llama3.2:3b` é rápido mas confunde o formato |
+| Claude Code escreve os comandos mas NÃO executa (ou diz "você pode verificar com…") | v3.0.2: o guard de execução detecta resposta sem chamadas de ferramenta + blocos de código e (1) repete a chamada com ordem direta de usar Bash; (2) em último caso executa os comandos no lugar (saída REAL, marcada e auditada). Se persistir, prefira o agente ◈ Hermes para tarefas do sistema |
 | Claude Code gerando respostas sem sentido (templates, códigos soltos) | 1) confira o rodapé da resposta: **sem rodapé = server antigo** (reinicie o `hermes server` após atualizar); rodapé "CLI antiga" = rode `claude update`; 2) com "modo leve" ativo, use `qwen2.5-coder:7b` no campo do Claude Code; 3) persistindo, prefira o agente ◈ Hermes — com 10 GB de RAM o Claude Code fica limitado |
 | **>100s para coisas simples** | modelo grande na CPU: rode `ollama ps` DURANTE uma resposta (PROCESSOR `100% CPU` → troque para um 3B); veja o tok/s no badge do chat (< 5 tok/s = pesado); confira `nvidia-smi` (GPU disponível/VRAM) e `free -h` (swap?) |
 | Claude Code "não encontrado" | instale com `curl -fsSL https://claude.ai/install.sh \| bash` (ou npm) e reinicie o `hermes server` |

@@ -58,7 +58,59 @@ CLAUDE_LIGHT_PROMPT = (
     "Bash (ex.: uname -a, free -h, df -h, ls) e responda com a saída REAL. "
     "PROIBIDO escrever JSON Schema, XML, exemplos de chamada de ferramenta "
     "ou qualquer explicação sobre como usar ferramentas. Nunca invente dados."
+    "\nREGRA INVIOLÁVEL DE EXECUÇÃO: escrever um comando dentro de um bloco "
+    "de código é ERRO — o comando só existe quando você CHAMA a ferramenta "
+    "Bash. NUNCA peça ao usuário para executar, verificar, abrir o terminal "
+    "ou 'conferir com lscpu': quem executa é VOCÊ, com a ferramenta Bash. "
+    "Resposta sem execução = resposta errada."
 )
+
+# ── guard de execução (v3.0.2) ──────────────────────────────────────────────
+# Modelos pequenos às vezes escrevem os comandos em blocos de código (ou
+# dizem "você pode verificar com lscpu") em vez de CHAMAR a ferramenta Bash.
+# O guard detecta isso e garante que a resposta venha de execução REAL.
+_BASH_BLOCK_RE = re.compile(r"```(?:bash|sh|shell|zsh)?\s*\n(.+?)```",
+                            re.DOTALL | re.IGNORECASE)
+_TELL_USER_RE = re.compile(
+    r"voc[eê]\s+pode\s+(verificar|executar|rodar|usar)"
+    r"|pode\s+(verificar|executar|rodar)\s+com"
+    r"|(execute|rode|digite)\s+(o\s+|esse\s+|este\s+)?comando"
+    r"|abra\s+o\s+terminal"
+    r"|verifique\s+se\s+os\s+endere",
+    re.IGNORECASE)
+
+
+def _extract_commands(text: str) -> list[str]:
+    """Comandos dos blocos ```bash (sem comentários, até 4, ≤500 chars)."""
+    out: list[str] = []
+    for m in _BASH_BLOCK_RE.finditer(text or ""):
+        lines = [l.rstrip() for l in m.group(1).splitlines()
+                 if l.strip() and not l.strip().startswith("#")]
+        cmd = "\n".join(lines).strip()
+        if cmd and len(cmd) <= 500:
+            out.append(cmd)
+    return out[:4]
+
+
+def _guard_execute(cfg, commands: list[str], ev) -> str:
+    """Último recurso: executa os comandos com as ferramentas do HERMES
+    (denylist + timeout + auditoria) e devolve a saída REAL."""
+    from .tools import execute_tool
+
+    parts: list[str] = []
+    for cmd in commands:
+        primeiro = cmd.split()[0] if cmd.split() else ""
+        if "sudo " in cmd or "=" in primeiro or '"' in primeiro:
+            parts.append(f"$ {cmd}\n(pulado: não parece um comando executável "
+                         "de forma segura — rode manualmente se precisar)")
+            continue
+        ev({"type": "tool_start", "name": "run_command", "args": {"command": cmd}})
+        res = execute_tool("run_command", {"command": cmd}, cfg,
+                           source="guard-claude", agent="claude")
+        ev({"type": "tool_end", "name": "run_command", "ok": res["ok"],
+            "output": res["output"][:4000]})
+        parts.append(f"$ {cmd}\n{res['output']}")
+    return "\n\n".join(parts)
 
 
 _VERSION_CACHE: dict[str, str] = {}
@@ -158,7 +210,8 @@ def run_claude(cfg, message: str, history: list[dict] | None = None,
     return _run_impl(cfg, message, history, on_event, cancel, _light=None)
 
 
-def _run_impl(cfg, message, history, on_event, cancel, _light=None) -> str:
+def _run_impl(cfg, message, history, on_event, cancel, _light=None,
+              _guard: bool = False) -> str:
     ev = on_event or (lambda _e: None)
     history = history or []
 
@@ -187,6 +240,7 @@ def _run_impl(cfg, message, history, on_event, cancel, _light=None) -> str:
         return msg
 
     tool_names: dict[str, str] = {}  # tool_use_id -> nome (p/ tool_end)
+    tools_used = 0                   # v3.0.2: o modelo CHAMOU ferramentas?
     final = ""
     t0 = time.time()
     ev({"type": "step", "step": 1})
@@ -230,6 +284,7 @@ def _run_impl(cfg, message, history, on_event, cancel, _light=None) -> str:
                         final += block["text"]
                         ev({"type": "token", "content": block["text"]})
                     elif block.get("type") == "tool_use":
+                        tools_used += 1
                         tool_names[block.get("id", "")] = block.get("name", "tool")
                         ev({"type": "tool_start", "name": block.get("name", "tool"),
                             "args": block.get("input") or {}})
@@ -259,6 +314,46 @@ def _run_impl(cfg, message, history, on_event, cancel, _light=None) -> str:
                 if data.get("is_error"):
                     ev({"type": "error", "message": texto or "erro no Claude Code"})
                     return final or texto
+
+                # ── guard de execução (v3.0.2): escreveu comando, não rodou ──
+                if (use_light and tools_used == 0 and not _guard
+                        and (cancel is None or not cancel.is_set())):
+                    cmds = _extract_commands(final)
+                    if cmds or _TELL_USER_RE.search(final or ""):
+                        ev({"type": "note",
+                            "message": "guard de execução: o modelo escreveu "
+                                       "comandos sem executar — repetindo com "
+                                       "ordem direta de usar a ferramenta Bash"})
+                        fix = (
+                            "CORREÇÃO IMPORTANTE: na sua resposta anterior você "
+                            "escreveu comandos em blocos de código (ou pediu que "
+                            "o usuário executasse/verificasse). Isso é PROIBIDO.\n"
+                            "Você possui a ferramenta Bash: CHAME a ferramenta "
+                            "Bash para executar cada comando, aguarde o resultado "
+                            "e responda com a SAÍDA REAL.\n\n"
+                            "Pedido original do usuário:\n" + message + "\n"
+                        )
+                        if cmds:
+                            fix += ("\nConteúdo dos blocos de código da sua resposta "
+                                    "anterior (execute via ferramenta Bash o que for "
+                                    "comando; se um bloco não for comando válido, "
+                                    "ignore e obtenha os dados reais de outra forma):\n")
+                            fix += "\n".join(f"  {c}" for c in cmds)
+                        return _run_impl(cfg, fix, history=[], on_event=ev,
+                                         cancel=cancel, _light=use_light,
+                                         _guard=True)
+                if _guard and tools_used == 0:
+                    cmds = _extract_commands(final)
+                    if cmds:
+                        ev({"type": "note",
+                            "message": "guard de execução: executando os comandos "
+                                       "no lugar do modelo (saída real, com auditoria)"})
+                        real = _guard_execute(cfg, cmds, ev)
+                        final = (final.rstrip()
+                                 + "\n\n─\n⚙ *guard de execução do Hermes — o modelo "
+                                   "não usou as ferramentas dele; os comandos foram "
+                                   "executados pelo Hermes (saída REAL, registrada na "
+                                   "aba Auditoria):*\n\n" + real)
                 return _finish_ok()
 
         # processo terminou sem evento "result"

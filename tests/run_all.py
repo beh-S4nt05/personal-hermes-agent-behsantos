@@ -753,7 +753,8 @@ def T33_cli_versao_e_doctor():
     venv_py = ROOT / ".venv" / "bin" / "python"
     py = str(venv_py) if venv_py.exists() else sys.executable
     out = os.popen(f'"{py}" -m hermes --version 2>&1').read()
-    assert "3.0.0" in out, out
+    from hermes.config import VERSION
+    assert VERSION in out, f"esperava {VERSION}: {out}"
     env = dict(os.environ, HERMES_DATA_DIR=tempfile.mkdtemp(prefix="hermes-cli-"),
                HERMES_MOCK="1")
     import subprocess
@@ -840,6 +841,86 @@ def T37_system_busy_relativo_a_nucleos():
     # limiar manual continua honrado (compat)
     with patch.object(S.Path, "read_text", return_value="99.0 1 1 1/1 1"):
         assert S._system_busy(threshold=2.0) is True
+
+
+# ════════════════════ v3.0.2 — guard de execução (Claude Code) ════════════════════
+
+def _fake_cli(script_body: str) -> tuple[Path, Path]:
+    """Cria CLI falsa; devolve (dir, executável)."""
+    d = Path(tempfile.mkdtemp(prefix="hermes-cli-"))
+    exe = d / "claude"
+    exe.write_text("#!/bin/bash\n" + script_body, encoding="utf-8")
+    exe.chmod(0o755)
+    return d, exe
+
+
+def _cli_prologue() -> str:
+    return ('if [[ "$1" == "--version" ]]; then echo "2.1.301 (Claude Code)"; exit 0; fi\n'
+            'D="$(dirname "$0")"\n')
+
+
+@case
+def T38_guard_retry_modelo_recupera_e_executa():
+    """1ª resposta: comando em bloco de código sem executar → guard repete
+    com ordem direta → 2ª resposta CHAMA Bash e entrega saída real."""
+    from hermes.claude_agent import run_claude
+
+    cfg = Config(data_dir=tempfile.mkdtemp(prefix="hermes-t-"), mock=False)
+    cfg.update({"model": "qwen2.5-coder:7b"})
+    body = (_cli_prologue()
+            + 'N=$(cat "$D/cnt" 2>/dev/null || echo 0); N=$((N+1)); echo $N > "$D/cnt"\n'
+            + 'if [[ "$N" == "1" ]]; then\n'
+            + "cat <<'EOF'\n"
+            + '{"type":"result","subtype":"success","result":"Vou verificar. Execute o comando:\\n```bash\\ncat /etc/os-release\\n```\\nVoumos executar agora."}\n'
+            + "EOF\n"
+            + "else\n"
+            + "cat <<'EOF'\n"
+            + '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"cat /etc/os-release"}}]}}\n'
+            + '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"PRETTY_NAME=\\"Teste-Real-Zorin\\""}]}}\n'
+            + '{"type":"result","subtype":"success","result":"Saida REAL: PRETTY_NAME=\\"Teste-Real-Zorin\\" — sistema identificado."}\n'
+            + "EOF\n"
+            + "fi\n")
+    d, _ = _fake_cli(body)
+    os.environ["PATH"] = str(d) + os.pathsep + os.environ.get("PATH", "")
+    try:
+        evs: list[dict] = []
+        final = run_claude(cfg, "mostre informações do sistema",
+                           history=[], on_event=evs.append)
+        assert "Teste-Real-Zorin" in final, final[:200]
+        assert (d / "cnt").read_text().strip() == "2"      # 2 invocações (retry)
+        notas = [e["message"] for e in evs if e["type"] == "note"]
+        assert any("guard de execução" in n and "repetindo" in n for n in notas)
+        assert any(e["type"] == "tool_start" and e["name"] == "Bash" for e in evs)
+    finally:
+        os.environ["PATH"] = os.environ["PATH"].replace(str(d) + os.pathsep, "", 1)
+
+
+@case
+def T39_guard_teimoso_hermes_executa_no_lugar():
+    """Modelo insiste em não executar → Hermes executa os comandos de verdade
+    (denylist + auditoria) e entrega a saída REAL — nunca deixa na mão."""
+    from hermes import audit
+    from hermes.claude_agent import run_claude
+
+    cfg = Config(data_dir=tempfile.mkdtemp(prefix="hermes-t-"), mock=False)
+    cfg.update({"model": "qwen2.5-coder:7b"})
+    body = (_cli_prologue()
+            + "cat <<'EOF'\n"
+            + '{"type":"result","subtype":"success","result":"Voumos verificar:\\n```bash\\necho zorin-guard-ok\\n```\\n```bash\\nPRETTY_NAME=\\"Zorin OS 16\\"\\n```\\nVoumos executar agora."}\n'
+            + "EOF\n")
+    d, _ = _fake_cli(body)
+    os.environ["PATH"] = str(d) + os.pathsep + os.environ.get("PATH", "")
+    try:
+        evs: list[dict] = []
+        final = run_claude(cfg, "informações do sistema", history=[], on_event=evs.append)
+        assert "zorin-guard-ok" in final, final[:300]      # comando REAL executou
+        assert "pulado" in final                            # bloco alucinado pulado
+        assert "guard de execução do Hermes" in final
+        assert any(e["type"] == "tool_start" and e["name"] == "run_command" for e in evs)
+        recs = audit.query(cfg, tool="run_command", limit=10)
+        assert any(r.get("source") == "guard-claude" for r in recs), recs
+    finally:
+        os.environ["PATH"] = os.environ["PATH"].replace(str(d) + os.pathsep, "", 1)
 
 
 if __name__ == "__main__":
