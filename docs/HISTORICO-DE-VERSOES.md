@@ -11,10 +11,10 @@ entregue (um commit por versão, árvore verbatim dos zips de release).
 
 | Branch | Fase | Versões | Marco |
 |---|---|---|---|
-| [`v1.x`]({'v1.x'}) | 🖥 **1 — O agente de terminal** | v1.1.0 → v1.5.0 | núcleo: chat, comandos, memória, agendamento |
-| [`v2.x`]({'v2.x'}) | 🌐 **2 — GUI web + 2º agente** | v2.0.0 → v2.2.8 | painel web, Claude Code, web, voz |
-| [`v3.0.x`]({'v3.0.x'}) | 🏗 **3 — A plataforma** | v3.0.0 → v3.0.2 | auditoria, backups, skills, scheduler, doctor |
-| [`v3.1.x`]({'v3.1.x'}) | 📧 **4 — Conectividade** | v3.1.0 → v3.1.3 | e-mail (OAuth 2FA), agenda, log ao vivo |
+| [`v1.x`](../tree/v1.x) | 🖥 **1 — O agente de terminal** | v1.1.0 → v1.5.0 | núcleo: chat, comandos, memória, agendamento |
+| [`v2.x`](../tree/v2.x) | 🌐 **2 — GUI web + 2º agente** | v2.0.0 → v2.2.8 | painel web, Claude Code, web, voz |
+| [`v3.0.x`](../tree/v3.0.x) | 🏗 **3 — A plataforma** | v3.0.0 → v3.0.2 | auditoria, backups, skills, scheduler, doctor |
+| [`v3.1.x`](../tree/v3.1.x) | 📧 **4 — Conectividade** | v3.1.0 → v3.1.3 | e-mail (OAuth 2FA), agenda, log ao vivo |
 | `main` | 📱 **5 — Mobile** | v3.2.0 → | GUI responsiva + PWA instalável |
 
 ---
