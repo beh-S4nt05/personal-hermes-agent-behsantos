@@ -1,5 +1,35 @@
 # Changelog
 
+## v3.5.0 — 🧠 mente sênior no orquestrador/revisor · 🛡 fim do bug "não recebo a resposta"
+
+Dois pedidos do operador, tratados na raiz:
+
+**🧠 Uma mente acima de adolescente — um sênior experiente.** Os prompts
+do 🎯 orquestrador e do 🔍 revisor foram reescritos como um engenheiro de
+sistemas SÊNIOR com 30 anos de estrada: calmo, direto, obcecado por
+resultado certo na primeira tentativa:
+- orquestrador: lê a INTENÇÃO real do pedido (não só o texto), escreve
+  a task como uma ORDEM DE SERVIÇO precisa — objetivo com verbo de
+  conclusão, passos curtos que um subordinado executa sem perguntar
+  nada, critérios VERIFICÁVEIS — com exemplos firmados no prompt;
+- executor: recebe a ordem de serviço + "padrão de qualidade" (completar
+  na PRIMEIRA tentativa, trazer EVIDÊNCIA real, nunca pedir ao usuário
+  para fazer);
+- revisor: o veterano que ASSINA embaixo — checklist de cobrança em 4
+  itens (cumprimento · evidência real · proibições · entrega) e aprova
+  só se TODOS passarem. "O operador não pode receber retrabalho."
+
+**🛡 Bug recorrente "não recebo a resposta do agente" — erradicado em
+duas camadas:** (1) GARANTIDOR no servidor: se qualquer caminho terminar
+o stream sem emitir `done`, o resultado final é entregue de qualquer
+jeito; (2) GUI defensiva: a resposta final sempre vira bolha — mesmo se
+nenhum token tiver sido streamado (done direto) — e quando o final difere
+do texto streamado (selo 🔍 da revisão), a bolha é ATUALIZADA com o
+conteúdo final. Regressão protegida pelo teste T57 (stub sem done →
+garantidor entrega; todos os caminhos emitem exatamente 1 done).
+
+Testes T57–T58. Suíte: **58/58**.
+
 ## v3.4.0 — ⌨️ comandos /na GUI · 🔬 por baixo dos panos · ✦ skills no pipeline · 🔒 aprovação de criação
 
 Quatro pedidos do operador, implementados como features permanentes:

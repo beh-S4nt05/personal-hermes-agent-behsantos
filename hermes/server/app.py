@@ -687,12 +687,15 @@ self.addEventListener("fetch", (e) => {
 
         q: "queue.Queue[dict | None]" = queue.Queue()
         cancel = threading.Event()
-        result = {"final": "", "duration_s": None, "tokens": 0, "steps": 0}
+        result = {"final": "", "duration_s": None, "tokens": 0, "steps": 0,
+                  "done_emitted": False}
 
         def collect(e: dict) -> None:
             """Publica eventos na fila e coleta estatísticas da geração."""
             if cancel.is_set():
                 return
+            if e.get("type") == "done":
+                result["done_emitted"] = True
             if e.get("type") == "token":
                 # hermes emite por token (conta 1); claude emite por bloco —
                 # estima pelos caracteres para as estatísticas ficarem honestas
@@ -741,6 +744,12 @@ self.addEventListener("fetch", (e) => {
                         "steps": result["steps"],
                         "tok_s": tok_s,
                     })
+                    # v3.5 GARANTIDOR: se nenhum caminho emitiu "done", o
+                    # resultado final é entregue de qualquer jeito — a
+                    # resposta do agente NUNCA some (bug recorrente: fim do
+                    # stream sem done = conversa muda sem resposta).
+                    if not result["done_emitted"] and result["final"]:
+                        q.put({"type": "done", "message": result["final"]})
                     # v3.0: métricas históricas (painel de desempenho)
                     try:
                         from .. import metrics as _metrics

@@ -1231,8 +1231,14 @@ async function sendChat(){
   clearInterval(tick);
   if (turns.loading){ turns.loading.remove(); turns.loading = null; }
   turns.texts.forEach(t=>{ if (t && t.textContent.trim()) t.innerHTML = miniMD(t.textContent); });
-  // badge com o tempo de geração (do servidor; fallback: cronômetro do navegador)
+  // v3.5: a resposta final SEMPRE aparece — mesmo se nenhum token foi
+  // streamado (done direto) ou se o final difere do streamado (selo 🔍)
   const lastText = [...turns.texts].reverse().find(t=>t && t.textContent.trim());
+  if (finalMsg){
+    if (!lastText) bubble("bot", miniMD(finalMsg), "");
+    else if (finalMsg.trim() !== lastText.textContent.trim())
+      lastText.innerHTML = miniMD(finalMsg);
+  }
   if (lastText){
     const dur = turns.stats ? turns.stats.duration_s : ((performance.now()-t0)/1000).toFixed(1);
     const extra = turns.stats ? " · " + turns.stats.tokens + " tokens · " +

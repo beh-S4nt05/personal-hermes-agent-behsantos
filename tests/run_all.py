@@ -1521,6 +1521,120 @@ def T48_agenda_google_somente_leitura():
 
 
 @case
+def T57_resposta_sempre_entregue():
+    """v3.5 REGRESSÃO do bug recorrente 'não recebo a resposta':
+    (a) todo caminho do chat emite UM done com mensagem não vazia;
+    (b) se o pipeline ESQUECER o done, o GARANTIDOR do servidor entrega
+    o resultado final de qualquer jeito; (c) a GUI renderiza a resposta
+    final mesmo sem tokens streamados (marcador do render defensivo)."""
+    import threading as _th
+
+    from hermes import orchestrator as orc
+    cfg = fresh()
+    c = _app(cfg)
+    orc.APPROVAL_TIMEOUT_S = 20
+
+    def _chat_evts(msg, seg=40):
+        evs = []
+        r = c.post("/api/chat", json={"message": msg, "history": []}, buffered=False)
+        def run():
+            try:
+                for linha in r.response:
+                    linha = linha.decode("utf-8", "replace").strip()
+                    if linha:
+                        evs.append(json.loads(linha))
+            except Exception as exc:  # noqa: BLE001
+                evs.append({"type": "error", "message": str(exc)})
+        th = _th.Thread(target=run, daemon=True); th.start()
+        return evs, th
+
+    def _done(evs):
+        ds = [e for e in evs if e.get("type") == "done"]
+        return ds
+
+    # (a1) rota responder
+    evs, th = _chat_evts("oi, tudo bem?")
+    th.join(timeout=30)
+    ds = _done(evs)
+    assert len(ds) == 1 and ds[0]["message"].strip(), (len(ds), evs[:5])
+    # (a2) rota executar leitura (com revisão e selo)
+    evs, th = _chat_evts("verifique o uso de memória da máquina")
+    th.join(timeout=45)
+    ds = _done(evs)
+    assert len(ds) == 1 and "revisada" in ds[0]["message"], (len(ds), evs[:5])
+    # (a3) criação cancelada no plano → done com motivo (não vazio)
+    evs, th = _chat_evts("crie um arquivo teste.txt com dados")
+    fim = time.time() + 20
+    ap = None
+    while time.time() < fim and not ap:
+        ap = next((e for e in evs if e.get("type") == "approval_request"), None)
+        time.sleep(0.1)
+    assert ap, evs[:5]
+    c.post("/api/chat/approve", json={"id": ap["id"], "action": "cancelar"})
+    th.join(timeout=25)
+    ds = _done(evs)
+    assert len(ds) == 1 and "cancelada" in ds[0]["message"], (len(ds), evs[-5:])
+    # (b) GARANTIDOR: pipeline que esquece o done → servidor entrega mesmo assim
+    orig = orc.run_pipeline
+    def _sem_done(agent, cfg, message, history, on_event=None, cancel=None, **kw):
+        return "RESPOSTA FINAL SEM DONE DO PIPELINE"
+    orc.run_pipeline = _sem_done
+    try:
+        evs, th = _chat_evts("qualquer coisa")
+        th.join(timeout=30)
+        ds = _done(evs)
+        assert len(ds) == 1 and ds[0]["message"] == "RESPOSTA FINAL SEM DONE DO PIPELINE", evs
+    finally:
+        orc.run_pipeline = orig
+    # (c) GUI: render defensivo presente
+    html = c.get("/").get_data(as_text=True)
+    assert "v3.5: a resposta final SEMPRE aparece" in html
+    assert 'bubble("bot", miniMD(finalMsg), "")' in html
+
+
+@case
+def T58_mente_senior_orquestrador():
+    """v3.5: orquestrador e revisor com mente SÊNIOR (30 anos, cobrança,
+    sem retrabalho) e o padrão de qualidade injetado no executor."""
+    from hermes import orchestrator as orc
+
+    # personas nos prompts
+    assert "ORQUESTRADOR" in orc._PLANO_JSON and "SÊNIOR" in orc._PLANO_JSON
+    assert "30 anos" in orc._PLANO_JSON
+    assert "INTENÇÃO real" in orc._PLANO_JSON            # lê além do texto
+    assert "PRIMEIRA tentativa" in orc._PLANO_JSON
+    assert "VERIFICÁVEIS" in orc._PLANO_JSON
+    assert "REVISOR SÊNIOR" in orc._REVISAO_JSON
+    assert "retrabalho" in orc._REVISAO_JSON
+    assert "COBRE" in orc._REVISAO_JSON
+    for item in ("CUMPRIMENTO", "EVIDÊNCIA REAL", "PROIBIÇÕES", "ENTREGA"):
+        assert item in orc._REVISAO_JSON, item           # checklist de cobrança
+    # plano/rota continuam funcionando com o prompt novo
+    cfg = fresh()
+    assert orc.plan(cfg, "me conta uma piada", [])["rota"] == "responder"
+    pl = orc.plan(cfg, "verifique o disco e aponte problemas", [])
+    assert pl["rota"] == "executar" and pl["tipo"] == "leitura"
+    # o executor recebe a ordem de serviço do sênior (brain event ao vivo)
+    c = _app(cfg)
+    evs = []
+    r = c.post("/api/chat", json={"message": "verifique o uso de disco",
+                                  "history": []}, buffered=False)
+    for linha in r.response:
+        linha = linha.decode("utf-8", "replace").strip()
+        if linha:
+            evs.append(json.loads(linha))
+    brain = [e for e in evs if e.get("type") == "brain"]
+    execu = next((e for e in brain if e.get("stage") == "⚡ executor"), None)
+    assert execu, [e.get("stage") for e in brain]
+    pj = execu["data"]["prompt_injetado"]
+    assert "ordem de serviço de um sênior" in pj
+    assert "PRIMEIRA tentativa" in pj and "EVIDÊNCIA" in pj
+    assert "o revisor vai cobrar" in pj
+    rev = next((e for e in brain if e.get("stage") == "🔍 revisor"), None)
+    assert rev and rev["data"]["veredito"] == "ok"
+
+
+@case
 def T54_comandos_slash_no_chat():
     """v3.4: comandos do terminal disponíveis na GUI via /api/chat/command —
     /goal define e mostra, /tools, /skills, /tasks, /memoria, /ajuda;

@@ -703,6 +703,16 @@ com opção de ✏️ editar o plano — e pausam de novo na entrega, onde o
 resultado pode ser editado antes de você receber. Tasks de leitura
 (listar, verificar, resumir) seguem direto. Desligável em Ajustes.
 
+**🧠 Mente sênior (v3.5.0):** o 🎯 orquestrador e o 🔍 revisor pensam
+como um engenheiro de sistemas sênior de 30 anos de estrada — o
+orquestrador lê a INTENÇÃO real do pedido e escreve a task como uma
+ordem de serviço (objetivo com conclusão, passos curtos, critérios
+verificáveis); o revisor COBRA com checklist de 4 itens (cumprimento,
+evidência real, proibições, entrega) e só aprova se passar em tudo —
+para você não receber retrabalho. E a resposta do agente nunca mais
+some: o servidor garante a entrega do resultado (garantidor de `done`)
+e a GUI sempre renderiza a resposta final.
+
 **🎯 Pipeline orquestrado (v3.3.0):** mensagens de AÇÃO no chat seguem o
 fluxo **🎯 orquestrador → ⚡ executor → 🔍 revisor**. O orquestrador (rápido)
 decide a rota e monta objetivo/passos/critérios; a task é registrada; o
