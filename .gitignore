@@ -1,6 +1,9 @@
+# dados locais do agente (conversas, auditoria, AGENDA/SEGREDO DE E-MAIL) — nunca versionar
+data/
+# ambiente python
 .venv/
 __pycache__/
+*.pyc
 *.egg-info/
-data/
-~/.hermes/
-*.log
+# artefatos de release
+*.zip

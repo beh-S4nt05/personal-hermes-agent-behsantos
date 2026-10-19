@@ -647,8 +647,8 @@ agendamentos, configuração).
 
 ```bash
 hermes email setup
-# informe: breno0s1s6@gmail.com  + senha de app (não a senha normal)
-# informe: breno.239941@fmm.org.br + a senha usada no webmail da FMM
+# informe: seu.usuario@gmail.com + senha de app (não a senha normal)
+# informe: conta@instituicao.org.br + a senha do webmail institucional
 hermes email oauth     # contas Microsoft/Google (2FA via navegador)
 hermes email test      # valida os logins
 hermes email modo <conta> envio   # libera o ENVIO (padrão: somente leitura)
@@ -658,7 +658,7 @@ hermes email modo <conta> envio   # libera o ENVIO (padrão: somente leitura)
 - **Gmail**: exige 2FA ativado → crie a senha de app em
   `myaccount.google.com/apppasswords` (16 caracteres) — é ELA que se usa
   no setup, nunca a senha principal da conta.
-- **FMM/_outros domínios**: o setup testa sozinho `imap.`/`mail.` do
+- **Outros domínios**: o setup testa sozinho `imap.`/`mail.` do
   domínio; se o servidor da instituição for diferente, edite
   `<data>/secrets/email.json` (campos `imap_host`/`smtp_host`).
 
@@ -684,6 +684,18 @@ automaticamente (e o seletor v3.0 injeta só as relevantes à pergunta).
 2. `hermes email oauth` → escolha o provedor, informe e-mail + client_id
    → abre o link, digite o código mostrado, autorize com seu 2FA. Pronto:
    o refresh token fica guardado junto das demais credenciais (600).
+
+**📱 Pelo celular (v3.2.0 — GUI responsiva + PWA):** a GUI se adapta a
+qualquer tela (barra de navegação inferior no celular, teclado respeitado
+no chat, alvos de toque grandes). Para usar no celular:
+1. no PC, descubra o IP na rede local (`ip a` — ex.: `192.168.0.20`);
+2. no celular, no **mesmo Wi-Fi**, abra `http://192.168.0.20:8080`;
+3. use "Adicionar à tela inicial" — o Hermes abre como **app** (tela
+   cheia, ícone próprio), com o log e o chat ao vivo no bolso.
+   *Nota:* o service worker (modo offline do shell) só ativa em contexto
+   seguro — HTTPS ou localhost. Na rede local via http o app funciona
+   normal, apenas sem o cache offline; para isso, coloque HTTPS na frente
+   (proxy reverso com certificado ou túnel) quando quiser acesso externo.
 
 **🔎 Somente leitura por padrão (v3.1.3):** toda conta de e-mail fica em
 modo VISUALIZAÇÃO — o agente lista, lê e busca, mas **não envia** (leitura

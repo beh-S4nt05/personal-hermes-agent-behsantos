@@ -2,8 +2,17 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hermes Agent — Painel de Controle</title>
+<meta name="description" content="Agente Linux local com GUI de controle — Ollama + Hermes, 100% offline">
+<meta name="theme-color" content="#0b0e14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hermes">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
   :root{
     --bg:#0b0e14; --bg2:#0e121b; --panel:#121826; --panel2:#161d2e;
@@ -88,7 +97,8 @@
   .logbox .hl{color:#c9bcff}
 
   /* ---------- chat ---------- */
-  .chatwrap{display:flex;flex-direction:column;height:calc(100vh - 230px);min-height:480px}
+  .chatwrap{display:flex;flex-direction:column;height:calc(100vh - 230px);
+             height:calc(100dvh - 230px);min-height:480px}
   #chatlog{flex:1;overflow-y:auto;padding:6px 4px 16px;display:flex;flex-direction:column;gap:14px}
   .msg{max-width:88%;padding:12px 15px;border-radius:13px;font-size:13.5px;word-wrap:break-word}
   .msg.user{align-self:flex-end;background:linear-gradient(135deg,#5236e0,#6b4df0);border-bottom-right-radius:4px;color:#fff}
@@ -254,6 +264,73 @@
   .tag.idle{border-color:var(--warn);color:var(--warn)}
   .hist-mini{margin-top:6px;border-left:2px solid var(--border);padding-left:10px}
   .hist-mini .h{font-size:11.5px;color:var(--dim);margin:2px 0}
+
+  /* ═══════════════ v3.2 — responsivo: celular e tablet ═══════════════ */
+  @media (max-width:1024px){
+    .wrap{max-width:100%}
+  }
+  @media (max-width:768px){
+    body{font-size:13px}
+    .wrap{padding:10px 12px calc(92px + env(safe-area-inset-bottom,0px))}
+    header{gap:8px;padding:10px 0 12px}
+    .logo{font-size:15px;gap:8px}
+    .logo .gem{width:22px;height:22px;font-size:13px;border-radius:7px}
+    .logo small{font-size:10px}
+    .pills{margin-left:auto;gap:6px}
+    .pill{padding:4px 9px;font-size:11px}
+    /* nav vira barra inferior fixa e rolável (alcançável com o polegar) */
+    nav{position:fixed;left:0;right:0;bottom:0;z-index:55;margin:0;gap:2px;
+        display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+        background:rgba(11,14,20,.96);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+        border-top:1px solid var(--border);
+        padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+    nav::-webkit-scrollbar{display:none}
+    nav button{flex:0 0 auto;padding:9px 13px;font-size:12px;border-radius:10px;
+               border-color:transparent;background:transparent;white-space:nowrap}
+    nav button.active{border-color:var(--acc)}
+    html[data-theme="light"] nav{background:rgba(244,246,251,.97)}
+    .grid{grid-template-columns:1fr;gap:12px}
+    .card{padding:14px;border-radius:12px}
+    .kv{font-size:12.5px}
+    .msg{max-width:94%;font-size:13px}
+    .chatrow{flex-wrap:wrap}
+    #chatin{font-size:16px}                    /* impede o zoom automático do iOS */
+    input[type=text],input[type=number],input[type=password],textarea,select{
+      font-size:16px;min-height:44px}
+    button.b{min-height:44px}
+    button.b.small{min-height:38px}
+    .logbox{height:min(420px,55dvh)}
+    .auditrow{grid-template-columns:auto auto 1fr;grid-template-rows:auto auto;font-size:11.5px}
+    .auditrow .out{grid-column:1/-1;white-space:normal}
+    .notifbox{left:10px;right:10px;top:auto;width:auto;
+              bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+    .toast{left:12px;right:12px;max-width:none;
+           bottom:calc(88px + env(safe-area-inset-bottom,0px))}
+    .modal{max-height:92dvh}
+    .modalbg,.modalwrap{padding:10px}
+    .banner{font-size:11.5px;padding:9px 11px}
+    .toolgrid{grid-template-columns:1fr 1fr}
+    .chatwrap{height:calc(100dvh - 235px);min-height:320px}
+    .livebox{font-size:11px;padding:10px 12px}
+    form.set{grid-template-columns:1fr}
+    .chips{gap:6px}
+    .chip{font-size:11.5px;padding:8px 12px}
+    footer{margin-top:22px;font-size:10.5px}
+  }
+  @media (max-width:420px){
+    .toolgrid{grid-template-columns:1fr}
+    .logo small{display:none}
+    .pills{width:100%;margin-left:0}
+  }
+  /* toque: sem hover-fantasma e alvos maiores */
+  @media (hover:none){
+    button.b:hover:not(:disabled){transform:none}
+    .tool summary{padding:12px}
+    .chip{padding:10px 14px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
 </style>
 </head>
 <body>
@@ -724,6 +801,10 @@
 
 <script>
 "use strict";
+/* ═══ PWA (v3.2): registra o service worker quando o contexto é seguro ═══ */
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register("/sw.js").catch(()=>{});
+}
 /* ═══════════════ utilidades ═══════════════ */
 const $ = (id) => document.getElementById(id);
 const state = { status:null, paused:false, es:null, sending:false, history:[], token:"", page:"painel", sessionId:null, abort:null };

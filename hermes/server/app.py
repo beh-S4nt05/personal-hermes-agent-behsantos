@@ -130,6 +130,119 @@ def create_app(cfg: Config) -> Flask:
         resp.headers["Cache-Control"] = "no-store, must-revalidate"
         return resp
 
+    # ------------------------------------------------- PWA (v3.2)
+    # A GUI é instalável como app no celular/tablet (manifest + service
+    # worker + ícones). Tudo gerado em Python puro — zero dependências.
+    @app.get("/manifest.webmanifest")
+    def manifest():
+        return jsonify({
+            "name": "Hermes Agent — Painel de Controle",
+            "short_name": "Hermes",
+            "description": "Agente Linux local com GUI de controle (Ollama + Hermes)",
+            "start_url": "/", "scope": "/",
+            "display": "standalone", "orientation": "any",
+            "background_color": "#0b0e14", "theme_color": "#0b0e14",
+            "lang": "pt-BR",
+            "icons": [
+                {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png",
+                 "purpose": "any maskable"},
+                {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png",
+                 "purpose": "any maskable"},
+            ],
+        })
+
+    _SW_JS = """// service worker do Hermes Agent (v3.2) — shell offline mínimo
+const CACHE = "hermes-shell-v3.2";
+const SHELL = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
+self.addEventListener("install", (e) => {
+  self.skipWaiting();
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));
+});
+self.addEventListener("activate", (e) => {
+  e.waitUntil(caches.keys().then((ks) => Promise.all(
+    ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+  ).then(() => self.clients.claim()));
+});
+self.addEventListener("fetch", (e) => {
+  const url = new URL(e.request.url);
+  if (e.request.method !== "GET" || url.pathname.startsWith("/api/")) return;
+  e.respondWith(
+    fetch(e.request).then((r) => {
+      if (r.ok && url.origin === location.origin) {
+        const cp = r.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, cp)).catch(() => {});
+      }
+      return r;
+    }).catch(() => caches.match(e.request).then((m) => m || caches.match("/")))
+  );
+});
+"""
+
+    @app.get("/sw.js")
+    def service_worker():
+        resp = Response(_SW_JS, mimetype="application/javascript")
+        resp.headers["Cache-Control"] = "no-store"
+        resp.headers["Service-Worker-Allowed"] = "/"
+        return resp
+
+    def _pwa_icon(size: int) -> bytes:
+        """Ícone do app (losango ◈ em gradiente roxo) — PNG escrito à mão
+        com zlib/struct, sem Pillow nem qualquer dependência."""
+        import struct
+        import zlib
+        from functools import lru_cache
+
+        @lru_cache(maxsize=4)
+        def _gen(size: int) -> bytes:
+            half = size / 2 - .5
+            rad = int(size * 0.225)
+            c = size - 1
+
+            def px(x: int, y: int):
+                # gradiente diagonal #4633b8 -> #7c5cff
+                k = (x + y) / max(1, 2 * c)
+                r = int(0x46 + (0x7c - 0x46) * k)
+                g = int(0x33 + (0x5c - 0x33) * k)
+                b = int(0xb8 + (0xff - 0xb8) * k)
+                a = 255
+                # cantos arredondados (transparente fora)
+                for cx, cy in ((rad, rad), (c - rad, rad),
+                               (rad, c - rad), (c - rad, c - rad)):
+                    if (abs(x - cx) < rad and abs(y - cy) < rad
+                            and (x - cx) ** 2 + (y - cy) ** 2 > rad * rad):
+                        a = 0
+                # losango ◈ com borda suave
+                d = abs(x - half) + abs(y - half)
+                in_d, edge = size * 0.295, size * 0.35
+                if d < in_d:
+                    r, g, b = 0xd7, 0xe0, 0xee
+                elif d < edge:
+                    m = (d - in_d) / max(1e-6, edge - in_d)
+                    r = int(0xd7 + (r - 0xd7) * m)
+                    g = int(0xe0 + (g - 0xe0) * m)
+                    b = int(0xee + (b - 0xee) * m)
+                return r, g, b, a
+
+            raw = b"".join(
+                b"\x00" + b"".join(bytes(px(x, y)) for x in range(size))
+                for y in range(size))
+
+            def chunk(tag: bytes, data: bytes) -> bytes:
+                return (struct.pack(">I", len(data)) + tag + data
+                        + struct.pack(">I", zlib.crc32(tag + data) & 0xffffffff))
+
+            ihdr = struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)
+            return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
+                    + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+        return _gen(size)
+
+    @app.get("/icon-<int:size>.png")
+    def pwa_icon(size: int):
+        if size not in (192, 512):
+            size = 192
+        return Response(_pwa_icon(size), mimetype="image/png",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
     # ----------------------------------------------------------- status
     @app.get("/api/status")
     @protected

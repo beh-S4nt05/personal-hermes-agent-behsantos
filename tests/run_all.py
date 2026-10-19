@@ -941,7 +941,7 @@ class _FakeImap(_threading.Thread):
         self.logins: list[list[str]] = []
         self.auths: list[str] = []          # strings SASL XOAUTH2 recebidas
         self.messages = [
-            b"From: Prof. Silva <prof@fmm.org.br>\r\n"
+            b"From: Prof. Silva <prof@escola.org.br>\r\n"
             b"To: t@x.com\r\n"
             b"Subject: Prazo de entrega do trabalho\r\n"
             b"Date: Sat, 18 Oct 2026 09:00:00 -0400\r\n"
@@ -953,7 +953,7 @@ class _FakeImap(_threading.Thread):
             b"Date: Fri, 17 Oct 2026 18:00:00 -0400\r\n"
             b"\r\n"
             b"As 10 noticias da semana em uma linha cada.\r\n",
-            b"From: Coordenacao <coord@fmm.org.br>\r\n"
+            b"From: Coordenacao <coord@escola.org.br>\r\n"
             b"To: t@x.com\r\n"
             b"Subject: =?utf-8?B?UmV1bsOjbyBhbWHDow==?=\r\n"
             b"Date: Thu, 16 Oct 2026 14:00:00 -0400\r\n"
@@ -1518,6 +1518,39 @@ def T48_agenda_google_somente_leitura():
     st = agendacfg.status(cfg)
     assert st["accounts"][0]["scope"].endswith("calendar.readonly")
     assert st["mcp_registered"]
+
+
+@case
+def T50_gui_responsiva_e_pwa():
+    """v3.2: GUI responsiva (viewport dinâmico, barra inferior, alvos de toque,
+    inputs 16px anti-zoom do iOS) e PWA instalável (manifest, service worker
+    que NUNCA cacheia /api/, ícones PNG gerados sem dependências)."""
+    from hermes.server.app import create_app
+    cfg = fresh()
+    c = create_app(cfg).test_client()
+    html = c.get("/").get_data(as_text=True)
+    # responsivo
+    for marco in ("viewport-fit=cover", "100dvh", "@media (max-width:768px)",
+                  "@media (hover:none)", "prefers-reduced-motion",
+                  "env(safe-area-inset-bottom"):
+        assert marco in html, marco
+    assert "font-size:16px" in html            # anti-zoom iOS nos inputs
+    assert "position:fixed;left:0;right:0;bottom:0" in html  # nav = barra inferior
+    # pwa
+    assert 'rel="manifest"' in html and "icon-192.png" in html
+    assert "serviceWorker" in html and "isSecureContext" in html
+    m = c.get("/manifest.webmanifest").get_json()
+    assert m["display"] == "standalone" and m["start_url"] == "/"
+    assert {i["sizes"] for i in m["icons"]} == {"192x192", "512x512"}
+    sw = c.get("/sw.js").get_data(as_text=True)
+    assert "addAll" in sw
+    assert 'startsWith("/api/")' in sw         # API nunca servida do cache
+    assert "token" not in sw.lower()           # nada sensível no worker
+    for s in (192, 512):
+        b = c.get(f"/icon-{s}.png").get_data()
+        assert b[:4] == b"\x89PNG" and len(b) > 2000, s
+    # ícone inválido cai no 192 (não erro 500)
+    assert c.get("/icon-99.png").get_data()[:4] == b"\x89PNG"
 
 
 @case

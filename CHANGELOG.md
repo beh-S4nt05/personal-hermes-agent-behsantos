@@ -1,5 +1,34 @@
 # Changelog
 
+## v3.2.0 — 📱 GUI responsiva (celular/tablet) + instalável como app (PWA)
+
+Diretriz do operador: a GUI deve se adaptar à tela do usuário — e a
+aplicação will ganhar acesso mobile.
+
+**Responsivo de verdade (zero build-step mantido — CSS e JS puros):**
+- navegação vira **barra inferior fixa e rolável** no celular (alcançável
+  com o polegar), com blur e área segura (notch) respeitada;
+- chat com **viewport dinâmico (100dvh)** — o teclado do celular não
+  esconde mais a caixa de mensagem;
+- **inputs com 16px** → o iOS não dá zoom automático ao focar;
+- alvos de toque ≥44px, sem hover-fantasma em telas de toque;
+- grid de cards, auditoria, modais, toasts e notificações refluem para
+  uma coluna; `prefers-reduced-motion` respeitado; tema claro adaptado.
+
+**Instalável como app (PWA):** `manifest.webmanifest` + service worker +
+ícones gerados em Python puro (PNG escrito com zlib/struct — sem Pillow).
+No celular: "Adicionar à tela inicial" abre em modo standalone, como app.
+O worker NUNCA cacheia `/api/*` (dados sempre ao vivo) e só age em
+contexto seguro (HTTPS/localhost) — em LAN http ele fica em silêncio.
+
+**Acesso do celular na prática:** no PC, `ip a` mostra o IP da rede; no
+celular (mesmo Wi-Fi), abra `http://<ip-do-pc>:8080`. Para instalação
+completa do PWA e uso fora de casa, coloque HTTPS na frente (proxy
+reverso ou túnel) — documentado no docs.md.
+
+Teste T50: viewport/marcos responsivos, manifest standalone, worker
+(api nunca cacheada), ícones PNG válidos (192/512). Suíte: **50/50**.
+
 ## v3.1.3 — 🔎 E-mail somente leitura por padrão · 🗓 Agenda Google · 🌀 guard anti-loop
 
 Diretriz do operador: o agente deve **VISUALIZAR** e-mails e agenda das duas
