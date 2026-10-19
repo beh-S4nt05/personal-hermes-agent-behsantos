@@ -264,6 +264,9 @@
   .tag.idle{border-color:var(--warn);color:var(--warn)}
   .hist-mini{margin-top:6px;border-left:2px solid var(--border);padding-left:10px}
   .hist-mini .h{font-size:11.5px;color:var(--dim);margin:2px 0}
+  .sysnote{align-self:center;text-align:center;color:var(--dim);font-size:11.5px;
+    border:1px dashed var(--border2);border-radius:99px;padding:4px 14px;
+    margin:4px 0;max-width:94%;word-break:break-word}
 
   /* ═══════════════ v3.2 — responsivo: celular e tablet ═══════════════ */
   @media (max-width:1024px){
@@ -757,6 +760,10 @@
           <textarea id="s-system_prompt_extra" placeholder="ex.: Esta máquina é um servidor de arquivos; prefira soluções não destrutivas…"></textarea></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-sandbox"><label for="s-sandbox" style="color:var(--txt)">sandbox de arquivos (restringe ao workspace)</label></div></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-confirm_dangerous"><label for="s-confirm_dangerous" style="color:var(--txt)">confirmar comandos arriscados no terminal</label></div></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-orchestrator_on"><label for="s-orchestrator_on" style="color:var(--txt)">🎯 Orquestrador (criar task e planejar ações)</label></div>
+          <span class="hint">conversa vira plano → task → execução → revisão</span></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-reviewer_on"><label for="s-reviewer_on" style="color:var(--txt)">🔍 Revisor (conferir o resultado antes de entregar)</label></div>
+          <span class="hint">reprovado = refaz (máx. 2 tentativas)</span></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-claude_use_ollama"><label for="s-claude_use_ollama" style="color:var(--txt)">🔌 Claude Code via Ollama (mesmo servidor do Hermes)</label></div></div>
         <div class="field"><div class="check"><input type="checkbox" id="s-web_access"><label for="s-web_access" style="color:var(--txt)">🌐 acesso à web (busca e leitura de páginas)</label></div></div>
         <div class="field"><label>🎤 modelo de voz (Whisper)</label>
@@ -1214,6 +1221,12 @@ function handleEvent(ev, turns, cursors){
   if (ev.type === "session"){ state.sessionId = ev.id; return; }  // sessão persistida
   if (ev.type === "stats"){ turns.stats = ev; return; }           // tempo/tokens da resposta
   if (ev.type === "ping") return;  // keepalive do servidor enquanto a IA pensa
+  if (ev.type === "note"){          // v3.3: etapas do pipeline (🎯/🔍)
+    const nd = document.createElement("div");
+    nd.className = "sysnote"; nd.textContent = ev.message || "";
+    $("chatlog").appendChild(nd); turns.cur = null; scrollChat();
+    return;
+  }
   if (ev.type === "step"){
     if (turns.loading)
       turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar… <span class="hint">(passo '+ev.step+')</span>';
@@ -1858,7 +1871,9 @@ async function loadSettings(){
     $("s-temperature").value = s.temperature; $("s-system_prompt_extra").value = s.system_prompt_extra;
     $("s-auth_token").value = s.auth_token || "";
     $("s-sandbox").checked = !!s.sandbox; $("s-confirm_dangerous").checked = !!s.confirm_dangerous;
-    $("s-claude_use_ollama").checked = !!s.claude_use_ollama; $("s-claude_model").value = s.claude_model || "";
+    $("s-claude_use_ollama").checked = !!s.claude_use_ollama;
+    $("s-orchestrator_on").checked = s.orchestrator_on !== false;
+    $("s-reviewer_on").checked = s.reviewer_on !== false; $("s-claude_model").value = s.claude_model || "";
     $("s-web_access").checked = !!s.web_access;
     $("s-stt_model").value = s.stt_model || "base"; $("s-stt_language").value = s.stt_language || "pt";
     $("s-stt_autosend").checked = !!s.stt_autosend; window.STT_AUTOSEND = !!s.stt_autosend;
@@ -1878,6 +1893,7 @@ async function saveSettings(){
     auth_token: $("s-auth_token").value,
     sandbox: $("s-sandbox").checked, confirm_dangerous: $("s-confirm_dangerous").checked,
     claude_use_ollama: $("s-claude_use_ollama").checked, claude_model: $("s-claude_model").value.trim(),
+    orchestrator_on: $("s-orchestrator_on").checked, reviewer_on: $("s-reviewer_on").checked,
     web_access: $("s-web_access").checked,
     stt_model: $("s-stt_model").value, stt_language: $("s-stt_language").value.trim(),
     stt_autosend: $("s-stt_autosend").checked,

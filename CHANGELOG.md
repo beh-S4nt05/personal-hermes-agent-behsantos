@@ -1,5 +1,43 @@
 # Changelog
 
+## v3.3.0 — 🎯 Orquestrador + ⚡ Executor + 🔍 Revisor (pipeline de tasks)
+
+Diretriz do operador: a conversa deve passar por um ORQUESTRADOR que
+entende o que deve ser feito, cria uma TASK, a IA executa, e o resultado
+é REVISADO antes de ser entregue.
+
+**O pipeline (só no agente Hermes; Claude Code segue com seus guards):**
+
+    mensagem ─► 🎯 ORQUESTRADOR (chamada rápida, JSON)
+                  ├─ "responder"  ─► resposta direta (custo zero extra)
+                  └─ "executar"   ─► task criada (registrada + visível)
+                                      ─► ⚡ EXECUTOR (Agent de sempre:
+                                         ferramentas reais, denylist)
+                                      ─► 🔍 REVISOR (cumpriu o objetivo?)
+                                           ├─ ok      ─► entrega com selo
+                                           └─ refazer ─► re-executa com o
+                                              problema apontado (máx. 2)
+
+**Decisões de performance (modelo local ≤8B):** orquestrador e revisor
+rodam em chamadas rápidas (num_predict 220/140, temperature 0, ~1-3 s);
+conversa simples NÃO entra no pipeline; tentativas limitadas a 2 (nunca
+loop infinito); prompts curtos e excertos truncados; em modo mock o
+roteamento é heurístico determinístico (demo estável).
+
+**Robustez:** qualquer falha de parse do orquestrador cai na heurística;
+do revisor, em "ok" (a entrega nunca trava); o `done` da GUI agora sai
+DEPOIS da revisão, com o selo 🔍 na mensagem final.
+
+**GUI:** etapas do pipeline aparecem ao vivo no chat (🎯 task criada,
+🔍 reprovou/refazendo, ✔ aprovada); interruptores em Ajustes
+("🎯 Orquestrador" e "🔍 Revisor"); histórico de tasks em
+`GET /api/orchestrator/tasks` (também em data/orchestrator_tasks.jsonl).
+
+Testes T51–T53: plano/roteamento (JSON, prosa ao redor, lixo→heurística,
+flag), vereditos do revisor (ok/refazer/lixo→ok/flag), e o pipeline
+ponta a ponta no chat real — task criada, executada, aprovada com selo
+no `done`, registrada; conversa comum não gera task. Suíte: **53/53**.
+
 ## v3.2.0 — 📱 GUI responsiva (celular/tablet) + instalável como app (PWA)
 
 Diretriz do operador: a GUI deve se adaptar à tela do usuário — e a

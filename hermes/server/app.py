@@ -243,6 +243,13 @@ self.addEventListener("fetch", (e) => {
         return Response(_pwa_icon(size), mimetype="image/png",
                         headers={"Cache-Control": "public, max-age=86400"})
 
+    # ------------------------------------------- orquestrador (v3.3)
+    @app.get("/api/orchestrator/tasks")
+    @protected
+    def orchestrator_tasks():
+        from ..orchestrator import list_tasks
+        return jsonify({"ok": True, "tasks": list_tasks(cfg)})
+
     # ----------------------------------------------------------- status
     @app.get("/api/status")
     @protected
@@ -613,11 +620,11 @@ self.addEventListener("fetch", (e) => {
                     result["final"] = run_claude(cfg, message, history=clean_history,
                                                  on_event=collect, cancel=cancel)
                 else:
-                    result["final"] = agent.run(
-                        clean_history + [{"role": "user", "content": message}],
-                        on_event=collect,
-                        cancel=cancel,
-                    )
+                    # v3.3: 🎯 orquestrador → ⚡ execução → 🔍 revisão
+                    from ..orchestrator import run_pipeline
+                    result["final"] = run_pipeline(
+                        agent, cfg, message, clean_history,
+                        on_event=collect, cancel=cancel)
             except Exception as exc:  # noqa: BLE001
                 if not cancel.is_set():
                     activity.log(cfg, "chat",
@@ -1151,6 +1158,7 @@ self.addEventListener("fetch", (e) => {
                    "cmd_timeout", "sandbox", "confirm_dangerous", "temperature", "auth_token",
                    "ollama_url", "auto_start_ollama", "claude_use_ollama", "claude_model", "web_access",
                    "stt_model", "stt_language", "stt_autosend", "keep_alive", "num_predict",
+                   "orchestrator_on", "reviewer_on",
                    "max_tool_calls", "backups_keep", "mcp_autorestart", "tool_selector",
                    "memory_top_k"}
         changes = {k: v for k, v in payload.items() if k in allowed}

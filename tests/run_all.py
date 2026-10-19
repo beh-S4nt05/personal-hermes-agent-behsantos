@@ -1521,6 +1521,110 @@ def T48_agenda_google_somente_leitura():
 
 
 @case
+def T51_orquestrador_plano_e_rota():
+    """v3.3 🎯: plano JSONParseado; JSON inválido → heurística; ação → rota
+    'executar' com objetivo; conversa → 'responder'; flag desliga tudo."""
+    from hermes import orchestrator as orc
+
+    cfg = fresh()
+    # heurística (mock não bate no modelo — determinístico)
+    pl = orc.plan(cfg, "crie um arquivo resumo.txt com o uso de memória", [])
+    assert pl["rota"] == "executar" and "resumo.txt" in pl["objetivo"]
+    assert orc.plan(cfg, "oi, tudo bem? me conta uma piada", [])["rota"] == "responder"
+    assert orc.plan(cfg, "qual a capital do Brasil?", [])["rota"] == "responder"
+    assert orc.plan(cfg, "liste os arquivos do workspace", [])["rota"] == "executar"
+    # JSON de verdade do modelo é parseado (mesmo cercado de prosa)
+    orig = orc._fast
+    orc._fast = lambda cfg, sys, user, ntok=200: (
+        'claro! {"rota":"executar","objetivo":"medir disco","passos":["df -h"],'
+        '"criterios":["mostrar saída real"]} espero ajudar')
+    pl = orc.plan(cfg, "verifique o disco", [])
+    assert pl["rota"] == "executar" and pl["objetivo"] == "medir disco"
+    assert pl["passos"] == ["df -h"] and pl["criterios"] == ["mostrar saída real"]
+    # lixo do modelo → heurística (nunca quebra o chat)
+    orc._fast = lambda cfg, sys, user, ntok=200: "46 46 pizza"
+    assert orc.plan(cfg, "rode o comando uname -a", [])["rota"] == "executar"
+    # flag desligada → rota direta, custo zero
+    cfg.orchestrator_on = False
+    assert orc.plan(cfg, "crie um arquivo", [])["rota"] == "responder"
+    cfg.orchestrator_on = True
+    orc._fast = orig
+    # _extract_json: aninhado e com escape
+    assert (orc._extract_json('x {"a":{"b":"c}\\"d"}} y') or {}).get("a", {}).get("b") == 'c}\"d'
+    assert orc._extract_json("sem json aqui") is None
+
+
+@case
+def T52_revisor_vereditos():
+    """v3.3 🔍: ok/refazer parseados; lixo → ok (entrega nunca trava); flag
+    desligada → sempre ok; problema vem junto no refazer."""
+    from hermes import orchestrator as orc
+
+    cfg = fresh()
+    orig = orc._fast
+    orc._fast = lambda cfg, sys, user, ntok=200: '{"veredito":"ok"}'
+    assert orc.review(cfg, "obj", [], "resultado") == {"veredito": "ok"}
+    orc._fast = lambda cfg, sys, user, ntok=200: (
+        '{"veredito":"refazer","problema":"não executou o comando"}')
+    v = orc.review(cfg, "obj", ["mostrar saída real"], "eu sugiro que você rode")
+    assert v["veredito"] == "refazer" and "comando" in v["problema"]
+    # o prompt da revisão recebe objetivo + critérios + resultado
+    capturado = {}
+    def spy(cfg, sys, user, ntok=200):
+        capturado.update(sys=sys, user=user)
+        return '{"veredito":"ok"}'
+    orc._fast = spy
+    orc.review(cfg, "medir disco", ["saída real"], "df -h saiu 20G")
+    assert "medir disco" in capturado["user"] and "saída real" in capturado["user"]
+    assert "REVISOR" in capturado["sys"]
+    # lixo → ok (falhar é entregar, nunca travar)
+    orc._fast = lambda cfg, sys, user, ntok=200: "???"
+    assert orc.review(cfg, "obj", [], "r") == {"veredito": "ok"}
+    cfg.reviewer_on = False
+    assert orc.review(cfg, "obj", [], "r") == {"veredito": "ok"}
+    cfg.reviewer_on = True
+    orc._fast = orig
+
+
+@case
+def T53_pipeline_e2e_no_chat():
+    """v3.3 e2e: mensagem de AÇÃO no chat gera 🎯 task → execução → 🔍
+    revisão → registro (jsonl + endpoint); conversa comum não passa pelo
+    pipeline (nenhuma task nova)."""
+    from hermes import orchestrator as orc
+    cfg = fresh()
+    c = _app(cfg)
+    antes = len(orc.list_tasks(cfg))
+
+    evs = []
+    for linha in c.post("/api/chat", json={
+            "message": "verifique o uso de memória desta máquina",
+            "history": []}).get_data(as_text=True).splitlines():
+        evs.append(json.loads(linha))
+    tipos = [e.get("type") for e in evs]
+    assert "done" in tipos and "error" not in tipos, evs[:3]
+    notas = [e.get("message", "") for e in evs if e.get("type") == "note"]
+    assert any("🎯" in n and "task" in n for n in notas), notas
+    final = next(e.get("message", "") for e in evs if e.get("type") == "done")
+    assert "revisada" in final or "revisão" in final, final[:200]
+    # task registrada e visível no endpoint
+    tasks = orc.list_tasks(cfg)
+    assert len(tasks) == antes + 1
+    tk = tasks[0]
+    assert tk["status"] == "aprovada" and tk["tentativas"] >= 1
+    assert "memória" in tk["objetivo"]
+    j = c.get("/api/orchestrator/tasks").get_json()
+    assert j["ok"] and j["tasks"] and j["tasks"][0]["id"].startswith("T")
+
+    # conversa comum: sem pipeline, sem task nova
+    evs2 = [json.loads(l) for l in c.post("/api/chat", json={
+        "message": "obrigado, só isso!", "history": []}).get_data(as_text=True).splitlines()]
+    notas2 = [e.get("message", "") for e in evs2 if e.get("type") == "note"]
+    assert not any("🎯" in n for n in notas2), notas2
+    assert len(orc.list_tasks(cfg)) == antes + 1
+
+
+@case
 def T50_gui_responsiva_e_pwa():
     """v3.2: GUI responsiva (viewport dinâmico, barra inferior, alvos de toque,
     inputs 16px anti-zoom do iOS) e PWA instalável (manifest, service worker

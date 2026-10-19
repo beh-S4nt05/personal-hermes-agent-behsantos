@@ -685,6 +685,16 @@ automaticamente (e o seletor v3.0 injeta só as relevantes à pergunta).
    → abre o link, digite o código mostrado, autorize com seu 2FA. Pronto:
    o refresh token fica guardado junto das demais credenciais (600).
 
+**🎯 Pipeline orquestrado (v3.3.0):** mensagens de AÇÃO no chat seguem o
+fluxo **🎯 orquestrador → ⚡ executor → 🔍 revisor**. O orquestrador (rápido)
+decide a rota e monta objetivo/passos/critérios; a task é registrada; o
+Agent executa com ferramentas reais; o revisor confere o resultado —
+reprovado refaz com o problema apontado (máx. 2 tentativas); aprovado
+chega com selo "🔍 revisada". Conversa simples responde direto (custo
+zero extra). Desligue em Ajustes ("🎯 Orquestrador" / "🔍 Revisor").
+Histórico: `hermes` não tem CLI para isso — use `GET
+/api/orchestrator/tasks` ou o arquivo `data/orchestrator_tasks.jsonl`.
+
 **📱 Pelo celular (v3.2.0 — GUI responsiva + PWA):** a GUI se adapta a
 qualquer tela (barra de navegação inferior no celular, teclado respeitado
 no chat, alvos de toque grandes). Para usar no celular:
