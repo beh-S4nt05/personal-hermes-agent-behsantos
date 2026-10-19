@@ -65,7 +65,8 @@ class ConversationStore:
             pass
         return None
 
-    def append(self, session_id: str, role: str, content: str, dur: float | None = None) -> dict | None:
+    def append(self, session_id: str, role: str, content: str,
+               dur: float | None = None, agent: str | None = None) -> dict | None:
         """Adiciona uma mensagem à sessão (cria o arquivo se preciso)."""
         session = self.load(session_id)
         if session is None:
@@ -73,6 +74,8 @@ class ConversationStore:
         msg: dict = {"role": role, "content": content or ""}
         if dur is not None:
             msg["dur"] = dur  # tempo de geração (s) — exibido no histórico
+        if agent:
+            msg["agent"] = agent  # qual agente respondeu (hermes/claude)
         session["messages"].append(msg)
         if not session["title"] and role == "user":
             session["title"] = (content or "").strip().splitlines()[0][:70] or "conversa"
@@ -96,6 +99,38 @@ class ConversationStore:
         out = [s for s in out if s["id"]]
         out.sort(key=lambda s: s["updated_at"], reverse=True)
         return out[:MAX_SESSIONS]
+
+    def search(self, query: str) -> list[dict]:
+        """Busca texto dentro de TODAS as conversas (mín. 2 caracteres)."""
+        q = (query or "").strip().lower()
+        if len(q) < 2:
+            return []
+        self._ensure_dir()
+        results: list[dict] = []
+        for f in self.sessions_dir.glob("*.json"):
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            for m in d.get("messages", []):
+                content = str(m.get("content") or "")
+                idx = content.lower().find(q)
+                if idx < 0:
+                    continue
+                start = max(0, idx - 40)
+                preview = content[start:start + 130].replace("\n", " ")
+                preview = ("…" if start > 0 else "") + preview + "…"
+                results.append({
+                    "id": d.get("id"),
+                    "title": d.get("title") or "conversa",
+                    "updated_at": d.get("updated_at", ""),
+                    "role": m.get("role"),
+                    "preview": preview,
+                })
+                break  # uma ocorrência por conversa basta
+        results = [r for r in results if r["id"]]
+        results.sort(key=lambda r: r["updated_at"], reverse=True)
+        return results[:50]
 
     def delete(self, session_id: str) -> bool:
         if not SESSION_ID_RE.fullmatch(session_id or ""):

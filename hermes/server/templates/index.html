@@ -175,6 +175,13 @@
   .livebox .ok{color:var(--ok)} .livebox .err{color:var(--err)} .livebox .warn{color:var(--warn)}
   .livedot{width:9px;height:9px;border-radius:50%;background:var(--ok);display:inline-block;animation:lv-pulse 1s infinite}
   @keyframes lv-pulse{50%{opacity:.3}}
+
+  /* ---------- ferramentas / catálogo de modelos ---------- */
+  .toolgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+  .toolcard{background:#0a0e17;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12.5px}
+  .librow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+  .librow:last-child{border-bottom:none}
+  .agentbadge{font-size:10.5px;color:var(--acc);border:1px solid var(--acc);border-radius:20px;padding:2px 9px;display:inline-block;margin-bottom:6px;width:fit-content}
 </style>
 </head>
 <body>
@@ -213,6 +220,7 @@
     <button data-page="chat">◈ Chat</button>
     <button data-page="tarefas">☑ Tarefas</button>
     <button data-page="ollama">🧠 Ollama</button>
+    <button data-page="ferramentas">🛠 Ferramentas</button>
     <button data-page="skills">✦ Skills</button>
     <button data-page="memoria">📔 Memória</button>
     <button data-page="ajustes">⚙ Ajustes</button>
@@ -284,10 +292,21 @@
   <section class="page" id="page-chat">
     <div class="chatrow" style="margin:0 0 10px;align-items:center">
       <span class="hint" id="chat-session" style="flex:1">◈ nova conversa</span>
+      <select id="agent-sel" title="qual agente responde"
+              style="background:#0a0e17;border:1px solid var(--border);border-radius:9px;color:var(--txt);padding:7px 10px;font-size:12.5px">
+        <option value="hermes">◈ Hermes (Ollama)</option>
+        <option value="claude">🔌 Claude Code</option>
+      </select>
+      <button class="b small primary" onclick="newConversation()">＋ nova</button>
       <button class="b small ghost" onclick="toggleHistory()">🕘 conversas (<span id="hist-count">0</span>)</button>
       <button class="b small danger" onclick="resetChat()">🗑 zerar</button>
     </div>
-    <div class="card" id="hist-panel" style="display:none;margin-bottom:12px;max-height:260px;overflow:auto">
+    <div class="card" id="hist-panel" style="display:none;margin-bottom:12px;max-height:320px;overflow:auto">
+      <div class="chatrow" style="margin-bottom:10px">
+        <input type="text" id="hist-search" placeholder="🔍 buscar em todas as conversas…" style="flex:1" oninput="searchConversations()">
+        <button class="b small ghost" onclick="$('hist-search').value='';searchConversations()">✕ limpar</button>
+      </div>
+      <div id="hist-results" style="display:none"></div>
       <div id="hist-list" class="hint">carregando…</div>
     </div>
     <div class="chatwrap">
@@ -326,6 +345,10 @@
         <input type="text" id="sched-input" placeholder="o que o agente deve fazer — ex.: resuma meus e-mails e as atividades do classroom"
                style="flex:2" onkeydown="if(event.key==='Enter')$('sched-when').focus()">
         <input type="text" id="sched-when" placeholder="quando — ex.: diário 07:30" style="max-width:220px" onkeydown="if(event.key==='Enter')schedAdd()">
+        <select id="sched-agent" style="max-width:150px">
+          <option value="hermes">◈ Hermes</option>
+          <option value="claude">🔌 Claude Code</option>
+        </select>
         <button class="b primary" onclick="schedAdd()">⏰ agendar</button>
       </div>
       <div class="hint" style="margin-top:8px">
@@ -375,9 +398,16 @@
       <div class="card">
         <h3><span class="ic">📦</span> Modelos <span class="hint" style="margin-left:auto" id="olp-loaded"></span></h3>
         <div class="chatrow" style="margin-top:0">
-          <input type="text" id="olp-pullin" placeholder="baixar modelo (ex.: hermes3:3b)" style="flex:1"
+          <input type="text" id="olp-libq" placeholder="🔍 buscar modelos — ex.: qwen, visão, código…" style="flex:1"
+                 onkeydown="if(event.key==='Enter')searchLibrary()">
+          <button class="b" onclick="searchLibrary()">🔍 buscar</button>
+        </div>
+        <div id="olp-lib" style="margin-top:8px"></div>
+        <div class="chatrow" style="margin-top:10px">
+          <input type="text" id="olp-pullin" placeholder="baixar por nome (ex.: hermes3:3b)" style="flex:1"
                  onkeydown="if(event.key==='Enter')pullModel()">
           <button class="b primary" id="olp-pullbtn" onclick="pullModel()">⬇ baixar</button>
+          <button class="b danger" id="olp-pullcancel" style="display:none" onclick="cancelPull()">⏹ cancelar</button>
         </div>
         <div id="olp-progress" style="display:none;margin-top:10px">
           <div style="background:#0a0e17;border-radius:6px;overflow:hidden;border:1px solid var(--border)">
@@ -410,6 +440,40 @@
       <h3><span class="ic">📄</span> <span id="skill-view-name"></span>
         <button class="b small ghost" style="margin-left:auto" onclick="closeSkillView()">✕ fechar</button></h3>
       <pre id="skill-view" style="background:#080b11;border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12px;max-height:420px;overflow:auto;white-space:pre-wrap"></pre>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ FERRAMENTAS ══════════════════════ -->
+  <section class="page" id="page-ferramentas">
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">⌨</span> Terminal rápido <span class="hint" style="margin-left:auto">mesma segurança do agente</span></h3>
+        <div class="chatrow" style="margin-top:0">
+          <input type="text" id="tool-cmd" placeholder="ex.: df -h · free -h · ls -la" style="flex:1" onkeydown="if(event.key==='Enter')toolRun()">
+          <button class="b primary" onclick="toolRun()">▶ executar</button>
+          <button class="b ghost" onclick="toolSysInfo()">🖥 info do sistema</button>
+        </div>
+        <pre id="tool-out" style="display:none;background:#05070c;border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;max-height:300px;overflow:auto;white-space:pre-wrap;margin-top:12px"></pre>
+      </div>
+      <div class="card">
+        <h3><span class="ic">🗂</span> Arquivos do workspace</h3>
+        <div class="chatrow" style="margin-top:0">
+          <input type="text" id="tool-path" placeholder="caminho (ex.: . ou notas.txt)" style="flex:1" onkeydown="if(event.key==='Enter')toolList()">
+          <button class="b" onclick="toolList()">📂 listar</button>
+          <button class="b ghost" onclick="toolRead()">📄 ler</button>
+        </div>
+        <div id="tool-files" style="margin-top:10px"></div>
+        <textarea id="tool-filecontent" placeholder="conteúdo do arquivo — clique em 📄 ler para abrir, edite e use 💾 gravar" style="width:100%;margin-top:10px"></textarea>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="b primary" onclick="toolWrite()">💾 gravar arquivo</button>
+          <span class="hint" id="tool-filemsg"></span>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">✦</span> Funções do agente <span class="hint" style="margin-left:auto" id="tool-count"></span></h3>
+      <div class="hint" style="margin-bottom:10px">Estas são as funções padrão dos agentes — o Hermes e o Claude Code usam equivalentes. Chame direto por aqui ou peça no chat.</div>
+      <div id="tool-catalog" class="toolgrid">carregando…</div>
     </div>
   </section>
 
@@ -518,6 +582,7 @@ document.querySelectorAll("nav button").forEach(b=>{
     if (state.page==="chat") $("chatin").focus();
     if (state.page==="tarefas"){ loadTasks(); loadSchedules(); }
     if (state.page==="ollama") loadOllamaPage();
+    if (state.page==="ferramentas") loadToolsPage();
     if (state.page==="skills") loadSkills();
     if (state.page==="memoria") loadMemory();
     if (state.page==="ajustes") loadSettings();
@@ -695,6 +760,11 @@ function renderSession(session){
     if (m.role === "user") bubble("user", esc(m.content), "");
     else if (m.content){
       const b = bubble("bot", miniMD(m.content), "");
+      if (m.agent === "claude"){
+        const tg = document.createElement("div");
+        tg.className = "agentbadge"; tg.textContent = "🔌 Claude Code";
+        b.insertBefore(tg, b.firstChild);
+      }
       if (m.dur != null){
         const t = document.createElement("div");
         t.className = "hint"; t.style.margin = "-8px 0 10px";
@@ -709,6 +779,8 @@ function toggleHistory(){
   const p = $("hist-panel");
   p.style.display = p.style.display === "none" ? "" : "none";
   if (p.style.display === "none") return;
+  $("hist-results").style.display = "none";
+  $("hist-list").style.display = "";
   const el = $("hist-list");
   if (!CONVS.length){ el.innerHTML = "nenhuma conversa anterior — o histórico aparece aqui automaticamente."; return; }
   el.innerHTML = CONVS.map(c=>`
@@ -782,7 +854,9 @@ async function sendChat(){
   try{
     state.abort = new AbortController();
     const r = await api("/api/chat", {method:"POST", signal: state.abort.signal,
-      body: JSON.stringify({message:text, history: state.history.slice(0,-1), session_id: state.sessionId})});
+      body: JSON.stringify({message:text, history: state.history.slice(0,-1), session_id: state.sessionId,
+                            agent: (($("agent-sel")||{}).value)||"hermes"})});
+    state.agentInUse = (($("agent-sel")||{}).value)||"hermes";
     const reader = r.body.getReader(); const dec = new TextDecoder();
     let buf = "";
     while (true){
@@ -843,6 +917,11 @@ function handleEvent(ev, turns, cursors){
     if (!turns.cur){
       const d = document.createElement("div");
       d.className = "msg bot"; d.style.whiteSpace = "pre-wrap";
+      if (state.agentInUse === "claude"){
+        const tg = document.createElement("div");
+        tg.className = "agentbadge"; tg.textContent = "🔌 Claude Code";
+        d.appendChild(tg);
+      }
       const c = document.createElement("span"); c.className = "cursor";
       d.appendChild(c); d._cursor = c; cursors.push(c);
       turns.cur = d; turns.texts.push(d);
@@ -919,7 +998,7 @@ async function loadSchedules(){
       <div class="task"><div class="top">
         <span class="st ${s.running?"pend":(s.enabled?(s.last_status==="ok"?"ok":(s.last_status?"err":"pend")):"err")}">${s.running?"rodando…":(s.enabled?"ativa":"pausada")}</span>
         <span class="input"><b>${esc(s.input.slice(0,110))}</b><br>
-          <span class="hint">⏰ ${esc(s.human)} · próxima: ${esc(s.next_run||"—")} · ${s.run_count} execução(ões)${s.last_run?` · última: ${esc(s.last_run)} (${esc(s.last_duration_s)}s)`:''}</span></span>
+          <span class="hint">⏰ ${esc(s.human)}${s.agent==="claude"?" · 🔌 Claude Code":""} · próxima: ${esc(s.next_run||"—")} · ${s.run_count} execução(ões)${s.last_run?` · última: ${esc(s.last_run)} (${esc(s.last_duration_s)}s)`:''}</span></span>
         <span class="btnrow" style="margin:0">
           ${s.running?`<button class="b small" onclick="openLive('${esc(s.id)}')">👁 ao vivo</button>`:""}
           <button class="b small" onclick="schedRun('${esc(s.id)}')">▶ agora</button>
@@ -932,7 +1011,8 @@ async function loadSchedules(){
 async function schedAdd(){
   const input = $("sched-input").value.trim(), when = $("sched-when").value.trim();
   if (!input || !when){ toast("preencha o que fazer e quando", true); return; }
-  const r = await api("/api/schedules", {method:"POST", body: JSON.stringify({input, when})});
+  const r = await api("/api/schedules", {method:"POST", body: JSON.stringify({input, when,
+    agent: (($("sched-agent")||{}).value)||"hermes"})});
   const j = await r.json().catch(()=>({msg:"sem resposta"}));
   toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
   if (j.ok){ $("sched-input").value=""; $("sched-when").value=""; }
@@ -1145,6 +1225,8 @@ async function pullModel(){
   const name = $("olp-pullin").value.trim();
   if (!name){ toast("informe o nome do modelo (ex.: hermes3:3b)", true); return; }
   $("olp-pullbtn").disabled = true;
+  window.__pullingModel = name;
+  $("olp-pullcancel").style.display = "";
   $("olp-progress").style.display = "";
   $("olp-bar").style.width = "0%";
   $("olp-status").textContent = "iniciando…";
@@ -1164,9 +1246,11 @@ async function pullModel(){
           if (ev.pct != null) $("olp-bar").style.width = ev.pct+"%";
           $("olp-status").textContent = ev.status + (ev.pct != null ? " — "+ev.pct+"%" : "");
         } else if (ev.type === "done"){
+          $("olp-pullcancel").style.display = "none";
           $("olp-bar").style.width = "100%"; $("olp-status").textContent = "✔ "+ev.msg;
           toast("✔ "+ev.msg); $("olp-pullin").value = ""; loadModels(); refresh();
         } else if (ev.type === "error"){
+          $("olp-pullcancel").style.display = "none";
           $("olp-status").textContent = "✖ "+ev.msg; toast(ev.msg, true);
         }
       }
@@ -1289,6 +1373,162 @@ state.token = store("hermes_token") || "";
 if (state.token) $("tokenin").value = state.token;
 startLog();
 restoreLastConversation();   // a última conversa volta sozinha (nem F5 perde)
+
+/* ═══════════════ ferramentas (funções manuais do agente) ═══════════════ */
+let TOOL_FILES = [], TOOL_BASE = "";
+async function toolRun(){
+  const c = $("tool-cmd").value.trim();
+  if (!c){ toast("digite um comando", true); return; }
+  const out = $("tool-out");
+  out.style.display = ""; out.textContent = "$ " + c + "\n…";
+  try{
+    const j = await (await api("/api/tools/run", {method:"POST", body: JSON.stringify({command:c})})).json();
+    out.textContent = j.output || "(sem saída)";
+  }catch(e){ out.textContent = "✖ falha: " + e.message; }
+}
+async function toolSysInfo(){
+  const out = $("tool-out");
+  out.style.display = ""; out.textContent = "coletando…";
+  try{
+    const j = await (await api("/api/tools/sys_info", {method:"POST", body:"{}"})).json();
+    out.textContent = j.output || "(sem saída)";
+  }catch(e){ out.textContent = "✖ falha: " + e.message; }
+}
+async function toolList(){
+  const path = $("tool-path").value.trim() || ".";
+  try{
+    const j = await (await api("/api/tools/list_dir", {method:"POST", body: JSON.stringify({path})})).json();
+    const el = $("tool-files");
+    if (!j.ok){ el.innerHTML = '<span class="hint">✖ ' + esc(j.output) + "</span>"; return; }
+    const lines = (j.output||"").split("\n");
+    TOOL_BASE = (lines[0]||"").replace(/\s+\(\d+ entradas\)\s*$/,"").trim();
+    TOOL_FILES = [];
+    let chips = "";
+    lines.slice(1).forEach(l=>{
+      const m = l.match(/^\[(dir|file)\] (.*)$/);
+      if (!m) return;
+      let nm = m[2].replace(/\s+\d+ B$/, "");
+      const i = TOOL_FILES.length;
+      TOOL_FILES.push({kind:m[1], name:nm});
+      chips += `<button class="chip" onclick="toolNav(${i})">${m[1]==="dir"?"📁":"📄"} ${esc(nm)}</button> `;
+    });
+    el.innerHTML = chips || '<span class="hint">(diretório vazio)</span>';
+  }catch(e){ $("tool-files").innerHTML = '<span class="hint">✖ '+esc(e.message)+"</span>"; }
+}
+function toolNav(i){
+  const f = TOOL_FILES[i]; if (!f) return;
+  $("tool-path").value = TOOL_BASE ? TOOL_BASE + "/" + f.name : f.name;
+  if (f.kind === "dir") toolList(); else toolRead();
+}
+async function toolRead(){
+  const path = $("tool-path").value.trim();
+  if (!path){ toast("informe o caminho do arquivo", true); return; }
+  try{
+    const j = await (await api("/api/tools/read_file", {method:"POST", body: JSON.stringify({path})})).json();
+    if (j.ok){ $("tool-filecontent").value = j.output; $("tool-filemsg").textContent = "📄 " + path; }
+    else { $("tool-filemsg").textContent = "✖ " + j.output; }
+  }catch(e){ $("tool-filemsg").textContent = "✖ " + e.message; }
+}
+async function toolWrite(){
+  const path = $("tool-path").value.trim();
+  if (!path){ toast("informe o caminho do arquivo", true); return; }
+  try{
+    const j = await (await api("/api/tools/write_file", {method:"POST",
+      body: JSON.stringify({path, content: $("tool-filecontent").value})})).json();
+    toast((j.ok?"✔ ":"✖ ")+j.output, !j.ok);
+    if (j.ok) toolList();
+  }catch(e){ toast("✖ "+e.message, true); }
+}
+async function loadToolsPage(){
+  try{
+    const d = await (await api("/api/tools")).json();
+    const all = [
+      ...(d.tools||[]).map(t=>({n:t.name, d:t.description, k:"nativa"})),
+      ...(d.mcp||[]).map(t=>({n:t.name, d:t.description, k:"MCP"})),
+    ];
+    $("tool-count").textContent = all.length + " função(ões)";
+    $("tool-catalog").innerHTML = all.map(t=>`
+      <div class="toolcard">
+        <b>${esc(t.n)}</b> <span class="hint">· ${esc(t.k)}</span>
+        <div class="hint" style="margin-top:4px">${esc((t.d||"").split("\n")[0].slice(0,150))}</div>
+      </div>`).join("") || '<span class="hint">nenhuma</span>';
+  }catch(e){}
+}
+
+/* ═══════════════ catálogo de modelos (LMMs) ═══════════════ */
+async function searchLibrary(){
+  const q = $("olp-libq").value.trim();
+  const el = $("olp-lib");
+  el.innerHTML = '<span class="hint">buscando…</span>';
+  try{
+    const d = await (await api("/api/ollama/library" + (q ? "?q=" + encodeURIComponent(q) : ""))).json();
+    const ms = d.models || [];
+    if (!ms.length){
+      el.innerHTML = '<span class="hint">nada encontrado — digite o nome completo (ex.: qwen2.5:7b) e use ⬇ baixar.</span>';
+      return;
+    }
+    el.innerHTML = '<div class="hint" style="margin-bottom:6px">' + ms.length + " modelo(s) · fonte: " +
+      esc(d.source||"—") + " · clique em ⬇ para baixar (a tag padrão vem sem sufixo; use o campo manual p/ tags específicas)</div>" +
+      ms.map(m=>`
+      <div class="librow">
+        <span class="input"><b>${esc(m.name)}</b><br>
+          <span class="hint">${esc(m.desc||"—")}${m.caps?" · "+esc(m.caps):""}${m.sizes?" · "+esc(m.sizes):""}</span></span>
+        <button class="b small primary" onclick="pullFromLib('${esc(m.name)}')">⬇ baixar</button>
+      </div>`).join("");
+  }catch(e){
+    el.innerHTML = '<span class="hint">falha na busca — use o campo manual abaixo.</span>';
+  }
+}
+function pullFromLib(name){
+  $("olp-pullin").value = name;
+  pullModel();
+}
+async function cancelPull(){
+  const name = window.__pullingModel || $("olp-pullin").value.trim();
+  if (!name){ toast("nenhum download em andamento", true); return; }
+  try{
+    const j = await (await api("/api/ollama/pull/cancel", {method:"POST", body: JSON.stringify({model:name})})).json();
+    toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  }catch(e){ toast("✖ "+e.message, true); }
+}
+
+/* ═══════════════ conversas: nova + busca ═══════════════ */
+function newConversation(){
+  if (state.sending){ toast("aguarde a resposta terminar…", true); return; }
+  state.history = []; state.sessionId = null; state.agentInUse = null;
+  $("chatlog").innerHTML = "";
+  $("chat-session").textContent = "◈ nova conversa";
+  $("hist-panel").style.display = "none";
+  api("/api/conversations/current", {method:"POST", body: JSON.stringify({id: null})});
+  loadConversations();
+  toast("nova conversa — as anteriores seguem em 🕘 conversas");
+  $("chatin").focus();
+}
+let HIST_TIMER = null;
+function searchConversations(){
+  if (HIST_TIMER) clearTimeout(HIST_TIMER);
+  HIST_TIMER = setTimeout(doSearchConversations, 250);
+}
+async function doSearchConversations(){
+  const q = $("hist-search").value.trim();
+  const res = $("hist-results"), lst = $("hist-list");
+  if (q.length < 2){ res.style.display = "none"; res.innerHTML = ""; lst.style.display = ""; return; }
+  try{
+    const d = await (await api("/api/conversations/search?q=" + encodeURIComponent(q))).json();
+    const rs = d.results || [];
+    lst.style.display = "none"; res.style.display = "";
+    res.innerHTML = rs.length ? rs.map(r=>`
+      <div class="task"><div class="top">
+        <span class="input"><b>${esc(r.title)}</b><br>
+          <span class="hint">${r.role==="user"?"👤":"🤖"} ${esc(r.preview)}</span>
+          <div class="hint">${esc(r.updated_at)}</div></span>
+        <span class="btnrow" style="margin:0">
+          <button class="b small primary" onclick="openConversation('${esc(r.id)}')">abrir</button>
+        </span>
+      </div></div>`).join("")
+      : '<div class="hint">nenhuma conversa contém “'+esc(q)+'”</div>';
+  }catch(e){}
+}
 </script>
 </body>
 </html>

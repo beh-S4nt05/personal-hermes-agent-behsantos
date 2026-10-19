@@ -166,6 +166,46 @@ mcp_servers:
     url: https://gmailmcp.googleapis.com/mcp/v1   # requer OAuth (Google Cloud)
 ```
 
+## 🛠 Ferramentas do agente direto na GUI
+
+A aba **Ferramentas** dá acesso manual às funções padrão dos agentes:
+terminal rápido (com a mesma denylist de segurança), arquivos do workspace
+(listar/ler/gravar), diagnóstico da máquina e o catálogo de funções
+(nativas + MCP). Use sem passar pelo chat.
+
+## 🔌 Dois agentes: Hermes e Claude Code
+
+No chat, o seletor no topo escolhe quem responde:
+
+- **◈ Hermes (Ollama)** — o agente padrão deste projeto;
+- **🔌 Claude Code** — a CLI `claude` instalada na sua máquina, com as
+  funções padrão do Claude (bash, leitura/edição de arquivos, busca…).
+  Requer o Claude Code instalado e as variáveis de ambiente ativas no
+  terminal onde o `hermes server` roda:
+
+  ```bash
+  export ANTHROPIC_BASE_URL=http://localhost:11434   # Claude Code via Ollama
+  export ANTHROPIC_AUTH_TOKEN=ollama
+  export ANTHROPIC_API_KEY=""
+  hermes server
+  ```
+
+As tarefas agendadas também têm seletor de agente (Hermes ou Claude Code).
+
+## 📚 Baixar modelos (LMMs) pela GUI
+
+Na aba **Ollama → Modelos**, busque na biblioteca oficial (ollama.com) ou na
+curadoria popular ("qwen", "visão", "código"…) e baixe com um clique; o
+download mostra progresso e pode ser **cancelado**. Para tags específicas
+(ex.: `qwen2.5:7b`), use o campo manual.
+
+## 💬 Gerenciar conversas
+
+- **＋ nova** — começa uma conversa limpa (a anterior continua salva);
+- **🕘 conversas → 🔍** — busca dentro de TODAS as conversas salvas e abre a
+  conversa que contém o texto;
+- **abrir** — retoma qualquer conversa anterior exatamente de onde parou.
+
 ## 👁 Acompanhando uma tarefa ao vivo
 
 Ao disparar uma tarefa agendada ("▶ agora" na aba Tarefas), a GUI abre um

@@ -220,7 +220,7 @@ class ScheduleStore:
     def _ensure(self) -> None:
         self.dir.mkdir(parents=True, exist_ok=True)
 
-    def create(self, input_text: str, spec: dict) -> dict:
+    def create(self, input_text: str, spec: dict, agent: str = "hermes") -> dict:
         self._ensure()
         entry = {
             "id": time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6],
@@ -229,6 +229,7 @@ class ScheduleStore:
             "enabled": True,
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "created_ts": time.time(),
+            "agent": agent if agent in ("hermes", "claude") else "hermes",
             "run_count": 0,
             "last_run": None,
             "last_status": None,
@@ -277,6 +278,7 @@ class ScheduleStore:
                 "input": e.get("input", ""),
                 "schedule": e.get("schedule", {}),
                 "human": human_schedule(e.get("schedule") or {}),
+                "agent": e.get("agent", "hermes"),
                 "enabled": bool(e.get("enabled")),
                 "running": bool(e.get("running")),
                 "next_run": nr.strftime("%Y-%m-%d %H:%M") if (nr and e.get("enabled")) else None,
@@ -315,6 +317,23 @@ def execute_entry(cfg, entry: dict, on_event=None) -> dict:
                 OllamaManager(cfg).start()
         except Exception:
             pass
+
+    # segundo agente: Claude Code (CLI) em vez do loop Hermes/Ollama
+    if entry.get("agent") == "claude":
+        from .claude_agent import run_claude
+        events: list[dict] = []
+        t0 = time.time()
+        final = run_claude(cfg, entry["input"], on_event=lambda e: events.append(e))
+        status = "ok" if final and "não encontrado neste computador" not in final else "error"
+        return {
+            "status": status,
+            "output": final,
+            "tools": [
+                {"name": e["name"], "ok": e["ok"], "output": (e.get("output") or "")[-1500:]}
+                for e in events if e.get("type") == "tool_end"
+            ],
+            "duration_s": round(time.time() - t0, 1),
+        }
 
     agent = Agent(cfg)
     events: list[dict] = []

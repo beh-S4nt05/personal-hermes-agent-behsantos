@@ -36,6 +36,9 @@ from ..skills import SkillLoader
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
+# downloads de modelos em andamento (model -> Event de cancelamento)
+ACTIVE_PULLS: dict = {}
+
 # nome de modelo válido para o Ollama: nome[/namespace][:tag] — sem espaços
 MODEL_RE = re.compile(r"^[A-Za-z0-9._]+(/[A-Za-z0-9._-]+)?(:[A-Za-z0-9._-]+)?$")
 
@@ -193,16 +196,6 @@ def create_app(cfg: Config) -> Flask:
         if not model or not MODEL_RE.fullmatch(model):
             return jsonify({"ok": False, "msg": "nome de modelo inválido (use nome:tag)"}), 400
 
-        if cfg.mock:
-            def fake():
-                for pct in range(0, 101, 10):
-                    yield json.dumps({"type": "progress", "status": "baixando (simulado)",
-                                      "pct": pct}, ensure_ascii=False) + "\n"
-                    time.sleep(0.12)
-                yield json.dumps({"type": "done", "msg": f"modelo {model} disponível (simulado)"},
-                                 ensure_ascii=False) + "\n"
-            return Response(stream_with_context(fake()), mimetype="application/x-ndjson")
-
         import queue
         import threading
 
@@ -213,13 +206,22 @@ def create_app(cfg: Config) -> Flask:
             pct = round(done / total * 100, 1) if total else None
             q.put({"type": "progress", "status": data.get("status", ""), "pct": pct})
 
+        import threading as _th
+
+        pull_cancel = _th.Event()
+        ACTIVE_PULLS[model] = pull_cancel
+
         def worker():
             try:
-                OllamaManager(cfg).client.pull(model, on_progress)
-                q.put({"type": "done", "msg": f"modelo {model} instalado"})
+                get_client(cfg).pull(model, on_progress, cancel=pull_cancel)
+                if pull_cancel.is_set():
+                    q.put({"type": "error", "msg": f"download de {model} cancelado"})
+                else:
+                    q.put({"type": "done", "msg": f"modelo {model} instalado"})
             except Exception as exc:  # noqa: BLE001
                 q.put({"type": "error", "msg": str(exc)[:300]})
             finally:
+                ACTIVE_PULLS.pop(model, None)
                 q.put(None)
 
         def gen():
@@ -381,6 +383,9 @@ def create_app(cfg: Config) -> Flask:
         payload = request.get_json(silent=True) or {}
         message = str(payload.get("message", "")).strip()
         history = payload.get("history") or []
+        chat_agent = str(payload.get("agent") or "hermes")
+        if chat_agent not in ("hermes", "claude"):
+            chat_agent = "hermes"
         if not message:
             return jsonify({"ok": False, "msg": "mensagem vazia"}), 400
 
@@ -405,7 +410,7 @@ def create_app(cfg: Config) -> Flask:
         store.set_current(session_id)
 
         client = get_client(cfg)
-        if not client.is_running():
+        if chat_agent == "hermes" and not client.is_running():
             def unavailable():
                 yield json.dumps({
                     "type": "error",
@@ -444,11 +449,16 @@ def create_app(cfg: Config) -> Flask:
             """A 'promise' da geração: roda em thread e publica eventos na fila."""
             t0 = time.time()
             try:
-                result["final"] = agent.run(
-                    clean_history + [{"role": "user", "content": message}],
-                    on_event=collect,
-                    cancel=cancel,
-                )
+                if chat_agent == "claude":
+                    from ..claude_agent import run_claude
+                    result["final"] = run_claude(cfg, message, history=clean_history,
+                                                 on_event=collect, cancel=cancel)
+                else:
+                    result["final"] = agent.run(
+                        clean_history + [{"role": "user", "content": message}],
+                        on_event=collect,
+                        cancel=cancel,
+                    )
             except Exception as exc:  # noqa: BLE001
                 if not cancel.is_set():
                     q.put({"type": "error",
@@ -496,7 +506,8 @@ def create_app(cfg: Config) -> Flask:
                 try:
                     if result["final"]:
                         store.append(session_id, "assistant", result["final"],
-                                     dur=result["duration_s"])
+                                     dur=result["duration_s"],
+                                     agent=(chat_agent if chat_agent == "claude" else None))
                 except OSError:
                     pass
 
@@ -505,6 +516,157 @@ def create_app(cfg: Config) -> Flask:
         return resp
 
     # -------------------------------------------------- conversas (histórico)
+    # --------------------------------------------------------- ferramentas
+    @app.get("/api/tools")
+    @protected
+    def tools_catalog():
+        """Catálogo das funções padrão do agente (ferramentas nativas + MCP)."""
+        from ..tools import TOOLS
+
+        mcp_tools = []
+        try:
+            mcp_tools = [
+                {"name": t["function"]["name"],
+                 "description": t["function"]["description"].splitlines()[0][:200]}
+                for t in get_manager(cfg).openai_tools()
+            ]
+        except Exception:
+            pass
+        return jsonify({
+            "tools": [
+                {"name": t["function"]["name"],
+                 "description": t["function"]["description"]}
+                for t in TOOLS
+            ],
+            "mcp": mcp_tools,
+        })
+
+    @app.post("/api/tools/run")
+    @protected
+    def tools_run():
+        """Terminal rápido — mesma segurança do agente (denylist + timeout)."""
+        from ..tools import execute_tool
+
+        payload = request.get_json(silent=True) or {}
+        command = str(payload.get("command", "")).strip()
+        if not command:
+            return jsonify({"ok": False, "output": "comando vazio"}), 400
+        res = execute_tool("run_command", {"command": command, "timeout": 120}, cfg)
+        return jsonify(res)
+
+    @app.post("/api/tools/list_dir")
+    @protected
+    def tools_list_dir():
+        from ..tools import execute_tool
+
+        payload = request.get_json(silent=True) or {}
+        return jsonify(execute_tool("list_dir", {"path": payload.get("path") or "."}, cfg))
+
+    @app.post("/api/tools/read_file")
+    @protected
+    def tools_read_file():
+        from ..tools import execute_tool
+
+        payload = request.get_json(silent=True) or {}
+        return jsonify(execute_tool("read_file", {"path": payload.get("path", "")}, cfg))
+
+    @app.post("/api/tools/write_file")
+    @protected
+    def tools_write_file():
+        from ..tools import execute_tool
+
+        payload = request.get_json(silent=True) or {}
+        path = str(payload.get("path", "")).strip()
+        if not path:
+            return jsonify({"ok": False, "output": "informe o caminho do arquivo"}), 400
+        return jsonify(execute_tool(
+            "write_file", {"path": path, "content": str(payload.get("content", ""))}, cfg))
+
+    @app.post("/api/tools/sys_info")
+    @protected
+    def tools_sys_info():
+        from ..tools import execute_tool
+
+        return jsonify(execute_tool("sys_info", {}, cfg))
+
+    # ------------------------------------------- catálogo de modelos (LMMs)
+    @app.get("/api/ollama/library")
+    @protected
+    def ollama_library():
+        """Busca modelos: curadoria popular + biblioteca oficial (ollama.com)."""
+        import html as html_mod
+        import re as re_mod
+
+        import requests as rq
+
+        q = str(request.args.get("q", "")).strip().lower()
+        import unicodedata as _ud
+
+        def _flat(s: str) -> str:
+            return "".join(c for c in _ud.normalize("NFD", s)
+                           if _ud.category(c) != "Mn").lower()
+        popular = [
+            {"name": "llama3.2", "desc": "Meta — pequeno e rápido (1B/3B), bom p/ o dia a dia"},
+            {"name": "qwen2.5", "desc": "Alibaba — forte em código e raciocínio (0.5B a 72B)"},
+            {"name": "qwen2.5-coder", "desc": "especialista em programação"},
+            {"name": "gemma3", "desc": "Google — moderno e eficiente (1B a 27B), com visão"},
+            {"name": "hermes3", "desc": "Nous Research — conversacional/agente (3B/8B/70B), o padrão do Hermes"},
+            {"name": "deepseek-r1", "desc": "raciocínio passo a passo (1.5B a 671B)"},
+            {"name": "mistral", "desc": "Mistral AI — leve e equilibrado (7B)"},
+            {"name": "phi4", "desc": "Microsoft — 14B compacto com bom raciocínio"},
+            {"name": "llava", "desc": "entende imagens (7B)"},
+            {"name": "tinyllama", "desc": "1.1B — mínimo, roda em qualquer máquina"},
+            {"name": "nomic-embed-text", "desc": "embeddings p/ busca semântica (leve)"},
+            {"name": "codellama", "desc": "Meta — código (7B/13B/70B)"},
+        ]
+        models = [dict(m) for m in popular
+                  if (not q) or q in m["name"] or q in _flat(m["desc"])]
+        source = "curadoria"
+        if not cfg.mock:
+            try:
+                r = rq.get("https://ollama.com/search",
+                           params={"q": q} if q else {}, timeout=8,
+                           headers={"User-Agent": "hermes-agent"})
+                r.raise_for_status()
+                known = {m["name"] for m in models}
+                for m in re_mod.finditer(
+                        r'href="/library/([a-z0-9._-]+)"(.*?)</li>', r.text, re_mod.S):
+                    name, chunk = m.group(1), m.group(2)
+                    if name in known:
+                        continue
+                    known.add(name)
+                    dm = re_mod.search(r"<p[^>]*>\s*(.*?)\s*</p>", chunk, re_mod.S)
+                    desc = re_mod.sub(r"<[^>]+>", "", dm.group(1)) if dm else ""
+                    desc = html_mod.unescape(desc)[:160]
+                    item = {"name": name, "desc": desc or "—"}
+                    caps = re_mod.findall(
+                        r'bg-indigo-50[^>]*">\s*([a-z]+)\s*</span>', chunk)
+                    sizes = re_mod.findall(
+                        r'bg-\[#ddf4ff\][^>]*">\s*(\d+(?:\.\d+)?[bm])\s*</span>', chunk)
+                    if caps:
+                        item["caps"] = "·".join(caps[:3])
+                    if sizes:
+                        item["sizes"] = "·".join(sizes[:6])
+                    models.append(item)
+                if len(models) > len(popular):
+                    source = "ollama.com"
+            except Exception:
+                pass
+        if q:
+            models.sort(key=lambda m: 0 if m["name"] == q else 1)
+        return jsonify({"models": models[:40], "source": source})
+
+    @app.post("/api/ollama/pull/cancel")
+    @protected
+    def ollama_pull_cancel():
+        payload = request.get_json(silent=True) or {}
+        model = str(payload.get("model", "")).strip()
+        ev = ACTIVE_PULLS.get(model)
+        if ev is None:
+            return jsonify({"ok": False, "msg": "nenhum download ativo com esse nome"}), 404
+        ev.set()
+        return jsonify({"ok": True, "msg": f"cancelando download de {model}…"})
+
     @app.get("/api/conversations")
     @protected
     def conversations_list():
@@ -522,6 +684,15 @@ def create_app(cfg: Config) -> Flask:
         if not session:
             return jsonify({"ok": False, "msg": "conversa não encontrada"}), 404
         return jsonify({"ok": True, "session": session})
+
+    @app.get("/api/conversations/search")
+    @protected
+    def conversations_search():
+        from ..conversations import ConversationStore
+
+        query = str(request.args.get("q", ""))
+        return jsonify({"ok": True,
+                        "results": ConversationStore(cfg).search(query)})
 
     @app.post("/api/conversations/delete")
     @protected
@@ -607,7 +778,10 @@ def create_app(cfg: Config) -> Flask:
             spec = parse_schedule(when)
         except ValueError as exc:
             return jsonify({"ok": False, "msg": str(exc)}), 400
-        entry = ScheduleStore(cfg).create(input_text, spec)
+        sched_agent = str(payload.get("agent") or "hermes")
+        if sched_agent not in ("hermes", "claude"):
+            sched_agent = "hermes"
+        entry = ScheduleStore(cfg).create(input_text, spec, agent=sched_agent)
         return jsonify({
             "ok": True,
             "msg": f"tarefa agendada: {human_schedule(spec)}",

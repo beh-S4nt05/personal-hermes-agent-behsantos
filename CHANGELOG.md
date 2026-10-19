@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.0.0 — ferramentas manuais, Claude Code, catálogo de LMMs e conversas completas
+
+- **🛠 Aba Ferramentas**: as funções padrão do agente direto na GUI — terminal
+  rápido (mesma segurança/denylist do agente), navegador de arquivos do
+  workspace (listar/ler/gravar), diagnóstico do sistema e o catálogo de todas
+  as funções (nativas + conectores MCP).
+- **🔌 Claude Code como segundo agente**: seletor no chat — fale com o
+  **Hermes (Ollama)** ou com o **Claude Code** (CLI `claude` da sua máquina,
+  com as funções padrão dele: bash, arquivos, busca…). Respostas ficam no
+  histórico com etiqueta "🔌 Claude Code". As tarefas agendadas também podem
+  escolher o agente.
+- **📚 Catálogo de modelos (LMMs)**: busca na biblioteca oficial (ollama.com)
+  + curadoria popular em português, com descrição, capacidades e tamanhos —
+  baixe com 1 clique. Download agora é **cancelável** (⏹ cancelar).
+- **💬 Conversas completas**: botão **＋ nova** (a anterior continua salva),
+  busca em **todas** as conversas (🔍 dentro de 🕘 conversas) e abrir/continuar
+  qualquer conversa pelo resultado da busca.
+
 ## v1.5.0 — execução ao vivo + memória persistente
 
 - **👁 Execução ao vivo**: acompanhe uma tarefa agendada trabalhando em tempo

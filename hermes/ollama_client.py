@@ -167,8 +167,9 @@ class OllamaClient:
                 f"({exc.__class__.__name__}) — o texto acima pode estar incompleto"
             ) from exc
 
-    def pull(self, model: str, on_progress: Callable[[dict], None] | None = None) -> None:
-        """Baixa um modelo via /api/pull reportando progresso."""
+    def pull(self, model: str, on_progress: Callable[[dict], None] | None = None,
+             cancel=None) -> None:
+        """Baixa um modelo via /api/pull reportando progresso (cancelável)."""
         try:
             r = requests.post(
                 f"{self.base_url}/api/pull",
@@ -177,14 +178,19 @@ class OllamaClient:
                 timeout=(10, 60 * 60 * 4),
             )
             r.raise_for_status()
-            for line in r.iter_lines():
-                if not line:
-                    continue
-                data = json.loads(line)
-                if data.get("error"):
-                    raise OllamaError(data["error"])
-                if on_progress:
-                    on_progress(data)
+            try:
+                for line in r.iter_lines():
+                    if cancel is not None and cancel.is_set():
+                        raise OllamaError(f"download de {model} cancelado pelo operador")
+                    if not line:
+                        continue
+                    data = json.loads(line)
+                    if data.get("error"):
+                        raise OllamaError(data["error"])
+                    if on_progress:
+                        on_progress(data)
+            finally:
+                r.close()
         except requests.RequestException as exc:
             raise OllamaError(f"falha ao baixar {model}: {exc}") from exc
 
@@ -243,9 +249,18 @@ class MockOllamaClient:
             time.sleep(0.012)
         yield {"message": {"role": "assistant", "content": ""}, "done": True, "done_reason": "stop"}
 
-    def pull(self, model, on_progress=None):
-        if on_progress:
-            on_progress({"status": "simulado — nada a baixar"})
+    def pull(self, model, on_progress=None, cancel=None):
+        """Download simulado com barra visível (e cancelável) na demo."""
+        total, step = 12_000_000_000, 1_000_000_000
+        for i in range(1, 13):
+            if cancel is not None and cancel.is_set():
+                if on_progress:
+                    on_progress({"status": "cancelando…"})
+                return
+            if on_progress:
+                on_progress({"status": "baixando (simulado)", "total": total,
+                             "completed": min(i * step, total)})
+            time.sleep(0.35)
 
     # --------------------------------------------------------- roteiro
     def _fake_message(self, messages: list[dict], tools=None) -> dict:
