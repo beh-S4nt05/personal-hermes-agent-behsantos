@@ -964,7 +964,7 @@ document.querySelectorAll("nav button").forEach(b=>{
     document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
     b.classList.add("active"); $("page-"+b.dataset.page).classList.add("active");
     state.page = b.dataset.page;
-    if (state.page==="chat") $("chatin").focus();
+    if (state.page==="chat"){ $("chatin").focus(); loadPending(); }
     if (state.page==="tarefas"){ loadTasks(); loadSchedules(); loadRecipes(); }
     if (state.page==="painel"){ loadPerf(); loadOrchStats(); }
     if (state.page==="auditoria"){ loadAudit(); }
@@ -2138,7 +2138,7 @@ function mkBtn(label, cls, fn){
   b.className = "b small " + cls; b.textContent = label;
   b.addEventListener("click", fn); return b;
 }
-function renderApproval(ev){
+function renderApproval(ev, target){
   const card = document.createElement("div");
   card.className = "approval"; card.dataset.id = ev.id || "";
   const ttl = document.createElement("div"); ttl.className = "ttl";
@@ -2175,7 +2175,8 @@ function renderApproval(ev){
   const st = document.createElement("div"); st.className = "status";
   st.textContent = "aguardando sua decisão…";
   card.appendChild(st);
-  $("chatlog").appendChild(card); scrollChat();
+  (target || $("chatlog")).appendChild(card);
+  if (!target) scrollChat();
 }
 async function approveTask(card, action){
   const st = card.querySelector(".status");
@@ -2199,6 +2200,53 @@ async function approveTask(card, action){
     card.querySelectorAll("button").forEach(b=>b.disabled = false);
   }
 }
+/* ── v3.11: pendências que sobreviveram a restart ── */
+const _pendOff = new Set();
+async function loadPending(){
+  try{
+    if (state.page!=="chat") return;
+    const r = await api("/api/approvals/pending"); const d = await r.json();
+    let b = $("pending-box");
+    const pend = d.pending || [];
+    const ret = (d.retomadas || []).filter(x => !x.done || !_pendOff.has(x.id));
+    if (!pend.length && !ret.length){ if (b) b.remove(); return; }
+    if (b && b.contains(document.activeElement)) return;  // não atrapalhar edição em curso
+    if (!b){
+      b = document.createElement("div");
+      b.id = "pending-box";
+      b.style.cssText = "display:flex;flex-direction:column;gap:10px;margin:0 0 10px 0";
+      $("chatlog").parentNode.insertBefore(b, $("chatlog"));
+    }
+    b.innerHTML = "";
+    for (const p of pend){
+      renderApproval({id: p.id, kind: p.kind,
+        msg: p.kind === "plano" ? "🔒 plano pendente de antes do restart"
+                                : "📦 entrega pendente de antes do restart",
+        objetivo: p.objetivo, passos: p.passos || [], skills: [],
+        texto: p.texto || ""}, b);
+    }
+    for (const tk of ret){
+      const c = document.createElement("div"); c.className = "approval";
+      const ttl = document.createElement("div"); ttl.className = "ttl";
+      ttl.textContent = tk.done ? "✅ task " + tk.id + " concluída (retomada)"
+                                : "🔁 task " + tk.id + " retomada — executando…";
+      c.appendChild(ttl);
+      const corpo = document.createElement("div"); corpo.className = "corpo";
+      corpo.style.whiteSpace = "pre-wrap";
+      corpo.textContent = tk.done ? (tk.final || "") :
+        (((tk.events || []).map(e => e.message || e.msg || "").join("\n")) || "executando…");
+      c.appendChild(corpo);
+      if (tk.done){
+        const acts = document.createElement("div"); acts.className = "acts";
+        acts.appendChild(mkBtn("✖ Fechar", "ghost", ()=>{ _pendOff.add(tk.id); loadPending(); }));
+        c.appendChild(acts);
+      }
+      b.appendChild(c);
+    }
+  }catch(e){}
+}
+setInterval(()=>{ if (state.page==="chat") loadPending(); }, 8000);
+
 function renderBrain(ev){
   const d = document.createElement("details"); d.className = "brain";
   const s = document.createElement("summary"); s.textContent = ev.stage || "🔬";

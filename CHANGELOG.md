@@ -1,5 +1,38 @@
 # Changelog
 
+## v3.11.0 — 🔁🛡 estado sobrevive a restart + auditoria de skills
+
+Escopo escolhido pelo operador (frentes 1+2 do ranking pós-v3.10).
+
+**1. 🔁 Estado persistente** — goals de sessão e aprovações pendentes
+saem da RAM e vão para o disco (`session_goals.json`,
+`pending_approvals.json`):
+- `/goal` definido antes de um restart continua valendo depois;
+- restart no meio do portão de CRIAÇÃO não perde mais a task: o plano
+  pendente re-aparece na GUI (banner no topo do chat, mesmo UI de
+  aprovar/editar) e, ao decidir, a execução RETOMA em thread nova —
+  mesmo id de task, revisão incluída, edição marcada na memória de
+  experiência;
+- restart no meio do portão de ENTREGA: o texto final re-aparece;
+  entregar/editar finaliza e registra na hora; "refazer" é recusado
+  com mensagem honesta (a execução já terminou);
+- a pendência só sai do disco quando o operador DECIDE — timeout não
+  apaga mais trabalho;
+- novo endpoint `GET /api/approvals/pending` + banner no chat (8s).
+
+**2. 🛡 `hermes skills audit`** — auditoria automática do catálogo:
+frontmatter (name/description), name ≠ pasta, description curta
+(gatilhos fracos), tamanho fora do orçamento (8 KB), prompt injection
+(7 padrões, com guarda de negação — quem ensina "nunca revele a senha"
+não é acusado) e duplicatas de nome declarado. Saída 0 = catálogo
+limpo. Hoje: **18/18 limpas**.
+
+**Testes:** T83 (goal sobrevive a restart, /goal na GUI), T84 (plano
+pendente re-aparece, edição retoma execução e registra "retomada"),
+T85 (entrega pendente finaliza; refazer recusado), T86 (auditoria
+detecta injeção/campos/nome/tamanho/duplicata e não acusa negação),
+T87 (catálogo real 18/18 limpo). **87/87.**
+
 ## v3.10.1 — 🧪 aceitação: melhoria prometida × melhoria medida
 
 O operador pediu prova: "houve melhoria mesmo? está dentro do esperado?"

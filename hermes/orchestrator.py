@@ -385,16 +385,42 @@ def list_tasks(cfg, limit: int = 100) -> list[dict]:
 SESSION_GOALS: dict[str, str] = {}
 
 
-def set_goal(session_id: str, texto: str) -> None:
+def _goals_path(cfg) -> Path:
+    return cfg.data_dir / "session_goals.json"
+
+
+def load_goals(cfg) -> None:
+    """v3.11: goals de sessão voltam do disco ao subir o servidor."""
+    try:
+        dados = json.loads(_goals_path(cfg).read_text(encoding="utf-8"))
+        if isinstance(dados, dict):
+            SESSION_GOALS.update({str(k): str(v)[:500]
+                                  for k, v in dados.items()})
+    except (OSError, ValueError):
+        pass
+
+
+def set_goal(session_id: str, texto: str, cfg=None) -> None:
     sid = (session_id or "default").strip() or "default"
     if texto and texto.strip():
         SESSION_GOALS[sid] = texto.strip()[:500]
     else:
         SESSION_GOALS.pop(sid, None)
+    if cfg is not None:                     # v3.11: sobrevive a restart
+        try:
+            _goals_path(cfg).parent.mkdir(parents=True, exist_ok=True)
+            _goals_path(cfg).write_text(
+                json.dumps(SESSION_GOALS, ensure_ascii=False, indent=1),
+                encoding="utf-8")
+        except OSError:
+            pass
 
 
-def get_goal(session_id: str) -> str:
-    return SESSION_GOALS.get((session_id or "default").strip() or "default", "")
+def get_goal(session_id: str, cfg=None) -> str:
+    sid = (session_id or "default").strip() or "default"
+    if sid not in SESSION_GOALS and cfg is not None:
+        load_goals(cfg)                     # v3.11: RAM fria → disco
+    return SESSION_GOALS.get(sid, "")
 
 
 # ──────────────────── ✦ skills aplicadas à task ────────────────────
@@ -459,14 +485,65 @@ _AP_LOCK = _threading.Lock()
 APPROVAL_TIMEOUT_S = 300.0   # tempo máximo esperando o operador (testes reduzem)
 
 
+def _pending_path(cfg) -> Path:
+    return cfg.data_dir / "pending_approvals.json"
+
+
+def _pending_save(cfg, dados: dict) -> None:
+    try:
+        p = _pending_path(cfg)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(dados, ensure_ascii=False, indent=1),
+                     encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _pending_load(cfg) -> dict:
+    try:
+        dados = json.loads(_pending_path(cfg).read_text(encoding="utf-8"))
+        return dados if isinstance(dados, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def list_pending(cfg) -> list[dict]:
+    """v3.11: pendências que sobreviveram a um restart (🔒/📦)."""
+    return sorted(_pending_load(cfg).values(), key=lambda x: x.get("ts", ""))
+
+
+def peek_pending(cfg, tid: str) -> dict | None:
+    return _pending_load(cfg).get(tid)
+
+
+def pop_pending(cfg, tid: str) -> dict | None:
+    with _AP_LOCK:
+        dados = _pending_load(cfg)
+        item = dados.pop(tid, None)
+        if item is not None:
+            _pending_save(cfg, dados)
+    return item
+
+
 def request_approval(tid: str, timeout: float = 300.0,
-                     check=None) -> tuple[str, dict | None]:
+                     check=None, cfg=None, meta: dict | None = None
+                     ) -> tuple[str, dict | None]:
     """Bloqueia até o operador decidir (ou esgotar o tempo). Devolve
     (ação, edição): aprovar|editar|cancelar|refazer|entregar · None em
-    timeout/cancelamento externo."""
+    timeout/cancelamento externo.
+
+    v3.11: com cfg+meta a pendência vai para o DISCO e sobrevive a
+    restart — sai do arquivo só quando o operador DECIDE (aprovar/
+    editar/cancelar/refazer/entregar). Timeout/cancelamento deixa o
+    registro: o operador ainda pode agir sobre ele depois."""
     evt = _threading.Event()
     with _AP_LOCK:
         _APPROVALS[tid] = {"event": evt, "action": None, "edit": None}
+        if cfg is not None and meta:
+            dados = _pending_load(cfg)
+            dados[tid] = {**meta, "id": tid,
+                          "ts": time.strftime("%Y-%m-%d %H:%M:%S")}
+            _pending_save(cfg, dados)
     decidiu = evt.wait(timeout) if check is None else False
     if check is not None:
         deadline = time.time() + timeout
@@ -478,6 +555,10 @@ def request_approval(tid: str, timeout: float = 300.0,
                 break
     with _AP_LOCK:
         item = _APPROVALS.pop(tid, None)
+        if item and decidiu and cfg is not None:
+            dados = _pending_load(cfg)
+            if dados.pop(tid, None) is not None:
+                _pending_save(cfg, dados)
     if not item or not decidiu:
         return ("cancelado" if check and check() else "timeout"), None
     return item["action"] or "cancelar", item["edit"]
@@ -499,7 +580,9 @@ def approve(tid: str, action: str, edit: dict | None = None) -> bool:
 
 def run_pipeline(agent, cfg, message: str, history: list[dict],
                  on_event=None, cancel=None, max_tentativas: int = 2,
-                 goal: str = "", session_id: str = "") -> str:
+                 goal: str = "", session_id: str = "",
+                 resume_plan: dict | None = None,
+                 resume_tid: str | None = None) -> str:
     """Conversa → 🎯 plano → [🔒 aprovação p/ criação] → ⚡ execução →
     🔍 revisão → [🔒 entrega editável p/ criação] → done.
 
@@ -515,7 +598,11 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     TRACE.clear()
     goal_txt = (f"\n[🎯 OBJETIVO DA SESSÃO definido pelo operador: {goal}]"
                 if goal else "")
-    plano = plan(cfg, message, history)
+    if resume_plan:                    # v3.11: retomada pós-restart
+        plano = dict(resume_plan)
+        plano["rota"] = "executar"     # o plano já foi aprovado
+    else:
+        plano = plan(cfg, message, history)
     ev({"type": "brain", "stage": "🎯 orquestrador",
         "data": {"decisao": plano, "chamadas": list(TRACE)}})
 
@@ -540,10 +627,13 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
             "data": {"aplicadas": sks}})
         skills_txt = "\n\n" + _skill_conteudo(cfg, sks)
 
-    tid = _next_id(cfg)
+    tid = resume_tid or _next_id(cfg)
     t0 = time.time()
     ev({"type": "note",
         "message": f"🎯 orquestrador: task {tid} criada ({tipo}) — {objetivo}"})
+    if resume_plan:
+        ev({"type": "note",
+            "message": f"🔁 task {tid} RETOMADA após restart — plano já aprovado pelo operador"})
     activity.log(cfg, "chat", f"🎯 task {tid} ({tipo}) — {objetivo[:80]}")
 
     def _plano_txt() -> str:
@@ -569,6 +659,10 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     edit_snip, plano_editado = "", False   # v3.10: sinais de experiência
     exige_aprovacao = (tipo == "criacao"
                        and getattr(cfg, "creation_approval", True))
+    if resume_plan:                    # v3.11: já aprovado antes do restart
+        aprovacao = "retomada"
+        plano_editado = bool(resume_plan.get("_editada"))
+        exige_aprovacao = False
     if exige_aprovacao and not _cancelado():
         ev({"type": "approval_request", "id": tid, "kind": "plano",
             "objetivo": objetivo, "passos": passos,
@@ -576,7 +670,12 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
             "msg": "🔒 tarefa de CRIAÇÃO — aprove o plano antes de executar"})
         act, edit = request_approval(
             tid, timeout=APPROVAL_TIMEOUT_S,
-            check=lambda: cancel is not None and cancel.is_set())
+            check=lambda: cancel is not None and cancel.is_set(),
+            cfg=cfg,
+            meta={"kind": "plano", "task_id": tid, "objetivo": objetivo,
+                  "tipo": tipo, "passos": passos, "criterios": criterios,
+                  "message": message, "session_id": session_id,
+                  "goal": goal})
         if act in ("cancelar", "cancelado", "timeout"):
             motivo = ("cancelada pelo operador" if act == "cancelar"
                       else "cancelada (geração interrompida)" if act == "cancelado"
@@ -694,7 +793,12 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
             "msg": "📦 entrega final — revise, edite se quiser, e confirme"})
         act2, edit2 = request_approval(
             f"{tid}-e", timeout=APPROVAL_TIMEOUT_S,
-            check=lambda: cancel is not None and cancel.is_set())
+            check=lambda: cancel is not None and cancel.is_set(),
+            cfg=cfg,
+            meta={"kind": "entrega", "task_id": tid, "texto": texto_entrega,
+                  "objetivo": objetivo, "tipo": tipo, "message": message,
+                  "session_id": session_id, "goal": goal,
+                  "tentativas": execucoes})
         if act2 == "editar" and edit2 and str(edit2.get("texto", "")).strip():
             texto = str(edit2["texto"]).rstrip()
             final = texto + "\n\n─\n✏️ *entrega editada pelo operador · 🔍 revisada antes*"

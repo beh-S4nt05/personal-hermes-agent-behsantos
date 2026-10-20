@@ -44,10 +44,19 @@ ACTIVE_PULLS: dict = {}
 MODEL_RE = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*(:[A-Za-z0-9._-]+)?$")
 
 
+# v3.11: tasks retomadas após restart (id → {events, final, done})
+_RESUMED: dict[str, dict] = {}
+
+
 def create_app(cfg: Config) -> Flask:
     app = Flask(__name__, template_folder=str(TEMPLATE_DIR))
     app.config["HERMES_CFG"] = cfg
     agents: dict[str, object] = {}
+    try:                                   # v3.11: goals voltam do disco
+        from ..orchestrator import load_goals
+        load_goals(cfg)
+    except Exception:  # noqa: BLE001
+        pass
 
     # --------------------------------------------- anti-CSRF (v3.0.1)
     def _same_origin(origin: str) -> bool:
@@ -305,16 +314,16 @@ self.addEventListener("fetch", (e) => {
         from .. import orchestrator as orc
         if cmd in ("/goal", "/objetivo"):
             if args:
-                orc.set_goal(session_id, args)
+                orc.set_goal(session_id, args, cfg)
                 return jsonify({"ok": True, "action": "goal", "output":
                                 "🎯 objetivo da sessão definido:\n  " + args +
                                 "\n  (o orquestrador leva isso em conta em cada task)"})
-            atual = orc.get_goal(session_id)
+            atual = orc.get_goal(session_id, cfg)
             return jsonify({"ok": True, "output": (
                 "🎯 objetivo atual da sessão:\n  " + atual if atual
                 else "nenhum objetivo definido — use: /goal <o que você quer alcançar>")})
         if cmd in ("/reset", "/novo"):
-            orc.set_goal(session_id, "")
+            orc.set_goal(session_id, "", cfg)
             return jsonify({"ok": True, "action": "reset", "output":
                             "🧹 objetivo da sessão limpo — a conversa continuará "
                             "sem goal (botão ＋ nova abre outra)"})
@@ -365,6 +374,107 @@ self.addEventListener("fetch", (e) => {
                 "  /ajuda          — esta lista")})
         return jsonify({"ok": False, "msg": f"comando desconhecido: {cmd} — /ajuda lista os comandos"})
 
+    @app.get("/api/approvals/pending")
+    @protected
+    def approvals_pending():
+        """v3.11: pendências que sobreviveram a restart + retomadas."""
+        from ..orchestrator import list_pending
+        return jsonify({"ok": True, "pending": list_pending(cfg),
+                        "retomadas": [{"id": k, "done": v["done"],
+                                       "final": v["final"],
+                                       "events": [e for e in v["events"]
+                                                  if e.get("type") in
+                                                  ("note", "approval_request")][-6:]}
+                                      for k, v in _RESUMED.items()]})
+
+    def _resolve_restored(tid: str, action: str, edit: dict | None):
+        """v3.11: decisão numa pendência que sobreviveu a um restart.
+        🔒 plano → retoma a execução em thread nova (o plano já foi
+        aprovado); 📦 entrega → finaliza e registra; cancelar → registra
+        e encerra. Devolve a resposta JSON."""
+        from .. import orchestrator as orc
+
+        pend = orc.peek_pending(cfg, tid)
+        if not pend:
+            return jsonify({"ok": False,
+                            "msg": "não há aprovação pendente com esse id"}), 404
+        base = str(pend.get("task_id") or tid)
+        if pend.get("kind") == "entrega" and action == "refazer":
+            return jsonify({"ok": False,
+                            "msg": "refazer não é possível após restart — a "
+                                   "execução já terminou; edite a entrega ou "
+                                   "cancele"}), 400
+        pend = orc.pop_pending(cfg, tid)
+        if not pend:
+            return jsonify({"ok": False,
+                            "msg": "não há aprovação pendente com esse id"}), 404
+        if action == "cancelar":
+            orc.record(cfg, {"objetivo": str(pend.get("objetivo") or "")[:300],
+                             "tipo": pend.get("tipo") or "leitura",
+                             "status": "cancelada", "tentativas": 0,
+                             "dur_s": 0.0, "veredito": "—",
+                             "problema": "cancelada após restart",
+                             "skills": [], "aprovacao": "retomada·cancelada"},
+                       base)
+            return jsonify({"ok": True, "final": f"⛔ task {base} cancelada.",
+                            "msg": "pendência cancelada"})
+        if pend.get("kind") == "entrega":
+            texto = str((edit or {}).get("texto")
+                        or pend.get("texto") or "").rstrip()
+            if action == "editar" and not texto.strip():
+                return jsonify({"ok": False, "msg": "edição vazia"}), 400
+            entry = {"objetivo": str(pend.get("objetivo") or "")[:300],
+                     "tipo": pend.get("tipo") or "leitura",
+                     "status": "aprovada",
+                     "tentativas": int(pend.get("tentativas") or 1),
+                     "dur_s": 0.0, "veredito": "ok", "problema": "",
+                     "skills": [],
+                     "aprovacao": ("retomada·editada" if action == "editar"
+                                   else "retomada·entregue")}
+            if action == "editar":
+                entry["entrega_editada"] = texto[:200]
+            orc.record(cfg, entry, base)
+            return jsonify({"ok": True, "final": texto,
+                            "msg": "entrega finalizada (pós-restart)"})
+        # 🔒 plano → retomar a execução
+        if action not in ("aprovar", "editar"):
+            return jsonify({"ok": False, "msg": "ação inválida"}), 400
+        plano = {"rota": "executar",
+                 "objetivo": str((edit or {}).get("objetivo")
+                                 or pend.get("objetivo") or "")[:300],
+                 "passos": [str(ps)[:160] for ps in
+                            ((edit or {}).get("passos")
+                             or pend.get("passos") or [])[:4]],
+                 "criterios": [str(cr)[:160] for cr in
+                               (pend.get("criterios") or [])[:3]],
+                 "tipo": pend.get("tipo") or "criacao"}
+        if action == "editar":
+            plano["_editada"] = True
+        st = {"events": [], "final": "", "done": False}
+        _RESUMED[tid] = st
+        msg = str(pend.get("message") or pend.get("objetivo") or "")
+
+        def _rodar():
+            try:
+                from ..agent import Agent
+                agent = agents.setdefault("chat", Agent(cfg))
+                st["final"] = orc.run_pipeline(
+                    agent, cfg, msg, [],
+                    on_event=lambda e: st["events"].append(e),
+                    goal=str(pend.get("goal") or ""),
+                    session_id=str(pend.get("session_id") or ""),
+                    resume_plan=plano, resume_tid=base)
+            except Exception as exc:  # noqa: BLE001
+                st["final"] = (f"✖ falha na retomada: "
+                               f"{exc.__class__.__name__}: {exc}")
+            finally:
+                st["done"] = True
+
+        import threading as _th
+        _th.Thread(target=_rodar, daemon=True).start()
+        return jsonify({"ok": True, "retomada": True,
+                        "msg": f"🔁 task {base} retomada — acompanhe no chat"})
+
     @app.post("/api/chat/approve")
     @protected
     def chat_approve():
@@ -376,7 +486,7 @@ self.addEventListener("fetch", (e) => {
             return jsonify({"ok": False, "msg": "ação inválida"}), 400
         from ..orchestrator import approve
         if not approve(tid, action, payload.get("edit") or None):
-            return jsonify({"ok": False, "msg": "não há aprovação pendente com esse id"}), 404
+            return _resolve_restored(tid, action, payload.get("edit") or None)
         return jsonify({"ok": True, "msg": f"decisão registrada: {action}"})
 
     # ----------------------------------------------------------- status
@@ -791,7 +901,7 @@ self.addEventListener("fetch", (e) => {
                     result["final"] = run_pipeline(
                         agent, cfg, message, clean_history,
                         on_event=collect, cancel=cancel,
-                        goal=get_goal(session_id), session_id=session_id)
+                        goal=get_goal(session_id, cfg), session_id=session_id)
             except Exception as exc:  # noqa: BLE001
                 if not cancel.is_set():
                     activity.log(cfg, "chat",

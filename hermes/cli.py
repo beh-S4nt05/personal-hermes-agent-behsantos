@@ -298,6 +298,12 @@ def cmd_update(args) -> None:
                                 assume_yes=bool(getattr(args, "yes", False))))
 
 
+def cmd_skills_audit(args) -> None:
+    """v3.11: audita o catálogo de skills (estrutura, tamanho, injeção)."""
+    from .skills_audit import run_audit
+    raise SystemExit(run_audit(_cfg(args)))
+
+
 def cmd_daemon(args) -> None:
     from .daemon import run_daemon
 
@@ -424,6 +430,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-y", "--yes", action="store_true",
                    help="aplica sem pedir confirmação")
     p.set_defaults(fn=cmd_update)
+
+    p = sub.add_parser("skills", help="catálogo de skills")
+    ssub = p.add_subparsers(dest="skills_cmd", required=True)
+    pa = ssub.add_parser("audit",
+                         help="audita todas as skills: estrutura, tamanho, "
+                              "prompt injection, duplicatas")
+    pa.set_defaults(fn=cmd_skills_audit)
 
     p = sub.add_parser("chat", help="chat interativo no terminal")
     p.set_defaults(fn=cmd_chat)
