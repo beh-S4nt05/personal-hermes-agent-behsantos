@@ -460,6 +460,18 @@
       </div>
 
       <div class="card">
+        <h3><span class="ic">🎯</span> Saúde do pipeline <span class="hint" style="margin-left:auto">orquestrador → revisor</span></h3>
+        <div class="kv"><span>tasks</span><span id="orch-total">—</span></div>
+        <div class="kv"><span>aprovação na 1ª tentativa</span><span id="orch-1a">—</span></div>
+        <div class="kv"><span>tentativas (média)</span><span id="orch-tent">—</span></div>
+        <div class="kv"><span>duração média</span><span id="orch-dur">—</span></div>
+        <div class="kv"><span>suas edições (plano/entrega)</span><span id="orch-edits">—</span></div>
+        <div class="hist-mini" id="orch-days" style="margin-top:8px"></div>
+        <div id="orch-skills" style="margin-top:8px"></div>
+        <div class="hint" style="margin-top:8px">aprovação na 1ª subindo = o orquestrador está aprendendo com suas edições</div>
+      </div>
+
+      <div class="card">
         <h3><span class="ic">🔌</span> Servidores MCP <span class="hint" style="margin-left:auto">conectores externos</span></h3>
         <div id="mcp-list" class="hint">—</div>
         <div class="btnrow">
@@ -954,7 +966,7 @@ document.querySelectorAll("nav button").forEach(b=>{
     state.page = b.dataset.page;
     if (state.page==="chat") $("chatin").focus();
     if (state.page==="tarefas"){ loadTasks(); loadSchedules(); loadRecipes(); }
-    if (state.page==="painel"){ loadPerf(); }
+    if (state.page==="painel"){ loadPerf(); loadOrchStats(); }
     if (state.page==="auditoria"){ loadAudit(); }
     if (state.page==="ollama") loadOllamaPage();
     if (state.page==="ferramentas") loadToolsPage();
@@ -1548,6 +1560,23 @@ async function loadAudit(){
 }
 
 /* ═══════════════ v3.0 — métricas (painel) ═══════════════ */
+async function loadOrchStats(){
+  try{
+    const r = await api("/api/orchestrator/stats"); const d = await r.json();
+    $("orch-total").textContent = d.total || "0";
+    $("orch-1a").textContent = (d.aprov_1a_pct != null) ? d.aprov_1a_pct + "%" : "—";
+    $("orch-tent").textContent = d.tentativas_media != null ? d.tentativas_media : "—";
+    $("orch-dur").textContent = (d.dur_media_s != null) ? d.dur_media_s + "s" : "—";
+    $("orch-edits").textContent = d.edicoes_operador || 0;
+    const dias = d.por_dia || [];
+    const max = Math.max(1, ...dias.map(x=>x[1]));
+    $("orch-days").innerHTML = dias.length
+      ? dias.map(x=>'<div class="h">'+esc(x[0].slice(5))+' '+'█'.repeat(Math.max(1,Math.round(x[1]/max*12)))+' '+x[1]+'</div>').join("")
+      : '<div class="h">sem tasks ainda — peça uma ação no chat</div>';
+    $("orch-skills").innerHTML = (d.skills_top || [])
+      .map(s=>'<span class="tag trig">✦ '+esc(s[0])+' ×'+s[1]+'</span>').join(" ");
+  }catch(e){}
+}
 async function loadPerf(){
   try{
     const d = await (await api("/api/metrics?limit=30")).json();
@@ -1569,7 +1598,7 @@ async function loadPerf(){
     }
   }catch(e){}
 }
-setInterval(()=>{ if (state.page==="painel") loadPerf(); }, 15000);
+setInterval(()=>{ if (state.page==="painel"){ loadPerf(); loadOrchStats(); } }, 15000);
 
 /* ═══════════════ v3.0 — receitas prontas ═══════════════ */
 async function loadRecipes(){

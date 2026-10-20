@@ -260,6 +260,9 @@ def plan(cfg, message: str, history: list[dict] | None = None) -> dict:
                         "refere a ela, o objetivo é CONCLUIR essa task.]")
             except Exception:  # noqa: BLE001
                 pass
+        xp = experience(cfg)
+        if xp:
+            partes.append(xp)
         partes.append("MENSAGEM ATUAL: " + (message or ""))
         texto = _fast(cfg, _PLANO_JSON, "\n".join(partes), ntok=220,
                       stage="🎯 orquestrador", model=model_for(cfg, "orchestrator"))
@@ -321,6 +324,42 @@ def record(cfg, entry: dict, tid: str | None = None) -> str:
         return tid
     except OSError:
         return tid or "?"
+
+
+def experience(cfg, limit: int = 6) -> str:
+    """v3.10 🧠: o orquestrador APRENDE — as últimas tasks (resultados,
+    reprovações e EDIÇÕES do operador) viram contexto do planejamento.
+    As edições do operador são as preferências dele; repetir erro que já
+    foi corrigido é falta de experiência."""
+    try:
+        tasks = list_tasks(cfg, limit=limit)
+    except Exception:  # noqa: BLE001
+        return ""
+    if not tasks:
+        return ""
+    linhas = []
+    for tk in tasks:
+        if not isinstance(tk, dict):
+            continue
+        linha = (f"- {tk.get('id', '?')} · {tk.get('status', '?')} · "
+                 f"{tk.get('tentativas', '?')} exec · {str(tk.get('objetivo', ''))[:100]}")
+        sk = tk.get("skills") or []
+        if sk:
+            linha += f" (skills: {', '.join(sk)})"
+        prob = str(tk.get("problema") or "")[:80]
+        if tk.get("status") == "reprovada" and prob:
+            linha += f" — problema: {prob}"
+        if tk.get("plano_editado"):
+            linha += " · o operador EDITOU o plano antes de executar"
+        if tk.get("entrega_editada"):
+            linha += (f" · o operador EDITOU a entrega para: "
+                      f"“{str(tk['entrega_editada'])[:120]}”")
+        linhas.append(linha)
+    return ("[EXPERIÊNCIA DO ORQUESTRADOR — tasks recentes desta máquina]\n"
+            + "\n".join(linhas)[:1400]
+            + "\nUse a experiência: repita o padrão do que foi aprovado; "
+              "evite o que já foi reprovado; as edições do operador são "
+              "PREFERÊNCIAS dele — planeje de acordo.")[:1600]
 
 
 def _next_id(cfg) -> str:
@@ -527,6 +566,7 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
 
     # ── 🔒 portão 1: aprovação do PLANO (só tarefas de criação) ──
     aprovacao = "auto"
+    edit_snip, plano_editado = "", False   # v3.10: sinais de experiência
     exige_aprovacao = (tipo == "criacao"
                        and getattr(cfg, "creation_approval", True))
     if exige_aprovacao and not _cancelado():
@@ -554,6 +594,7 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
             objetivo = str(edit.get("objetivo") or objetivo)[:300]
             passos = [str(p)[:160] for p in (edit.get("passos") or passos)[:4]]
             aprovacao = "editada"
+            plano_editado = True          # v3.10: a edição vira experiência
             ev({"type": "note",
                 "message": "✏️ plano editado pelo operador — seguindo o plano editado"})
         else:
@@ -658,6 +699,7 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
             texto = str(edit2["texto"]).rstrip()
             final = texto + "\n\n─\n✏️ *entrega editada pelo operador · 🔍 revisada antes*"
             entregue = "editada"
+            edit_snip = texto[:200]      # v3.10: a edição vira experiência
         elif act2 == "refazer" and execucoes < 3:
             ev({"type": "note",
                 "message": "🔁 refazendo a pedido do operador (entrega reprovada)"})
@@ -695,12 +737,17 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     dur = round(time.time() - t0, 1)
     status = ("aprovada" if veredito == "ok" and not _cancelado() else
               "reprovada" if not _cancelado() else "cancelada")
-    record(cfg, {"objetivo": objetivo, "tipo": tipo, "status": status,
-                 "tentativas": execucoes, "dur_s": dur,
-                 "veredito": veredito, "problema": problema[:200],
-                 "skills": [s["name"] for s in sks],
-                 "aprovacao": (aprovacao if not exige_aprovacao else
-                               f"{aprovacao}·{entregue}")}, tid)
+    entry = {"objetivo": objetivo, "tipo": tipo, "status": status,
+             "tentativas": execucoes, "dur_s": dur,
+             "veredito": veredito, "problema": problema[:200],
+             "skills": [s["name"] for s in sks],
+             "aprovacao": (aprovacao if not exige_aprovacao else
+                           f"{aprovacao}·{entregue}")}
+    if plano_editado:
+        entry["plano_editado"] = True
+    if edit_snip:
+        entry["entrega_editada"] = edit_snip
+    record(cfg, entry, tid)
     activity.log(cfg, "chat",
                  f"🎯 task {tid} {status} · {execucoes} execução(ões) · {dur}s")
     ev({"type": "brain", "stage": "🔍 revisor",

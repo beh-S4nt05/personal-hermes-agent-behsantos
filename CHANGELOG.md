@@ -1,5 +1,37 @@
 # Changelog
 
+## v3.10.0 — 🧠⬇📊 o orquestrador aprende + update em 1 comando + painel de saúde
+
+Versão escolhida pelo operador (frentes 1+2+3 do diagnóstico de melhorias).
+
+**1. 🧠 Memória de experiência** — o orquestrador agora APRENDE com o
+histórico: as últimas tasks registradas em `orchestrator_tasks.jsonl`
+(resultados, reprovações, tentativas e, principalmente, as EDIÇÕES do
+operador em planos e entregas) entram como contexto do planejamento.
+Editar uma entrega uma vez vira preferência permanente: o novo
+`experience()` em `orchestrator.py` resume cada task ("o operador
+EDITOU a entrega para: …") e o `plan()` injeta isso antes da mensagem
+atual. Repetir erro que já foi corrigido ficou sem desculpa.
+
+**2. ⬇ `hermes update`** — fim do ritual unzip+pip manual: o comando
+consulta a última tag estável no GitHub, compara com a versão
+instalada, baixa o zip da tag e aplica sobre a instalação atual —
+preservando `data/`, `.venv` e `.git`. Usa só stdlib (urllib/zipfile).
+`hermes update --check` só avisa; `hermes update -y` aplica sem
+perguntar (para scripts). Novo módulo `hermes/update.py`.
+
+**3. 📊 Painel de saúde do pipeline** — novo card no Painel da GUI com
+o funil completo a partir das tasks reais: aprovação na 1ª tentativa
+(%), tentativas médias, duração média, edições do operador, skills mais
+usadas e tasks por dia (últimos 14). Novo endpoint
+`/api/orchestrator/stats`. Aprovação na 1ª subindo = o orquestrador
+está aprendendo com suas edições.
+
+**Testes:** T76 (experiência vira few-shot do planejador, edição de
+entrega aparece no prompt), T77 (update offline: última tag estável,
+comparação de versões, apply preserva data/.venv), T78 (funil do
+painel confere com o jsonl + card na GUI). **78/78.**
+
 ## v3.9.0 — 🧠 aba Ollama: todos os modelos instalados + papel de cada um
 
 Pedido do operador: ver TODOS os modelos instalados nativamente na aba

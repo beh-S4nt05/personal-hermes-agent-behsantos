@@ -291,6 +291,13 @@ def cmd_chat(args) -> None:
     run_chat(_cfg(args))
 
 
+def cmd_update(args) -> None:
+    """Atualiza o projeto a partir do GitHub (tags oficiais do repo)."""
+    from .update import run as run_update
+    raise SystemExit(run_update(check_only=bool(getattr(args, "check", False)),
+                                assume_yes=bool(getattr(args, "yes", False))))
+
+
 def cmd_daemon(args) -> None:
     from .daemon import run_daemon
 
@@ -410,6 +417,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--data-dir", help="diretório de dados (padrão: ~/.hermes)")
     parser.add_argument("--mock", action="store_true", help="força modo demonstração (Ollama simulado)")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("update", help="atualiza o agente a partir do GitHub")
+    p.add_argument("--check", action="store_true",
+                   help="apenas verifica se há versão nova (não aplica)")
+    p.add_argument("-y", "--yes", action="store_true",
+                   help="aplica sem pedir confirmação")
+    p.set_defaults(fn=cmd_update)
 
     p = sub.add_parser("chat", help="chat interativo no terminal")
     p.set_defaults(fn=cmd_chat)

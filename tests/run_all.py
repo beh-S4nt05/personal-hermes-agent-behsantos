@@ -1550,6 +1550,123 @@ def _esperar(evs, pred, seg=25):
 
 
 @case
+def T76_orquestrador_aprende_experiencia():
+    """v3.10 🧠: as tasks recentes (com as EDIÇÕES do operador) entram no
+    contexto do planejador — reprovação e edição viram experiência."""
+    from hermes import orchestrator as orc
+
+    cfg = fresh()
+    assert orc.experience(cfg) == ""                       # sem tasks: nada
+    orc.record(cfg, {"objetivo": "verificar uso de disco", "tipo": "leitura",
+                     "status": "aprovada", "tentativas": 1, "dur_s": 4.2,
+                     "veredito": "ok", "problema": "", "skills": ["analise-dados"],
+                     "aprovacao": "auto"})
+    orc.record(cfg, {"objetivo": "criar relatório semanal", "tipo": "criacao",
+                     "status": "reprovada", "tentativas": 2, "dur_s": 9.0,
+                     "veredito": "refazer", "problema": "sem dados reais",
+                     "skills": [], "aprovacao": "editada·editada",
+                     "plano_editado": True,
+                     "entrega_editada": "Relatório direto ao ponto, sem preâmbulo."})
+    xp = orc.experience(cfg)
+    assert "verificar uso de disco" in xp and "analise-dados" in xp
+    assert "reprovada" in xp and "sem dados reais" in xp
+    assert "EDITOU o plano" in xp
+    assert "EDITOU a entrega" in xp and "sem preâmbulo" in xp
+    assert "PREFERÊNCIAS" in xp
+    # a experiência entra no prompt do planejador
+    capturado = {}
+    orig = orc._fast
+    orc._fast = lambda cfg, sys, user, ntok=200, **kw: (
+        capturado.update(user=user) or '{"rota":"responder"}')
+    try:
+        orc.plan(cfg, "verifique o disco", [])
+        assert "EXPERIÊNCIA DO ORQUESTRADOR" in capturado["user"]
+        assert "sem preâmbulo" in capturado["user"]
+        assert "MENSAGEM ATUAL: verifique o disco" in capturado["user"]
+    finally:
+        orc._fast = orig
+
+
+@case
+def T77_hermes_update_offline():
+    """v3.10 ⬇: lógica do update sem rede — escolha da última tag,
+    comparação de versões e aplicação que PRESERVA data/.venv/.git."""
+    import shutil as _sh
+    from hermes import update as up
+
+    # latest_tag com fetch injetado (sem rede)
+    fetch = lambda url: json.dumps([{"name": "v3.9.0"}, {"name": "v3.10.0"},
+                                    {"name": "v3.2.0"}, {"name": "v10.0.0-beta"}])
+    assert up.latest_tag(fetch) == "v3.10.0"            # maior versão estável
+    assert up._parse_version("v3.10.0") > up._parse_version("v3.9.0")
+    assert up._parse_version("v3.10.0") > up._parse_version("v3.2.0")
+    assert up.latest_tag(lambda url: "lixo") is None    # resposta inválida
+    # apply_update preserva o que é local
+    src = Path(tempfile.mkdtemp()) / "novo"
+    (src / "hermes").mkdir(parents=True)
+    (src / "hermes" / "novo.py").write_text("# novo", encoding="utf-8")
+    (src / "pyproject.toml").write_text("novo", encoding="utf-8")
+    (src / "data").mkdir()
+    (src / "data" / "segredo.txt").write_text("não me toque", encoding="utf-8")
+    dest = Path(tempfile.mkdtemp())
+    (dest / "hermes").mkdir()
+    (dest / "hermes" / "velho.py").write_text("# velho", encoding="utf-8")
+    (dest / "data").mkdir()
+    (dest / "data" / "conversas.json").write_text("importante", encoding="utf-8")
+    (dest / ".venv").mkdir()
+    (dest / ".venv" / "bin").write_text("x", encoding="utf-8")
+    atualizados = up.apply_update(src, dest, log=lambda *_: None)
+    assert "hermes" in atualizados and "pyproject.toml" in atualizados
+    assert "data" not in atualizados
+    assert (dest / "hermes" / "novo.py").exists()
+    assert (dest / "data" / "conversas.json").read_text() == "importante"
+    assert (dest / ".venv" / "bin").exists()
+    _sh.rmtree(src.parent, ignore_errors=True)
+    _sh.rmtree(dest, ignore_errors=True)
+    # CLI tem o comando
+    import subprocess as _sp
+    r = _sp.run(["./.venv/bin/hermes", "update", "--help"],
+                capture_output=True, text=True, timeout=30)
+    assert "check" in (r.stdout + r.stderr).lower()
+
+
+@case
+def T78_painel_de_saude_do_pipeline():
+    """v3.10 📊: /api/orchestrator/stats calcula o funil (aprovação na 1ª,
+    tentativas, duração, edições, skills top, por dia) e o Painel tem o card."""
+    from hermes import orchestrator as orc
+    cfg = fresh()
+    c = _app(cfg)
+    d = c.get("/api/orchestrator/stats").get_json()
+    assert d["ok"] and d["total"] == 0 and d["aprov_1a_pct"] is None
+    orc.record(cfg, {"objetivo": "a", "tipo": "leitura", "status": "aprovada",
+                     "tentativas": 1, "dur_s": 3.0, "veredito": "ok",
+                     "problema": "", "skills": ["analise-dados"],
+                     "aprovacao": "auto", "ts": "2026-10-19 10:00:00"})
+    orc.record(cfg, {"objetivo": "b", "tipo": "leitura", "status": "aprovada",
+                     "tentativas": 2, "dur_s": 9.0, "veredito": "ok",
+                     "problema": "", "skills": ["analise-dados"],
+                     "aprovacao": "aprovada·editada", "ts": "2026-10-19 11:00:00"})
+    orc.record(cfg, {"objetivo": "c", "tipo": "criacao", "status": "reprovada",
+                     "tentativas": 2, "dur_s": 6.0, "veredito": "refazer",
+                     "problema": "sem dados", "skills": [],
+                     "aprovacao": "editada·entregue", "ts": "2026-10-18 09:00:00"})
+    d = c.get("/api/orchestrator/stats").get_json()
+    assert d["total"] == 3
+    assert d["por_status"] == {"aprovada": 2, "reprovada": 1}
+    assert d["aprov_1a_pct"] == 33                    # 1 de 3 na primeira
+    assert d["tentativas_media"] == 1.67
+    assert d["dur_media_s"] == 6.0
+    assert d["edicoes_operador"] == 2
+    assert d["skills_top"][0] == ["analise-dados", 2]
+    assert d["por_dia"][0][0] == "2026-10-18"
+    # card no Painel
+    html = c.get("/").get_data(as_text=True)
+    assert 'id="orch-total"' in html and "Saúde do pipeline" in html
+    assert "loadOrchStats" in html
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

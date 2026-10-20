@@ -250,6 +250,45 @@ self.addEventListener("fetch", (e) => {
         from ..orchestrator import list_tasks
         return jsonify({"ok": True, "tasks": list_tasks(cfg)})
 
+    # --------------------------------- saúde do pipeline (v3.10)
+    @app.get("/api/orchestrator/stats")
+    @protected
+    def orchestrator_stats():
+        """Funil do pipeline a partir das tasks registradas: aprovação na
+        1ª tentativa, refações, edições do operador, skills mais usadas."""
+        from ..orchestrator import list_tasks
+        tasks = list_tasks(cfg, limit=1000)
+        total = len(tasks)
+        por_status: dict[str, int] = {}
+        primeira = tent = dur = edits = 0
+        skills: dict[str, int] = {}
+        dias: dict[str, int] = {}
+        for tk in tasks:
+            if not isinstance(tk, dict):
+                continue
+            st = str(tk.get("status", "?"))
+            por_status[st] = por_status.get(st, 0) + 1
+            if st == "aprovada" and tk.get("tentativas") == 1:
+                primeira += 1
+            tent += int(tk.get("tentativas") or 0)
+            dur += float(tk.get("dur_s") or 0)
+            for s in tk.get("skills") or []:
+                skills[s] = skills.get(s, 0) + 1
+            if "editada" in str(tk.get("aprovacao", "")):
+                edits += 1
+            d = str(tk.get("ts", ""))[:10]
+            if d:
+                dias[d] = dias.get(d, 0) + 1
+        return jsonify({
+            "ok": True, "total": total, "por_status": por_status,
+            "aprov_1a_pct": round(100 * primeira / total) if total else None,
+            "tentativas_media": round(tent / total, 2) if total else None,
+            "dur_media_s": round(dur / total, 1) if total else None,
+            "edicoes_operador": edits,
+            "skills_top": sorted(skills.items(), key=lambda x: -x[1])[:5],
+            "por_dia": sorted(dias.items())[-14:],
+        })
+
     # -------------------------------------- comandos e aprovação (v3.4)
     @app.post("/api/chat/command")
     @protected
