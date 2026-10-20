@@ -1667,6 +1667,243 @@ def T78_painel_de_saude_do_pipeline():
 
 
 @case
+def T79_edicao_do_operador_muda_decisao_do_planejador():
+    """v3.10 🧠 ACEITAÇÃO — esperado: depois de 1 edição do operador, a
+    decisão do planejador MUDA na task seguinte (executar com relatório
+    → responder direto). Cadeia completa: edição → jsonl → experience()
+    → prompt → decisão."""
+    from hermes import orchestrator as orc
+
+    prompts = []
+    orig = orc._fast
+
+    def planner(cfg, sys, user, ntok=220, **kw):
+        # planejador scriptado: quem LÊ a preferência decide direto
+        if "sem preâmbulo" in user:
+            return json.dumps({"rota": "responder"})
+        return json.dumps({"rota": "executar",
+                           "objetivo": "responder com relatório detalhado",
+                           "passos": ["levantar dados", "escrever", "revisar"]})
+
+    orc._fast = lambda cfg, sys, user, ntok=220, **kw: (
+        prompts.append(user) or planner(cfg, sys, user, ntok, **kw))
+    try:
+        # ANTES: sem histórico → planeja tarefa detalhada
+        cfg0 = fresh()
+        p0 = orc.plan(cfg0, "resuma o uso de disco", [])
+        assert p0["rota"] == "executar" and "detalhado" in p0["objetivo"]
+        assert "EXPERIÊNCIA" not in prompts[-1]
+
+        # o operador edita a entrega de uma task reprovada
+        cfg = fresh()
+        orc.record(cfg, {"objetivo": "relatório do disco", "tipo": "criacao",
+                         "status": "reprovada", "tentativas": 2, "dur_s": 8.0,
+                         "veredito": "refazer", "problema": "prolixo demais",
+                         "skills": [], "aprovacao": "editada·editada",
+                         "entrega_editada":
+                             "Resposta direta ao ponto, sem preâmbulo."})
+
+        # DEPOIS: a MESMA mensagem → resposta direta
+        p1 = orc.plan(cfg, "resuma o uso de disco", [])
+        assert p1["rota"] == "responder"
+        assert "EXPERIÊNCIA DO ORQUESTRADOR" in prompts[-1]
+        assert "sem preâmbulo" in prompts[-1]
+    finally:
+        orc._fast = orig
+
+
+@case
+def T80_memoria_persiste_restart_e_tem_limite():
+    """v3.10 🧠 ACEITAÇÃO — esperado: a memória vem do DISCO (jsonl),
+    não da RAM: novo processo mantém a preferência; janela de 6 tasks;
+    bloco cortado em 1600 chars; histórico vazio não injeta nada."""
+    from hermes import orchestrator as orc
+    from hermes.config import Config
+
+    d = tempfile.mkdtemp(prefix="hermes-restart-")
+    cfg1 = Config(data_dir=d, mock=True)
+    orc.record(cfg1, {"objetivo": "relatório", "tipo": "criacao",
+                      "status": "aprovada", "tentativas": 1, "dur_s": 5.0,
+                      "veredito": "ok", "problema": "", "skills": [],
+                      "aprovacao": "editada·editada",
+                      "entrega_editada": "direto, sem preâmbulo"})
+    # "restart": outro objeto Config, MESMO data_dir
+    cfg2 = Config(data_dir=d, mock=True)
+    xp = orc.experience(cfg2)
+    assert "sem preâmbulo" in xp and "EDITOU a entrega" in xp
+
+    # janela de 6 tasks
+    cfg = fresh()
+    for i in range(1, 31):
+        orc.record(cfg, {"objetivo": f"task-{i:02d} " + "x" * 180,
+                         "tipo": "leitura", "status": "aprovada",
+                         "tentativas": 1, "dur_s": 1.0, "veredito": "ok",
+                         "problema": "", "skills": [], "aprovacao": "auto"})
+    xp6 = orc.experience(cfg)
+    assert "task-30" in xp6 and "task-25" in xp6      # 6 mais recentes
+    assert "task-24" not in xp6 and "task-01" not in xp6
+    # teto duro: mesmo pedindo 50, o bloco corta em 1600 chars
+    xp50 = orc.experience(cfg, limit=50)
+    assert len(xp50) == 1600 and "task-30" in xp50
+    # histórico vazio: sem bloco
+    assert orc.experience(fresh()) == ""
+
+
+@case
+def T81_update_end_to_end_v3110_local():
+    """v3.10 ⬇ ACEITAÇÃO — esperado: 1 comando aplica a versão nova
+    (download REAL via file://), preserva data/ e .venv, não apaga
+    arquivos locais, recusa downgrade e é rápido."""
+    import zipfile as _zf
+    from hermes import update as up
+
+    tmp = Path(tempfile.mkdtemp(prefix="hermes-upd-"))
+    src = tmp / "personal-hermes-agent-behsantos-v3.11.0"
+    (src / "hermes").mkdir(parents=True)
+    (src / "hermes" / "__init__.py").write_text(
+        'VERSION = "3.11.0"', encoding="utf-8")
+    (src / "pyproject.toml").write_text('version = "3.11.0"', encoding="utf-8")
+    (src / "data").mkdir()
+    (src / "data" / "do-repo.txt").write_text("não deve copiar",
+                                              encoding="utf-8")
+    with _zf.ZipFile(tmp / "v3.11.0.zip", "w") as zf:
+        for f in sorted(src.rglob("*")):
+            if f.is_file():
+                zf.write(f, f.relative_to(tmp))
+    (tmp / "tags.json").write_text(
+        json.dumps([{"name": "v3.9.0"}, {"name": "v3.11.0"}]),
+        encoding="utf-8")
+    (tmp / "tags-velhas.json").write_text(
+        json.dumps([{"name": "v3.9.0"}]), encoding="utf-8")
+
+    dest = tmp / "inst"
+    (dest / "hermes").mkdir(parents=True)
+    (dest / "hermes" / "cli.py").write_text("# velho", encoding="utf-8")
+    (dest / "pyproject.toml").write_text('version = "3.10.0"',
+                                         encoding="utf-8")
+    (dest / "data").mkdir()
+    (dest / "data" / "conversas.json").write_text("[1,2,3]", encoding="utf-8")
+    (dest / ".venv").mkdir()
+    (dest / ".venv" / "bin").write_text("x", encoding="utf-8")
+
+    _api, _zip, _root = up.TAGS_API, up.ZIP_URL, up._project_root
+    try:
+        up.TAGS_API = f"file://{tmp}/tags.json"
+        up.ZIP_URL = f"file://{tmp}/{{tag}}.zip"
+        up._project_root = lambda: dest
+        out = []
+        t0 = time.time()
+        rc = up.run(check_only=False, assume_yes=True, print_fn=out.append)
+        dur = time.time() - t0
+        texto = " ".join(out)
+        assert rc == 0 and dur < 5, texto
+        assert "3.11.0" in texto and "itens atualizados" in texto
+        assert (dest / "hermes" / "__init__.py").read_text(
+            encoding="utf-8") == 'VERSION = "3.11.0"'
+        assert (dest / "data" / "conversas.json").read_text(
+            encoding="utf-8") == "[1,2,3]"           # dados sobrevivem
+        assert not (dest / "data" / "do-repo.txt").exists()
+        assert (dest / ".venv" / "bin").exists()
+        assert (dest / "hermes" / "cli.py").read_text(
+            encoding="utf-8") == "# velho"           # não apaga local
+
+        # --check avisa e NÃO aplica
+        (dest / "hermes" / "__init__.py").unlink()
+        out2 = []
+        assert up.run(check_only=True, assume_yes=True,
+                      print_fn=out2.append) == 0
+        assert "há atualização" in " ".join(out2)
+        assert not (dest / "hermes" / "__init__.py").exists()
+
+        # só há versão MAIS VELHA: não faz nada
+        up.TAGS_API = f"file://{tmp}/tags-velhas.json"
+        out3 = []
+        assert up.run(check_only=False, assume_yes=True,
+                      print_fn=out3.append) == 0
+        assert "mais recente" in " ".join(out3)
+    finally:
+        up.TAGS_API, up.ZIP_URL, up._project_root = _api, _zip, _root
+
+
+@case
+def T82_painel_confere_com_jsonl_bruto_fuzz_e_perf():
+    """v3.10 📊 ACEITAÇÃO — esperado: NENHUM número do painel é inventado
+    (todos conferem com o recálculo direto do jsonl bruto) e o endpoint
+    responde rápido com 1000 tasks."""
+    import random
+    from hermes import orchestrator as orc
+
+    cfg = fresh()
+    c = _app(cfg)
+    rnd = random.Random(42)
+    pool: list[str] = []
+    for i in range(1, 9):
+        pool += [f"skill-{i}"] * i          # contagens únicas 1..8
+    linhas = []
+    for j in range(120):
+        st = rnd.choice(["aprovada"] * 6 + ["reprovada"] * 2 + ["cancelada"])
+        linhas.append({"id": f"T{j + 1:04d}",
+                       "ts": f"2026-10-{1 + j % 10:02d} {j % 24:02d}:00:00",
+                       "objetivo": f"obj-{j}", "tipo": "leitura", "status": st,
+                       "tentativas": rnd.choice([1, 1, 1, 2, 3]),
+                       "dur_s": rnd.randint(1, 60),
+                       "veredito": "ok" if st == "aprovada" else "refazer",
+                       "problema": "" if st == "aprovada" else f"prob-{j}",
+                       "skills": [pool[j]] if j < len(pool) else [],
+                       "aprovacao": rnd.choice(
+                           ["auto", "editada", "aprovada", "aprovada·editada",
+                            "editada·refeita", "sem_confirmacao"])})
+    p = orc.tasks_path(cfg)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("".join(json.dumps(l, ensure_ascii=False) + "\n"
+                         for l in linhas), encoding="utf-8")
+
+    d = c.get("/api/orchestrator/stats").get_json()
+    # recálculo INDEPENDENTE a partir do arquivo bruto
+    total = len(linhas)
+    por_status: dict[str, int] = {}
+    n1a = tent = dur = edits = 0
+    skills: dict[str, int] = {}
+    dias: dict[str, int] = {}
+    for l in linhas:
+        por_status[l["status"]] = por_status.get(l["status"], 0) + 1
+        if l["status"] == "aprovada" and l["tentativas"] == 1:
+            n1a += 1
+        tent += l["tentativas"]
+        dur += l["dur_s"]
+        if "editada" in l["aprovacao"]:
+            edits += 1
+        for s in l["skills"]:
+            skills[s] = skills.get(s, 0) + 1
+        dias[l["ts"][:10]] = dias.get(l["ts"][:10], 0) + 1
+    assert d["total"] == total == 120
+    assert d["por_status"] == por_status
+    assert d["aprov_1a_pct"] == round(100 * n1a / total)
+    assert d["tentativas_media"] == round(tent / total, 2)
+    assert d["dur_media_s"] == round(dur / total, 1)
+    assert d["edicoes_operador"] == edits
+    top5 = [list(x) for x in sorted(skills.items(), key=lambda x: -x[1])[:5]]
+    assert d["skills_top"] == top5
+    assert d["skills_top"][0] == ["skill-8", 8]
+    assert d["por_dia"] == [list(x) for x in sorted(dias.items())[-14:]]
+
+    # escala: 1000 tasks → rápido
+    with p.open("a", encoding="utf-8") as f:
+        for j in range(120, 1000):
+            f.write(json.dumps({"id": f"T{j + 1:04d}",
+                                "ts": f"2026-10-20 {j % 24:02d}:00:00",
+                                "objetivo": f"obj-{j}", "tipo": "leitura",
+                                "status": "aprovada", "tentativas": 1,
+                                "dur_s": 3, "veredito": "ok", "problema": "",
+                                "skills": [], "aprovacao": "auto"},
+                               ensure_ascii=False) + "\n")
+    t0 = time.time()
+    d = c.get("/api/orchestrator/stats").get_json()
+    dt = time.time() - t0
+    assert d["total"] == 1000 and dt < 0.5, dt
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

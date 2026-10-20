@@ -1,5 +1,33 @@
 # Changelog
 
+## v3.10.1 — 🧪 aceitação: melhoria prometida × melhoria medida
+
+O operador pediu prova: "houve melhoria mesmo? está dentro do esperado?"
+Cada frente do v3.10.0 virou critério mensurável (T79–T82), com o
+resultado esperado definido ANTES da medição — e tudo medido:
+
+- **T79 · 🧠 experiência muda decisão** — esperado: 1 edição do
+  operador muda a decisão da task seguinte. Medido: sem histórico o
+  planejador decide `executar` (relatório detalhado); após registrar a
+  edição "sem preâmbulo", a MESMA mensagem vira `responder`. Cadeia
+  completa edição → jsonl → experience() → prompt → decisão.
+- **T80 · 🧠 persistência e limites** — esperado: memória no disco, sem
+  explodir contexto. Medido: novo processo (outro Config no mesmo
+  data_dir) mantém a preferência; janela de 6 tasks; com 30 tasks no
+  disco o bloco corta em exatos 1600 chars; histórico vazio não injeta.
+- **T81 · ⬇ update ponta a ponta** — esperado: 1 comando atualiza e
+  preserva dados. Medido: v3.10.0 → v3.11.0 com download real em
+  13 ms; conversas.json intacto; .venv intacto; arquivos locais não
+  apagados; downgrade recusado; `--check` avisa sem aplicar.
+- **T82 · 📊 painel sem número inventado** — esperado: todos os campos
+  conferem com o jsonl bruto. Medido: 120 tasks aleatórias (semente
+  fixa), os 8 campos do `/api/orchestrator/stats` idênticos ao
+  recálculo independente; 1000 tasks respondem em 6 ms.
+
+**82/82.** Nota honesta: com LLM mockado, T79 prova que o SINAL chega e
+muda a decisão de quem o lê; a melhoria de longo prazo (aprovação na
+1ª subindo) é medida pelo próprio painel de saúde durante o uso real.
+
 ## v3.10.0 — 🧠⬇📊 o orquestrador aprende + update em 1 comando + painel de saúde
 
 Versão escolhida pelo operador (frentes 1+2+3 do diagnóstico de melhorias).
