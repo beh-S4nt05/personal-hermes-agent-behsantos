@@ -2120,6 +2120,22 @@ def T87_skills_audit_catalogo_real_limpo():
 
 
 @case
+def T88_banner_offline_casca_em_cache():
+    """v3.11.1: a GUI avisa em LETRA quando é a casca em cache com o
+    servidor desligado (service worker) — nada de parecer 'viva'."""
+    cfg = fresh()
+    c = _app(cfg)
+    html = c.get("/").get_data(as_text=True)
+    assert "checkOnline" in html and "offline-bar" in html
+    assert "NÃO está rodando nesta máquina" in html
+    # o detector do banner: /api/status existe e responde
+    assert "version" in c.get("/api/status").get_json()
+    # e o service worker (a causa da casca) segue servido
+    sw = c.get("/sw.js")
+    assert sw.status_code == 200 and "hermes-shell" in sw.get_data(as_text=True)
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

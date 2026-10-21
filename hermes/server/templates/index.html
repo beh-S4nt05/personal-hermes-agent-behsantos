@@ -883,6 +883,32 @@
 if ("serviceWorker" in navigator && window.isSecureContext) {
   navigator.serviceWorker.register("/sw.js").catch(()=>{});
 }
+
+/* ── v3.11.1: aviso honesto quando o servidor está OFFLINE ──
+   a página pode vir do cache do service worker e parecer "viva";
+   o banner vermelho deixa claro: a aplicação NÃO está rodando. */
+let _offBar = null;
+async function checkOnline(){
+  let on = false;
+  try{
+    const r = await fetch("/api/status", {cache: "no-store"});
+    on = r.ok;
+  }catch(_e){ on = false; }
+  if (on){ if (_offBar){ _offBar.remove(); _offBar = null; } return; }
+  if (_offBar || !document.body) return;
+  _offBar = document.createElement("div");
+  _offBar.id = "offline-bar";
+  _offBar.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;"+
+    "background:#b3261e;color:#fff;font:600 13px system-ui,sans-serif;"+
+    "padding:10px 14px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.4)";
+  _offBar.textContent = "⚠ Hermes server OFFLINE — isto é a casca em cache do navegador (a aplicação NÃO está rodando nesta máquina). Ligue com: hermes server";
+  document.body.appendChild(_offBar);
+}
+if (document.readyState === "loading")
+  document.addEventListener("DOMContentLoaded", checkOnline);
+else
+  checkOnline();
+setInterval(checkOnline, 5000);
 /* ═══════════════ utilidades ═══════════════ */
 const $ = (id) => document.getElementById(id);
 const state = { status:null, paused:false, es:null, sending:false, history:[], token:"", page:"painel", sessionId:null, abort:null };

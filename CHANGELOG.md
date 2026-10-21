@@ -1,5 +1,22 @@
 # Changelog
 
+## v3.11.1 — 🚨 banner "server OFFLINE" (fim do fantasma do cache)
+
+Sintoma real do operador: com o servidor desligado, abrir
+`localhost:8080` no navegador ainda "abria a aplicação" — e parecia
+rodando full-time. Causa: o service worker (shell offline, v3.2)
+serve a CASCA da GUI salva em cache, com as chamadas de API falhando
+em silêncio. Nenhum processo roda — mas a página parece viva.
+
+Correção: a GUI agora se autodiagnostica (`/api/status` a cada 5s) e,
+sem resposta, exibe um **banner vermelho fixo** no topo:
+
+  ⚠ Hermes server OFFLINE — isto é a casca em cache do navegador (a
+  aplicação NÃO está rodando nesta máquina). Ligue com: hermes server
+
+O banner some sozinho quando o servidor volta. T88 cobra o banner, o
+detector e o service worker. **88/88.**
+
 ## v3.11.0 — 🔁🛡 estado sobrevive a restart + auditoria de skills
 
 Escopo escolhido pelo operador (frentes 1+2 do ranking pós-v3.10).
