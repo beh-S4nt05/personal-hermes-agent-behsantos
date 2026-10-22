@@ -1,5 +1,31 @@
 # Changelog
 
+## v3.13.3 — 🔬 código só entrega executado + `hermes selftest` (LLM real)
+
+Pergunta do operador: "e se eu pedir OUTROS tipos de tarefa (geração
+de código, projetos)? Pode alucinar e entregar errado/incompleto?"
+
+**1. ✅ Critério estrutural para código** — tarefas de código
+(`_CODIGO_RE`) ganham critério automático que o REVISOR passa a cobrar:
+"o código foi ESCRITO em arquivo e EXECUTADO, com a SAÍDA REAL colada
+na resposta". Rastro > opinião do modelo: código que não rodou não
+entrega mais. Nova skill `codigo-verificado` (28 no catálogo) ensina o
+fluxo completo — escrever, executar, ler saída, corrigir (máx. 3
+rodadas), anti-alucinação (biblioteca instalada? coluna REAL do
+arquivo?), entrega com limites declarados.
+
+**2. 🧪 `hermes selftest` — bateria de aceitação com LLM REAL** — a
+resposta mensurável para "pode alucinar?": 5 cenários de campo
+(diagnóstico do dispositivo, código verificado com saída "5", dados
+reais com total "60", conhecimento completo, memória que guarda e usa)
+verificam entrega não-vazia, SEM recusa, COM evidência de ferramenta.
+Pula limpo em mock ou sem Ollama. Rode na sua máquina:
+`hermes selftest` — relatório pronto para me mandar quando reprovar.
+
+**Teste:** T99 (critério de execução injetado p/ código e não p/
+outros, skill casa com "gere código python para o meu projeto", 5
+cenários, pulada limpa em mock, CLI exposta). **99/99.**
+
 ## v3.13.2 — 🔎 diagnóstico do dispositivo em UMA chamada
 
 Segunda bateria de campo do operador revelou os três modos de falha do

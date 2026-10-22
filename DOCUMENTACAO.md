@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.13.1** · gerado em 22/10/2026 · este documento é extraído do
+**Versão 3.13.2** · gerado em 22/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -84,6 +84,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `hermes skills` | catálogo de skills |
 | `hermes audit` | audita todas as skills: estrutura, tamanho,  |
 | `hermes chat` | chat interativo no terminal |
+| `hermes selftest` | 🧪 bateria de aceitação com o LLM real: sem  |
 | `hermes doctor` | diagnostica a conexão Ollama↔Python (com geração de teste) |
 | `hermes email` | configura contas de e-mail (MCP email_*) |
 | `hermes agenda` | agenda Google Calendar — somente leitura (MCP agenda_*) |
@@ -102,7 +103,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.13.1)
+## 3. Modificações — o que foi feito (v1.0.0 → v3.13.2)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -110,6 +111,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v3.13.2** | 🔎 diagnóstico do dispositivo em UMA chamada |
 | **v3.13.1** | 🩹🔓 dois bugs reais do campo (recusa vazia + home bloqueada) |
 | **v3.13.0** | ⚡💪 autonomia barata: cache de planos + skills do dia a dia |
 | **v3.12.0** | 🧠 transferência de memória + 4 skills do agente sênior |
@@ -248,6 +250,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `model_for(cfg, role)` | Modelo de um PAPEL (orquestrador/executor). Vazio = cfg.model. Um modelo por vez: o pipeline é SEQUENCIAL — o Ollama ca… |
 | `_fast(cfg, system, user, ntok, stage, model)` | Chamada rápida e curta ao modelo (orquestrador/revisor). Nunca lança; em modo mock devolve '' (o chamador cai na heurís… |
 | `_extract_json(text)` | Primeiro objeto JSON balanceado do texto (modelos pequenos cercam o JSON de prosa) — None se não achar nada válido. |
+| `_extra_criterios(message)` | Critérios estruturais por CLASSE de tarefa (v3.13.3): código só entrega com saída de execução real colada na resposta. |
 | `_heuristic(message)` | — |
 | `_plan_key(cfg, message)` | — |
 | `_cache_invalidate(cfg)` | — |
@@ -400,6 +403,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `cmd_chat(args)` | — |
 | `cmd_update(args)` | Atualiza o projeto a partir do GitHub (tags oficiais do repo). |
 | `cmd_memory_import(args)` | v3.12: importa fatos para a memória do agente (JSON lista de strings, ou texto com um fato por linha). Duplicados são p… |
+| `cmd_selftest(args)` | v3.13.3: bateria de aceitação com LLM REAL (pula sem Ollama). |
 | `cmd_skills_audit(args)` | v3.11: audita o catálogo de skills (estrutura, tamanho, injeção). |
 | `cmd_daemon(args)` | — |
 | `cmd_server(args)` | — |

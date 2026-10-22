@@ -2523,6 +2523,45 @@ def T98_diagnostico_em_uma_chamada():
 
 
 @case
+def T99_codigo_verificado_e_selftest():
+    """v3.13.3 🔬 ACEITAÇÃO — código só entrega com execução real, e a
+    bateria de campo com LLM REAL existe (pula limpa em mock/sem
+    Ollama). Responde à pergunta do operador: 'pode alucinar em
+    outros tipos de pedido?' — agora isso é MENSURÁVEL na máquina dele."""
+    from hermes import orchestrator as orc, selftest as st
+
+    # 1. critério de execução injetado para tarefas de código
+    crit = orc._extra_criterios("crie um script python que calcula potências")
+    assert len(crit) == 1 and "EXECUTADO" in crit[0] and "SAÍDA" in crit[0]
+    assert orc._extra_criterios("resuma o uso de disco") == []
+    assert orc._extra_criterios("implemente uma função de ordenação")
+    src = Path("hermes/orchestrator.py").read_text(encoding="utf-8")
+    assert "criterios += _extra_criterios(message)" in src
+    # 2. skill casa com pedidos de código/projeto
+    from hermes.orchestrator import skills_for
+    cfg = fresh()
+    nomes = [s["name"] for s in skills_for(cfg, "gere código python "
+                                            "para o meu projeto")]
+    assert "codigo-verificado" in nomes, nomes
+    # 3. selftest: 5 cenários de campo + pula limpa em mock
+    cenarios = st._cenarios()
+    assert len(cenarios) == 5
+    nomes_c = [c["nome"] for c in cenarios]
+    assert any("código verificado" in n for n in nomes_c)
+    assert any("memória" in n for n in nomes_c)
+    saida = []
+    assert st.run(fresh(), print_fn=saida.append) == 0
+    assert any("mock" in s.lower() for s in saida), saida
+    # recusa é checada em TODOS os cenários
+    assert "não vou repetir" in st._RECUSA[0]
+    # 4. CLI expõe o selftest
+    import subprocess as _sp
+    r = _sp.run(["./.venv/bin/hermes", "--help"],
+                capture_output=True, text=True, timeout=30)
+    assert "selftest" in r.stdout.lower()
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

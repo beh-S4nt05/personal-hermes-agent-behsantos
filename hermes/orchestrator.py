@@ -209,6 +209,23 @@ _FOLLOWUP_RE = re.compile(
     r"\b(pedido|tarefa|anterior|de novo|continu|conclu|repita|refa\w*|"
     r"mesma conversa)\b", re.IGNORECASE)
 
+# v3.13.3: tarefas de CÓDIGO ganham critério de execução — o revisor
+# passa a cobrar a SAÍDA REAL do código rodado (rastro > opinião do modelo)
+_CODIGO_RE = re.compile(
+    r"\b(c[óo]digo|script|fun[çc][ãa]o|funcao|classe|programa|implement\w*|"
+    r"python|\.py\b|\bvba\b|algoritmo|m[óo]dulo|api|classe)\b",
+    re.IGNORECASE)
+
+
+def _extra_criterios(message: str) -> list[str]:
+    """Critérios estruturais por CLASSE de tarefa (v3.13.3): código
+    só entrega com saída de execução real colada na resposta."""
+    if _CODIGO_RE.search(message or ""):
+        return ["o código foi ESCRITO em arquivo e EXECUTADO, com a SAÍDA "
+                "REAL da execução colada na resposta (não só o código)"]
+    return []
+
+
 _CRIACAO_RE = re.compile(
     r"\b(crie|criar|cria|escreva|escrever|gere|gerar|instale|instalar|"
     r"apague|apagar|delete|deletar|mova|mover|copie|copiar|envie|enviar|"
@@ -652,6 +669,7 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     objetivo = str(plano.get("objetivo") or message)[:300]
     passos = [str(p)[:160] for p in (plano.get("passos") or [])[:4]]
     criterios = [str(c)[:160] for c in (plano.get("criterios") or [])[:3]]
+    criterios += _extra_criterios(message)      # v3.13.3: rastro obrigatório
     tipo = plano.get("tipo") if plano.get("tipo") in ("leitura", "criacao") else "leitura"
 
     # ✦ skills ativas relevantes → instruções injetadas no executor

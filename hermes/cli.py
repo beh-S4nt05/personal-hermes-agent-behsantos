@@ -330,6 +330,13 @@ def cmd_memory_import(args) -> None:
         _fail("nenhum fato válido no arquivo")
 
 
+def cmd_selftest(args) -> None:
+    """v3.13.3: bateria de aceitação com LLM REAL (pula sem Ollama)."""
+    from .selftest import run as run_selftest
+    raise SystemExit(run_selftest(_cfg(args),
+                                  timeout=int(getattr(args, "timeout", 240))))
+
+
 def cmd_skills_audit(args) -> None:
     """v3.11: audita o catálogo de skills (estrutura, tamanho, injeção)."""
     from .skills_audit import run_audit
@@ -488,6 +495,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("chat", help="chat interativo no terminal")
     p.set_defaults(fn=cmd_chat)
+
+    p = sub.add_parser("selftest",
+                       help="🧪 bateria de aceitação com o LLM real: sem "
+                            "recusa, com evidência (pula se Ollama desligado)")
+    p.add_argument("--timeout", type=int, default=240,
+                   help="segundos máximos por cenário (padrão 240)")
+    p.set_defaults(fn=cmd_selftest)
 
     p = sub.add_parser("doctor", help="diagnostica a conexão Ollama↔Python (com geração de teste)")
     p.set_defaults(fn=cmd_doctor)
