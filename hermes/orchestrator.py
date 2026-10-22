@@ -856,16 +856,28 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
         """Roda o executor com o MODELO DO PAPEL (v3.7) — aplica o override
         e SEMPRE restaura (try/finally), em qualquer saída."""
         aplicou = False
+        # v3.15.0 (PR#2): tarefa longa (projeto/código) ganha fôlego —
+        # 8 passes e 40 ferramentas no lugar de 4/12 — SEMPRE restaurado.
+        longa = (projeto is not None) or bool(_extra_criterios(message))
         try:
             _exec_model = model_for(cfg, "executor")
             if _exec_model != str(cfg.model):
                 agent.model_override = _exec_model   # type: ignore[attr-defined]
                 aplicou = True
+            if longa:
+                agent.tool_budget_override = 40      # type: ignore[attr-defined]
+                agent.steps_override = 8             # type: ignore[attr-defined]
             return agent.run(msgs, on_event=_ev_exec, cancel=cancel)
         finally:
             if aplicou:
                 try:
                     agent.model_override = None      # type: ignore[attr-defined]
+                except Exception:  # noqa: BLE001
+                    pass
+            if longa:
+                try:
+                    agent.tool_budget_override = None  # type: ignore[attr-defined]
+                    agent.steps_override = None        # type: ignore[attr-defined]
                 except Exception:  # noqa: BLE001
                     pass
 

@@ -2900,6 +2900,145 @@ def T109_pipeline_na_pasta_do_projeto():
 
 
 @case
+def T110_biblioteca_rag_local():
+    """v3.15.0 (PR#2): livros do operador indexados e consultáveis —
+    trecho VERBATIM com fonte (anti-alucinação por construção)."""
+    from hermes import knowledge
+    from hermes import tools as T
+
+    cfg = fresh()
+    livro = knowledge.biblioteca_dir(cfg) / "livro-teste.md"
+    livro.write_text(
+        "# Padrões\n\n## Reducer\nO reducer é uma função pura que recebe "
+        "o estado atual e uma intent e devolve um NOVO estado imutável.\n\n"
+        "## Coroutines\nUse Dispatchers.IO para operações de rede e disco; "
+        "nunca bloqueie a main thread do Android.\n", encoding="utf-8")
+    st = knowledge.indexar(cfg)
+    assert st["livros"] == 1 and st["blocos"] >= 1, st
+    achados = knowledge.buscar(cfg, "reducer estado imutável")
+    assert achados and "função pura" in achados[0]["texto"]
+    assert "livro-teste.md" in achados[0]["fonte"]          # fonte citada
+    # ferramenta do agente devolve trecho com fonte
+    r = T.execute_tool("knowledge_search", {"query": "Dispatchers.IO"}, cfg)
+    assert r["ok"] and "Dispatchers.IO" in r["output"]
+    assert "FONTE:" in r["output"]
+    # consulta sem match: honesto, não inventa
+    r2 = T.execute_tool("knowledge_search", {"query": "zurtle frobnicate"}, cfg)
+    assert "nada encontrado" in r2["output"]
+
+
+@case
+def T111_git_no_projeto():
+    """v3.15.0 (PR#2): versionamento AUTÔNOMO — git permitido no projeto
+    da task; subcomando fora da lista e config global BLOQUEADOS."""
+    import os as _os
+    import shutil as _sh
+    from hermes import tools as T
+
+    cfg = fresh()
+    proj = Path.home() / f".hermes-t111-{_os.getpid()}"
+    _sh.rmtree(proj, ignore_errors=True)
+    try:
+        with T.task_scope(proj, cfg):
+            assert "init" in T.execute_tool(
+                "git_run", {"action": "init"}, cfg)["output"]
+            T.execute_tool("git_run", {"action": "config",
+                                       "args": "user.email t@t"}, cfg)
+            T.execute_tool("git_run", {"action": "config",
+                                       "args": "user.name T"}, cfg)
+            T.execute_tool("write_file", {"path": "app.py",
+                                          "content": "print('ok')"}, cfg)
+            T.execute_tool("git_run", {"action": "add", "args": "."}, cfg)
+            commit = T.execute_tool("git_run", {"action": "commit",
+                                                "args": "-m 'feat: app'"}, cfg)
+            assert "app.py" in commit["output"]
+            assert any(b in commit["output"] for b in ("main", "master"))
+            log = T.execute_tool("git_run", {"action": "log",
+                                             "args": "--oneline"}, cfg)
+            assert "feat: app" in log["output"]
+            # bloqueios
+            assert "BLOQUEADO" in T.execute_tool(
+                "git_run", {"action": "push"}, cfg)["output"]
+            assert "BLOQUEADO" in T.execute_tool(
+                "git_run", {"action": "config",
+                            "args": "--global user.email x@x"}, cfg)["output"]
+            assert "BLOQUEADO" in T.execute_tool(
+                "git_run", {"action": "reset", "args": "--hard"}, cfg)["output"]
+    finally:
+        _sh.rmtree(proj, ignore_errors=True)
+
+
+@case
+def T112_skills_de_engenharia_multilingue():
+    """v3.15.0 (PR#2): as 11 novas skills casam com pedidos reais de
+    linguagem/arquitetura — e o catálogo continua limpo (39)."""
+    from hermes import orchestrator as orc
+    from hermes.skills import SkillLoader
+
+    cfg = fresh()
+    nomes = [s["name"] for s in SkillLoader(cfg).enabled()]
+    for esperada in ("codigo-python", "codigo-javascript", "codigo-typescript",
+                     "codigo-kotlin", "codigo-java", "arquitetura-mvvm",
+                     "arquitetura-mvi", "arquitetura-mdc", "arquitetura-saas",
+                     "cicd-github-actions", "biblioteca-rag"):
+        assert esperada in nomes, f"{esperada} fora do catálogo"
+    # pedidos reais casam com as skills certas
+    def _acha(msg):
+        return {s["name"] for s in orc.skills_for(cfg, msg)}
+    assert "codigo-kotlin" in _acha("crie um aplicativo android em kotlin "
+                                    "com jetpack compose")
+    assert "arquitetura-mvi" in _acha("aplicativo android kotlin com "
+                                      "arquitetura mvi estado único")
+    assert "codigo-typescript" in _acha("sistema saas multitenant em "
+                                        "typescript com tipagem")
+    assert "arquitetura-saas" in _acha("sistema saas multitenant em "
+                                       "typescript com planos e assinatura")
+    assert "cicd-github-actions" in _acha("configure o pipeline de integração "
+                                          "contínua com github actions e deploy")
+    assert "arquitetura-mvvm" in _acha("app android com mvvm viewmodel e "
+                                       "data binding")
+    # conversa comum não casa com nada disso
+    assert _acha("bom dia, como vai você?") == set()
+
+
+@case
+def T113_folego_para_tarefas_de_projeto():
+    """v3.15.0 (PR#2): task de código/projeto roda com 8 passes e 40
+    ferramentas (não 4/12) — e o override é SEMPRE restaurado."""
+    import os as _os
+    import shutil as _sh
+    from hermes import orchestrator as orc
+
+    cfg = fresh(creation_approval=False)
+    proj = Path.home() / f".hermes-t113-{_os.getpid()}"
+    _sh.rmtree(proj, ignore_errors=True)
+    capturado = {}
+
+    class _Ag:
+        model_override = None
+        def run(self, msgs, on_event=None, cancel=None):
+            capturado["budget"] = getattr(self, "tool_budget_override", "AUSENTE")
+            capturado["steps"] = getattr(self, "steps_override", "AUSENTE")
+            on_event({"type": "done", "message": "app.py criado e executado "
+                      "com saída real colada"})
+            return "app.py criado e executado com saída real colada"
+
+    ag = _Ag()
+    try:
+        orc.run_pipeline(ag, cfg, f"crie o código python de uma calculadora "
+                                  f"em {proj}", [], on_event=lambda e: None)
+        assert capturado["budget"] == 40 and capturado["steps"] == 8, capturado
+        assert getattr(ag, "tool_budget_override", None) is None   # restaurado
+        assert getattr(ag, "steps_override", None) is None
+        # task simples: orçamento padrão (override ausente durante o run)
+        orc.run_pipeline(ag, cfg, "verifique o uso de disco", [],
+                         on_event=lambda e: None)
+        assert capturado["budget"] is None and capturado["steps"] is None
+    finally:
+        _sh.rmtree(proj, ignore_errors=True)
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

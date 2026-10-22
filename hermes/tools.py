@@ -76,6 +76,50 @@ TOOLS: list[dict] = [
     {
         "type": "function",
         "function": {
+            "name": "git_run",
+            "description": (
+                "Controle de versão git NO PROJETO: init, status, add, "
+                "commit, log, diff, branch, tag, config local. Use para "
+                "versionar o código produzido (commits claros) e examinar "
+                "histórico/alterações."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string",
+                               "description": "Subcomando: init, status, add, "
+                                              "commit, log, diff, branch, "
+                                              "checkout, show, tag, restore, "
+                                              "stash, config"},
+                    "args": {"type": "string",
+                             "description": "Argumentos extras (ex.: \"-m 'mensagem'\")"},
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "knowledge_search",
+            "description": (
+                "Busca na BIBLIOTECA de livros/documentos do operador "
+                "(RAG local) e devolve trechos verbatim com a fonte. Use "
+                "para consultar referência, documentação, livro, técnica, "
+                "padrão de projeto ou sintaxe antes de escrever código."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Consulta"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "read_file",
             "description": "Lê o conteúdo de um arquivo de texto (relativo ao workspace ou caminho absoluto).",
             "parameters": {
@@ -641,8 +685,58 @@ def _backups_tool(args: dict, cfg) -> str:
     return tool_backups(args, cfg)
 
 
+_GIT_OK = {"init", "status", "add", "commit", "log", "diff", "branch",
+           "checkout", "show", "tag", "restore", "stash", "config"}
+
+
+def git_run(args: dict, cfg) -> str:
+    """v3.15.0 (PR#2): git com subcomandos permitidos, no projeto da task."""
+    import shlex
+    acao = str(args.get("action", "")).strip().lower()
+    extra = str(args.get("args", "")).strip()
+    if acao not in _GIT_OK:
+        return (f"BLOQUEADO: subcomando git não permitido: {acao!r}. "
+                f"Permitidos: {', '.join(sorted(_GIT_OK))} "
+                "(push/pull ficam via run_command, se o operador quiser).")
+    if acao == "config" and re.search(r"--global|--system", extra):
+        return "BLOQUEADO: config --global/--system altera a máquina do operador — só config local do repositório."
+    cmd = ["git", acao] + shlex.split(extra)
+    cwd = scope_dir() or cfg.workdir
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
+                           check=False, cwd=str(cwd))
+    except FileNotFoundError:
+        return "ERRO: git não está instalado nesta máquina."
+    except subprocess.TimeoutExpired:
+        return f"$ git {acao}\n[TIMEOUT] excedeu 30s."
+    out = ((r.stdout or "") + (("\n[stderr] " + r.stderr) if r.stderr.strip() else "")).strip()
+    return f"$ git {acao} {extra}".strip() + f"\n{out[:4000] if out else '(sem saída)'}"
+
+
+def knowledge_search(args: dict, cfg) -> str:
+    """v3.15.0 (PR#2): RAG local — trechos verbatim com fonte."""
+    from . import knowledge
+    consulta = str(args.get("query", "")).strip()
+    if not consulta:
+        return "ERRO: consulta vazia."
+    achados = knowledge.buscar(cfg, consulta, k=3)
+    if not achados:
+        st = knowledge.status(cfg)
+        return (f"nada encontrado para {consulta!r} "
+                f"(biblioteca: {st['livros']} livro(s), {st['blocos']} trechos "
+                f"— adicione livros em {knowledge.biblioteca_dir(cfg)} e rode "
+                "`hermes rag`)")
+    partes = [f"📚 {len(achados)} trecho(s) da biblioteca (verbatim, com fonte):"]
+    for i, r in enumerate(achados, 1):
+        partes.append(f"\n── [{i}] FONTE: {r['fonte']} "
+                      f"(relevância {r['score']})\n{r['texto']}")
+    return "\n".join(partes)[:6000]
+
+
 EXECUTORS = {
     "run_command": run_command,
+    "git_run": git_run,
+    "knowledge_search": knowledge_search,
     "read_file": read_file,
     "write_file": write_file,
     "list_dir": list_dir,
