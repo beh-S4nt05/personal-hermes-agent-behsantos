@@ -57,9 +57,16 @@ def _score(nome: str, papel: str, chat_atual: str) -> float:
     return s
 
 
-def choose(models: list[str], chat_atual: str = "") -> dict[str, tuple[str, str]]:
-    """Devolve {papel: (modelo, motivo)} para a lista instalada."""
+def choose(models: list[str], chat_atual: str = "",
+           max_b: float | None = None) -> dict[str, tuple[str, str]]:
+    """Devolve {papel: (modelo, motivo)} para a lista instalada.
+
+    v3.11.4: max_b filtra modelos acima do teto de tamanho (B) — o
+    auto-assign jamais entrega um modelo que não roda bem no hardware
+    do operador só porque é "maior".""",
     out: dict[str, tuple[str, str]] = {}
+    if max_b is not None:
+        models = [m for m in models if _params(str(m)) <= float(max_b)]
     if not models:
         return out
     for papel in PAPEIS:
@@ -98,7 +105,12 @@ def run_auto(cfg, models: list[str] | None = None,
             return {"ok": False, "msg": "Ollama desligado ou sem modelos"}
         models = [str(m) for m in st["models"]]
     chat_atual = str(cfg.model or "")
-    esc = choose(models, chat_atual)
+    max_b = float(getattr(cfg, "max_model_b", 9.0) or 9.0)
+    esc = choose(models, chat_atual, max_b=max_b)
+    fora = [str(m) for m in models if _params(str(m)) > max_b]
+    if fora:
+        print_fn(f"  ⛔ ignorados acima do teto max_model_b={max_b:g}: "
+                 + ", ".join(fora))
     if not esc:
         print_fn("✖ nenhum modelo instalado.")
         return {"ok": False, "msg": "nenhum modelo instalado"}

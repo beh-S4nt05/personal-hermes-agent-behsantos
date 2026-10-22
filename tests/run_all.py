@@ -2212,6 +2212,37 @@ def T90_auto_atribuicao_de_papeis():
 
 
 @case
+def T91_auto_assign_respeita_teto_de_tamanho():
+    """v3.11.4 🛡 ACEITAÇÃO — hardware do operador é RTX 2050 (4 GB):
+    o auto-atribuidor tem teto max_model_b (padrão 9B, filosofia local
+    ≤8B do projeto). Mesmo com gemma3:12b e qwen3-coder:30b instalados,
+    NUNCA os escolhe; subir o teto libera (máquina melhor no futuro)."""
+    from hermes import autoselect as aus
+    from hermes.config import Config
+
+    MEUS = ["hermes3:8b", "qwen2.5-coder:7b", "qwen2.5:3b", "llama3.2:1b",
+            "qwen2.5-coder:3b", "hermes3:3b", "llama3.2:3b"]
+    LOTE = MEUS + ["gemma3:12b", "qwen3-coder:30b"]
+    esc = aus.choose(LOTE, chat_atual="hermes3:8b", max_b=9)
+    for papel, (m, _) in esc.items():
+        assert m in MEUS, f"{papel} escolheu {m} (acima do teto!)"
+    assert esc["orchestrator"][0] == "hermes3:8b"
+    assert esc["executor"][0] == "qwen2.5-coder:7b"
+    # teto maior libera a 12b (máquina melhor no futuro)
+    esc12 = aus.choose(LOTE, chat_atual="hermes3:8b", max_b=12)
+    assert esc12["orchestrator"][0] == "gemma3:12b"
+    # teto apertado: só pequenos
+    esc4 = aus.choose(LOTE, chat_atual="hermes3:3b", max_b=4)
+    for papel, (m, _) in esc4.items():
+        assert aus._params(m) <= 4
+    # default no config = 9.0 e coerce funciona
+    c9 = Config(data_dir=tempfile.mkdtemp(prefix="hermes-teto-"), mock=True)
+    assert float(c9.max_model_b) == 9.0
+    c9.update({"max_model_b": 8})
+    assert float(c9.max_model_b) == 8.0
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

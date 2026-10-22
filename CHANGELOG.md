@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.11.4 — 🛡 auto-assign respeita o hardware (teto max_model_b)
+
+Fato novo do operador: GPU RTX 2050 com 4 GB de VRAM. Modelos acima
+de ~9B (gemma3:12b = 8.2 GB, qwen3-coder:30b = 19 GB no catálogo)
+rodariam com offload pesado — lentos para o uso diário.
+
+**Mudança:** o auto-atribuidor (v3.11.3) agora tem teto de tamanho:
+`max_model_b` no config (**padrão 9.0** — filosofia local ≤8B do
+projeto). Modelos acima do teto são IGNORADOS na escolha e listados
+("⛔ ignorados acima do teto"). Máquina melhor no futuro?
+`hermes config set max_model_b 12` libera na hora.
+
+**Teste:** T91 — com gemma3:12b e qwen3-coder:30b "instalados", nenhum
+papel os recebe; teto 12 libera a 12b; teto 4 restringe a pequenos;
+default e coerce no config conferidos. **91/91.**
+
 ## v3.11.3 — ✨ auto-atribuição dos melhores modelos por papel
 
 Pedido do operador: "selecionar automaticamente as melhores LLMs para
