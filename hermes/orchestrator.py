@@ -800,7 +800,11 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
                         "EXECUTE AGORA, sem perguntar nada a ninguém:\n"
                         f"{lista}\n"
                         "Depois responda com a EVIDÊNCIA REAL (saídas/conteúdos "
-                        "colados na resposta).\n\n"
+                        "colados na resposta), INTERPRETANDO em texto o que os "
+                        "números significam. Recusa (\u201cnão vou repetir\u201d, "
+                        "\u201cpronto para ajudar\u201d) ou saída crua de comando "
+                        "sem interpretação NÃO são resposta — são falha de "
+                        "entrega.\n\n"
                         f"PEDIDO ORIGINAL: {message}"},
                 ]
             else:

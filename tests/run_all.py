@@ -2485,6 +2485,44 @@ def T97_leitura_da_home_e_sensiveis_bloqueados():
 
 
 @case
+def T98_diagnostico_em_uma_chamada():
+    """v3.13.2 🔎 ACEITAÇÃO — a dor real do operador: 'busca geral no
+    sistema' custava 9+ chamadas (sys_info ×9 na auditoria), alucinação
+    de saídas e recusas. Agora: UMA ferramenta devolve o digesto real
+    completo, e as mensagens de refazer proíbem recusa e saída crua."""
+    from hermes import tools as tl
+
+    cfg = fresh()
+    r = tl.execute_tool("diagnostico_sistema", {}, cfg)
+    assert r["ok"], r
+    out = r["output"]
+    for secao in ("== disco ==", "== memória ==", "== top RAM ==",
+                  "== uptime e carga =="):
+        assert secao in out, secao
+    assert out.count("==") >= 16                # >= 8 seções
+    assert 200 < len(out) <= 4000               # compacto p/ num_ctx 3072
+    assert any(c.isdigit() for c in out)        # números reais
+    # registrada no catálogo de ferramentas (o modelo a vê)
+    nomes = [s["function"]["name"] for s in tl.TOOLS]
+    assert "diagnostico_sistema" in nomes
+    spec = next(s for s in tl.TOOLS
+                if s["function"]["name"] == "diagnostico_sistema")
+    assert "UMA chamada" in spec["function"]["description"]
+    assert "diagnostico_sistema" in tl.EXECUTORS
+    # mensagens de refazer à prova de recusa e saída crua
+    src_o = Path("hermes/orchestrator.py").read_text(encoding="utf-8")
+    assert "saída crua" in src_o and "falha de" in src_o
+    # skill atalhos-shell aponta para a ferramenta
+    sk = Path("skills/atalhos-shell/SKILL.md").read_text(encoding="utf-8")
+    assert "diagnostico_sistema" in sk
+    # e o casamento continua funcionando para o pedido original
+    from hermes.orchestrator import skills_for
+    assert "atalhos-shell" in [s["name"] for s in
+                               skills_for(cfg, "busca geral no sistema e "
+                                               "uso do dispositivo")]
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

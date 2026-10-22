@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.13.0** · gerado em 22/10/2026 · este documento é extraído do
+**Versão 3.13.1** · gerado em 22/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -102,7 +102,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.13.0)
+## 3. Modificações — o que foi feito (v1.0.0 → v3.13.1)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -110,6 +110,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v3.13.1** | 🩹🔓 dois bugs reais do campo (recusa vazia + home bloqueada) |
 | **v3.13.0** | ⚡💪 autonomia barata: cache de planos + skills do dia a dia |
 | **v3.12.0** | 🧠 transferência de memória + 4 skills do agente sênior |
 | **v3.11.5** | ⚡🧽 fim da lentidão e das respostas sujas (regressão da v3.11.3) |
@@ -427,6 +428,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `_read_proc(path)` | — |
 | `_human_size(n)` | — |
 | `_human_uptime(seconds)` | — |
+| `diagnostico_sistema(_args, cfg)` | v3.13.2: o diagnóstico inteiro NUMA chamada só. Devolve digesto real e compacto — o executor interpreta, não flailha em… |
 | `sys_info(_args, cfg)` | — |
 | `_web_enabled(cfg)` | — |
 | `_ddg_decode(url)` | O DuckDuckGo devolve links-rediretor .../l/?uddg=<url real>. |

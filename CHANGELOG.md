@@ -1,5 +1,36 @@
 # Changelog
 
+## v3.13.2 — 🔎 diagnóstico do dispositivo em UMA chamada
+
+Segunda bateria de campo do operador revelou os três modos de falha do
+hermes3:8b sob offload pesado em "busca geral no sistema":
+1. **recusa** ("não vou repetir… pronto para ajudar") — entregava nada;
+2. **alucinação** — inventou um `history` que nunca rodou e diretórios
+   "total 0" (T0011);
+3. **saída crua** — respondeu com output de comando sem interpretar
+   (T0012).
+
+Causa comum: a tarefa exigia que um 8B lento orquestrasse 9+ chamadas
+(sys_info ×9 na auditoria). Modelo fraco + muitas decisões = flail.
+
+**Correção estrutural — nova ferramenta `diagnostico_sistema`:** o
+diagnóstico INTEIRO numa chamada só. Bateria fixa somente-leitura
+(sistema, disco, memória, top RAM/CPU, maiores pastas da home,
+bateria, GPU/VRAM, uptime, últimos logins), digesto real e compacto
+(≤4000 chars, cabe no num_ctx 3072). O executor vira interpretador de
+dados que já tem — que é o que um 8B faz bem. A skill atalhos-shell
+agora direciona: diagnóstico geral = UMA chamada, e sua descrição
+casou com o pedido natural ("busca geral no sistema / uso do
+dispositivo").
+
+**Blindagem extra:** a mensagem de refazer do revisor agora proíbe
+explicitamente recusa E saída crua sem interpretação ("NÃO são
+resposta — são falha de entrega").
+
+**Teste:** T98 (digesto real com as seções, compacto, registrado no
+catálogo, mensagens de refazer, skill casa com o pedido original).
+**98/98.**
+
 ## v3.13.1 — 🩹🔓 dois bugs reais do campo (recusa vazia + home bloqueada)
 
 Primeira bateria real do operador no próprio notebook, com Auditoria

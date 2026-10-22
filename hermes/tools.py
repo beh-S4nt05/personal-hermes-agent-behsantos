@@ -123,6 +123,14 @@ TOOLS: list[dict] = [
     {
         "type": "function",
         "function": {
+            "name": "diagnostico_sistema",
+            "description": "Diagnóstico COMPLETO do dispositivo em UMA chamada — disco, memória, processos que mais consomem RAM/CPU, maiores pastas da home, bateria, GPU, uptime e últimos logins, com saída real e compacta. Use para 'como está o sistema', 'uso do dispositivo', 'diagnóstico geral', 'o que está lento', saúde da máquina — NÃO fique chamando sys_info/df/free um por um.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "lembrar",
             "description": "Salva um fato sobre o usuário na memória permanente (vale para todas as conversas).",
             "parameters": {
@@ -381,6 +389,43 @@ def _human_uptime(seconds: float) -> str:
     return f"{d}d {h}h {m}min" if d else f"{h}h {m}min"
 
 
+# v3.13.2: bateria fixa e SOMENTE-LEITURA — o modelo não injeta
+# comandos aqui; ele recebe o digesto pronto para interpretar
+_DIAG_BATERIA = [
+    ("sistema", "uname -sr && (head -2 /etc/os-release | cut -d'\"' -f2 | tr '\n' ' '; echo)", 5),
+    ("disco", "df -h | head -7", 5),
+    ("memória", "free -h", 5),
+    ("top RAM", "ps aux --sort=-%mem | head -7", 5),
+    ("top CPU", "ps aux --sort=-%cpu | head -5", 5),
+    ("maiores pastas da home", "du -xh --max-depth=1 ~ 2>/dev/null | sort -rh | head -10", 25),
+    ("bateria", "for b in /sys/class/power_supply/BAT*; do echo $(cat $b/capacity 2>/dev/null)% $(cat $b/status 2>/dev/null); done", 3),
+    ("GPU", "nvidia-smi --query-gpu=name,memory.total,memory.used,utilization.gpu --format=csv,noheader 2>/dev/null || echo (sem nvidia-smi)", 8),
+    ("uptime e carga", "uptime", 3),
+    ("últimos logins", "last -n 4 -w 2>/dev/null | head -5 || echo (last indisponível)", 5),
+]
+
+
+def diagnostico_sistema(_args: dict, cfg) -> str:
+    """v3.13.2: o diagnóstico inteiro NUMA chamada só. Devolve digesto
+    real e compacto — o executor interpreta, não flailha em dezenas de
+    sys_info/df/free (e não precisa inventar dado: ele está aqui)."""
+    secoes = []
+    for nome, cmd, tmax in _DIAG_BATERIA:
+        try:
+            r = subprocess.run(cmd, shell=True, capture_output=True,
+                               text=True, timeout=tmax)
+            out = (r.stdout or "").strip()
+        except subprocess.TimeoutExpired:
+            out = "(comando demorou — pulado)"
+        except Exception as exc:  # noqa: BLE001
+            out = f"(falhou: {exc.__class__.__name__})"
+        if not out:
+            out = "(vazio)"
+        out = "\n".join(out.splitlines()[:10])[:600]
+        secoes.append(f"== {nome} ==\n{out}")
+    return "\n\n".join(secoes)[:4000]
+
+
 def sys_info(_args: dict, cfg) -> str:
     info = {
         "hostname": platform.node() or os.uname().nodename,
@@ -540,6 +585,7 @@ EXECUTORS = {
     "write_file": write_file,
     "list_dir": list_dir,
     "sys_info": sys_info,
+    "diagnostico_sistema": diagnostico_sistema,
     "lembrar": lembrar,
     "esquecer": esquecer,
     "web_search": web_search,

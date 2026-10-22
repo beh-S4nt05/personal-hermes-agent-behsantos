@@ -1,12 +1,20 @@
 ---
 name: atalhos-shell
-description: Receitas prontas de uma linha para o dia a dia — verificar espaço em disco, encontrar arquivos grandes, ver qual processo pesado come memória RAM, descobrir o dono de uma porta ocupada, fazer backup rápido de uma pasta e limpar arquivos temporários. Use quando o pedido envolver manutenção rápida, verificação de disco, memória, processo lento ou backup simples.
+description: Receitas prontas de uma linha para o dia a dia — busca geral no sistema, entender o uso do dispositivo, diagnóstico geral e saúde da máquina, verificar espaço em disco, encontrar arquivos grandes, ver qual processo pesado come memória RAM, descobrir o dono de uma porta ocupada, fazer backup rápido de uma pasta e limpar arquivos temporários. Use quando o pedido envolver manutenção rápida, verificação de disco, memória, processo lento ou backup simples.
 ---
 
 # Atalhos shell do dia a dia
 
 Operação comum = comando pronto. Escolha a linha, execute e interprete
 a saída em português (número sozinho não é resposta).
+
+## Antes de tudo: diagnóstico geral = UMA chamada
+
+Pedido de "busca geral no sistema / como está o dispositivo / o que
+está lento" → chame a ferramenta **`diagnostico_sistema`** UMA vez
+(disco, RAM, top processos, maiores pastas, bateria, GPU, logins) e
+INTERPRETE o digesto em texto. NÃO fique chamando sys_info/df/free um
+por um — cada chamada é um ciclo lento do modelo.
 
 ## Receitas
 
