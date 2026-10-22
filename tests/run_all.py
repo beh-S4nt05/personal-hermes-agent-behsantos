@@ -2168,6 +2168,50 @@ def T89_js_da_gui_tem_sintaxe_valida():
 
 
 @case
+def T90_auto_atribuicao_de_papeis():
+    """v3.11.3 ✨ ACEITAÇÃO — com os modelos REAIS do operador
+    (hermes3:8b, qwen2.5-coder:7b, qwen2.5:3b, llama3.2:1b,
+    qwen2.5-coder:3b, hermes3:3b, llama3.2:3b), o auto-atribuidor
+    escolhe: 🎯🔍💬🔌 hermes3:8b (maior geral · escolha atual) e
+    ⚡ qwen2.5-coder:7b (modelo de código)."""
+    from hermes import autoselect as aus
+
+    MEUS = ["hermes3:8b", "qwen2.5-coder:7b", "qwen2.5:3b", "llama3.2:1b",
+            "qwen2.5-coder:3b", "hermes3:3b", "llama3.2:3b"]
+    esc = aus.choose(MEUS, chat_atual="hermes3:8b")
+    assert esc["chat"][0] == "hermes3:8b"            # respeita a escolha atual
+    assert esc["orchestrator"][0] == "hermes3:8b"    # maior geral pensa
+    assert esc["reviewer"][0] == "hermes3:8b"
+    assert esc["executor"][0] == "qwen2.5-coder:7b"  # código executa
+    assert esc["claude"][0] == "hermes3:8b"
+    assert all(motivo for _, motivo in esc.values())  # toda escolha tem motivo
+    assert "código" in esc["executor"][1]
+    # pequenos nunca são escolhidos quando há maiores
+    for papel, (m, _) in esc.items():
+        assert m not in ("llama3.2:1b", "qwen2.5:3b", "llama3.2:3b")
+    # sem modelo de código instalado: executor cai no melhor geral
+    esc2 = aus.choose(["hermes3:3b", "llama3.2:1b"], chat_atual="hermes3:3b")
+    assert esc2["executor"][0] == "hermes3:3b"
+    assert "nenhum modelo de código" in esc2["executor"][1]
+    # endpoint aplica e SALVA no config
+    cfg = fresh()
+    c = _app(cfg)
+    r = c.post("/api/ollama/auto-assign").get_json()
+    assert r["ok"] and "assignments" in r and "reasons" in r
+    assert r["assignments"]["chat"] == cfg.model
+    assert cfg.executor_model                 # atribuído e persistido
+    assert r["assignments"]["executor"] == cfg.executor_model
+    # botão na GUI
+    html = c.get("/").get_data(as_text=True)
+    assert "autoAssign" in html and "auto-atribuir papéis" in html
+    # CLI expõe o subcomando
+    import subprocess as _sp
+    rr = _sp.run(["./.venv/bin/hermes", "models", "--help"],
+                 capture_output=True, text=True, timeout=30)
+    assert "auto" in rr.stdout.lower() and "auto-atribui" in rr.stdout.lower()
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

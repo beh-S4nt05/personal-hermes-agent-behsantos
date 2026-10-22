@@ -412,6 +412,13 @@ def cmd_models(args) -> None:
         _fail("Ollama desligado — ligue com: hermes ollama start")
 
 
+def cmd_models_auto(args) -> None:
+    """v3.11.3: escolhe o melhor modelo instalado para cada papel."""
+    from .autoselect import run_auto
+    if not run_auto(_cfg(args)).get("ok"):
+        raise SystemExit(1)
+
+
 # ------------------------------------------------------------------ parser
 
 def build_parser() -> argparse.ArgumentParser:
@@ -504,6 +511,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(fn=cmd_config)
 
     p = sub.add_parser("models", help="lista modelos locais do Ollama")
+    msub = p.add_subparsers(dest="models_cmd")
+    pa = msub.add_parser("auto",
+                         help="✨ auto-atribui o melhor modelo instalado "
+                              "para cada papel (chat/orquestrador/revisor/"
+                              "executor/claude)")
+    pa.set_defaults(fn=cmd_models_auto)
     p.set_defaults(fn=cmd_models)
 
     return parser

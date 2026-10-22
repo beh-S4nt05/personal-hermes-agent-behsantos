@@ -632,6 +632,7 @@
           <button class="b danger" id="olp-stop" onclick="ollamaAction2('stop')">■ Desligar</button>
           <button class="b ghost" onclick="ollamaAction2('restart')">⟳ Reiniciar</button>
           <button class="b small ghost" id="olp-bootbtn" onclick="toggleBoot()">⚙ iniciar com o sistema</button>
+          <button class="b small primary" onclick="autoAssign()">✨ auto-atribuir papéis</button>
         </div>
       </div>
 
@@ -1602,6 +1603,19 @@ async function loadOrchStats(){
     $("orch-skills").innerHTML = (d.skills_top || [])
       .map(s=>'<span class="tag trig">✦ '+esc(s[0])+' ×'+s[1]+'</span>').join(" ");
   }catch(e){}
+}
+async function autoAssign(){
+  try{
+    toast("✨ escolhendo os melhores modelos para cada papel…");
+    const r = await api("/api/ollama/auto-assign", {method:"POST", body:"{}"});
+    const d = await r.json();
+    if (d.ok){
+      const ic = {chat:"💬", orchestrator:"🎯", reviewer:"🔍", executor:"⚡", claude:"🔌"};
+      toast("✔ " + Object.entries(d.assignments).map(([k,v])=>ic[k]+" "+v).join(" · "));
+      loadModels();
+      loadSettings();
+    } else { toast("✖ " + (d.msg || "falhou")); }
+  }catch(e){ toast("✖ " + e.message); }
 }
 async function loadPerf(){
   try{

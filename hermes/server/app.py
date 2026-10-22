@@ -554,6 +554,15 @@ self.addEventListener("fetch", (e) => {
         """Validação completa da conexão, incluindo geração de teste real."""
         return jsonify(OllamaManager(cfg).diagnose(deep=True))
 
+    @app.post("/api/ollama/auto-assign")
+    @protected
+    def ollama_auto_assign():
+        """v3.11.3 ✨: escolhe e salva o melhor modelo instalado para
+        cada papel (chat/orquestrador/revisor/executor/claude)."""
+        from ..autoselect import run_auto
+        res = run_auto(cfg, print_fn=lambda *_: None)
+        return jsonify(res), (200 if res.get("ok") else 400)
+
     @app.get("/api/ollama/models")
     @protected
     def ollama_models():

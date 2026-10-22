@@ -1,5 +1,32 @@
 # Changelog
 
+## v3.11.3 — ✨ auto-atribuição dos melhores modelos por papel
+
+Pedido do operador: "selecionar automaticamente as melhores LLMs para
+cada atividade". Novo `hermes/autoselect.py` lê os modelos INSTALADOS
+no Ollama e escolhe o melhor para cada papel, com critérios
+explicáveis (cada escolha vem com o motivo):
+
+- ⚡ executor: modelo de CÓDIGO ganha bônus (qwen-coder, codellama…);
+- 🎯 orquestrador / 🔍 revisor: modelo GERAL maior (raciocínio);
+- 💬 chat: a escolha ATUAL do operador é respeitada;
+- 🔌 claude: geral para seguir instruções;
+- tamanho (B) conta a favor até o teto de 9B (máquina local).
+
+Na máquina do operador (7 modelos instalados) o resultado é:
+💬 🎯 🔍 🔌 hermes3:8b · ⚡ qwen2.5-coder:7b. Instalar um modelo novo e
+rodar de novo re-atribui tudo sozinho — a leitura é sempre da lista
+instalada no momento.
+
+**Onde:** CLI `hermes models auto` · GUI aba Ollama → botão
+"✨ auto-atribuir papéis" · endpoint `POST /api/ollama/auto-assign`
+(aplica e salva no config).
+
+**Teste:** T90 — aceitação com a lista REAL do operador (chat respeita
+a escolha, orquestrador/revisor = maior geral, executor = modelo de
+código, pequenos nunca escolhidos), fallback sem modelo de código,
+endpoint persiste, botão na GUI, CLI. **90/90.**
+
 ## v3.11.2 — 🩹 GUI volta a funcionar no navegador (SyntaxError da v3.9)
 
 Bug real encontrado PELO OPERADOR na própria máquina: a página abria
