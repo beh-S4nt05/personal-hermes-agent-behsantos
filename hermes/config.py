@@ -23,6 +23,9 @@ DEFAULTS = {
     "temperature": 0.4,
     # Sobe o servidor Ollama automaticamente quando o agente precisar dele
     "auto_start_ollama": False,
+    # v3.15.0 (PR#3): skills baixadas (GitHub/zip/pasta) viram nativas
+    "skills_autoscan": True,
+    "skills_watch_dirs": None,        # None = [~/Downloads]
     # Acesso à web (ferramentas web_search / web_fetch do agente e da GUI)
     "web_access": True,
     # Ditado por voz (Whisper local — requer: pip install faster-whisper)

@@ -473,6 +473,14 @@ class Scheduler:
 
     def tick(self) -> None:
         now = datetime.now()
+        # v3.15.0 (PR#3): skills baixadas pelo operador viram nativas
+        try:
+            if time.time() - getattr(self, "_last_skills_scan", 0.0) > 600:
+                self._last_skills_scan = time.time()
+                from .skills import autoscan
+                autoscan(self.cfg)
+        except Exception:  # noqa: BLE001
+            pass
         for entry in self.store.list_all():
             if not entry.get("enabled") or entry.get("running"):
                 continue

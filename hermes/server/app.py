@@ -57,6 +57,11 @@ def create_app(cfg: Config) -> Flask:
         load_goals(cfg)
     except Exception:  # noqa: BLE001
         pass
+    try:                                   # v3.15.0: skills baixadas → nativas
+        from ..skills import autoscan
+        autoscan(cfg)
+    except Exception:  # noqa: BLE001
+        pass
 
     # --------------------------------------------- anti-CSRF (v3.0.1)
     def _same_origin(origin: str) -> bool:

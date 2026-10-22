@@ -348,6 +348,30 @@ def cmd_rag(args) -> None:
           "aqui: hermes rag \"sua consulta\"")
 
 
+def cmd_skills_import(args) -> None:
+    """v3.15.0 (PR#3): importa skills de pasta local, .zip, URL ou owner/repo."""
+    from .skills import import_from
+    r = import_from(str(getattr(args, "fonte", "") or ""), _cfg(args))
+    print(r.get("msg") or r)
+    for nome in r.get("importadas") or []:
+        print(f"  ✦ {nome} — nativa (ativa por padrão)")
+    if not r.get("ok"):
+        raise SystemExit(1)
+
+
+def cmd_skills_scan(args) -> None:
+    """v3.15.0 (PR#3): varre as pastas assistidas e importa skills novas."""
+    from .skills import autoscan
+    r = autoscan(_cfg(args))
+    importadas = r.get("importadas") or []
+    if importadas:
+        print(f"✦ {len(importadas)} skill(s) importada(s): "
+              f"{', '.join(importadas)}")
+    else:
+        print("nenhuma skill nova nas pastas assistidas "
+              "(baixe para ~/Downloads ou aponte em skills_watch_dirs)")
+
+
 def cmd_selftest(args) -> None:
     """v3.13.3: bateria de aceitação com LLM REAL (pula sem Ollama)."""
     from .selftest import run as run_selftest
@@ -508,6 +532,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("skills", help="catálogo de skills")
     ssub = p.add_subparsers(dest="skills_cmd", required=True)
+    pi = ssub.add_parser("import", help="importa skills: pasta local, .zip, URL git ou owner/repo")
+    pi.add_argument("fonte", help="caminho da pasta/zip, URL ou owner/repo")
+    pi.set_defaults(fn=cmd_skills_import)
+    ps = ssub.add_parser("scan", help="varre pastas assistidas (ex.: ~/Downloads) e importa skills novas")
+    ps.set_defaults(fn=cmd_skills_scan)
     pa = ssub.add_parser("audit",
                          help="audita todas as skills: estrutura, tamanho, "
                               "prompt injection, duplicatas")

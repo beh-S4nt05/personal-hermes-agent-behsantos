@@ -82,6 +82,8 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `hermes memory` | memória de longo prazo do agente |
 | `hermes import` | importa fatos para a memória (JSON lista ou  |
 | `hermes skills` | catálogo de skills |
+| `hermes import` | importa skills: pasta local, .zip, URL git ou owner/repo |
+| `hermes scan` | varre pastas assistidas (ex.: ~/Downloads) e importa skills novas |
 | `hermes audit` | audita todas as skills: estrutura, tamanho,  |
 | `hermes chat` | chat interativo no terminal |
 | `hermes selftest` | 🧪 bateria de aceitação com o LLM real: sem  |
@@ -272,6 +274,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `set_goal(session_id, texto, cfg)` | — |
 | `get_goal(session_id, cfg)` | — |
 | `skills_for(cfg, text, max_skills)` | Skills ATIVAS relevantes ao texto (por palavras-chave da descrição). Devolve [{name, path, score}] — no máximo 2, score… |
+| `_skill_criterios(skills)` | v3.15.0 (PR#3): DELEGAÇÃO — a seção '## Verificação' da skill que casou vira critérios que o 🔍 revisor vai cobrar na en… |
 | `_skill_conteudo(cfg, skills)` | Conteúdo das SKILLs selecionadas (para injetar no executor). |
 | `_pending_path(cfg)` | — |
 | `_pending_save(cfg, dados)` | — |
@@ -411,6 +414,8 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `cmd_update(args)` | Atualiza o projeto a partir do GitHub (tags oficiais do repo). |
 | `cmd_memory_import(args)` | v3.12: importa fatos para a memória do agente (JSON lista de strings, ou texto com um fato por linha). Duplicados são p… |
 | `cmd_rag(args)` | v3.15.0 (PR#2): biblioteca local (RAG) — indexar e consultar. |
+| `cmd_skills_import(args)` | v3.15.0 (PR#3): importa skills de pasta local, .zip, URL ou owner/repo. |
+| `cmd_skills_scan(args)` | v3.15.0 (PR#3): varre as pastas assistidas e importa skills novas. |
 | `cmd_selftest(args)` | v3.13.3: bateria de aceitação com LLM REAL (pula sem Ollama). |
 | `cmd_skills_audit(args)` | v3.11: audita o catálogo de skills (estrutura, tamanho, injeção). |
 | `cmd_daemon(args)` | — |
@@ -477,6 +482,12 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 
 | Função | O que faz |
 |---|---|
+| `_slug(nome, fallback)` | — |
+| `find_skill_dirs(root, depth)` | Pastas com SKILL.md válido (name+description) sob `root`. |
+| `import_skill_dir(src_dir, cfg)` | Copia UMA pasta de skill para ~/.hermes/skills/<nome>. |
+| `_importar_todas(dirs, cfg)` | — |
+| `import_from(src, cfg)` | Importa skills de QUALQUER fonte: pasta local, arquivo .zip, URL git/GitHub ou owner/repo (delega no install_from_githu… |
+| `autoscan(cfg)` | Varre as pastas assistidas (default ~/Downloads) e importa skills novas — o 'baixei do GitHub, agora é nativa' sem coma… |
 | `parse_skill_md(text)` | Separa frontmatter YAML do corpo Markdown. |
 
 ### hermes/skills_audit.py — 🛡 auditoria do catálogo: estrutura, tamanho, prompt injection, duplicatas

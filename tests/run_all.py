@@ -3039,6 +3039,157 @@ def T113_folego_para_tarefas_de_projeto():
 
 
 @case
+def T114_import_nativo_de_qualquer_fonte():
+    """v3.15.0 (PR#3): skill baixada (pasta local ou .zip) vira NATIVA —
+    aparece no catálogo, casa com pedido e é idempotente."""
+    import tempfile
+    import zipfile as _zip
+    from hermes import skills as S
+    from hermes.orchestrator import skills_for
+    from hermes.skills import SkillLoader
+
+    cfg = fresh()
+    with tempfile.TemporaryDirectory() as td:
+        fonte = Path(td) / "skill-baixada"
+        fonte.mkdir()
+        (fonte / "SKILL.md").write_text(
+            "---\nname: fotografia-produto\ndescription: \"Fotografia de "
+            "produto para e-commerce — luz, fundo, enquadramento e edição. "
+            "Use quando a tarefa envolver foto, fotografia, produto, "
+            "ecommmerce, vitrine ou catálogo.\"\n---\n# Fotografia\n"
+            "## Verificação\n- A resposta cita equipamento e ajuste de luz.\n",
+            encoding="utf-8")
+        r = S.import_from(str(fonte), cfg)
+        assert r["ok"] and "fotografia-produto" in r["importadas"], r
+        nomes = {s["name"] for s in SkillLoader(cfg).enabled()}
+        assert "fotografia-produto" in nomes              # NATIVA
+        casou = {s["name"] for s in
+                 skills_for(cfg, "tire fotos do produto para o catálogo "
+                                 "da loja com fundo limpo")}
+        assert "fotografia-produto" in casou              # e CASA com pedido
+        # idempotente: de novo → pulada, nada sobrescrito
+        r2 = S.import_from(str(fonte), cfg)
+        assert not r2["importadas"] and "fotografia-produto" in r2["puladas"]
+        # zip com skill dentro também é fonte
+        zdir = Path(td) / "empacotada"; zdir.mkdir()
+        (zdir / "SKILL.md").write_text(
+            "---\nname: seo-loja\ndescription: \"SEO para loja virtual — "
+            "palavras-chave, título e descrição de produto. Use quando a "
+            "tarefa envolver seo, loja, ranking, busca ou palavras-chave.\"\n"
+            "---\n# SEO\n", encoding="utf-8")
+        zpath = Path(td) / "skills-baixadas.zip"
+        with _zip.ZipFile(zpath, "w") as zf:
+            zf.write(zdir / "SKILL.md", "seo-loja/SKILL.md")
+        r3 = S.import_from(str(zpath), cfg)
+        assert "seo-loja" in r3["importadas"], r3
+        assert "seo-loja" in {s["name"] for s in SkillLoader(cfg).enabled()}
+        # fonte inexistente: erro claro
+        assert not S.import_from(str(Path(td) / "nada-aqui"), cfg)["ok"]
+
+
+@case
+def T115_autoscan_baixou_virou_nativa():
+    """v3.15.0 (PR#3): skill largada na pasta assistida (ex.: ~/Downloads)
+    é descoberta e importada SEM comando — e só uma vez."""
+    import tempfile
+    from hermes import skills as S
+    from hermes.orchestrator import skills_for
+    from hermes.skills import SkillLoader
+
+    cfg = fresh()
+    with tempfile.TemporaryDirectory() as td:
+        cfg.update({"skills_watch_dirs": [td]})
+        baixada = Path(td) / "excel-avancado"
+        baixada.mkdir()
+        (baixada / "SKILL.md").write_text(
+            "---\nname: excel-avancado\ndescription: \"Excel avançado — "
+            "tabela dinâmica, procv e gráficos. Use quando a tarefa "
+            "envolver excel, planilha, dinamica, procv ou gráfico.\"\n"
+            "---\n# Excel\n", encoding="utf-8")
+        r = S.autoscan(cfg)
+        assert "excel-avancado" in r["importadas"], r
+        assert "excel-avancado" in {s["name"]
+                                    for s in SkillLoader(cfg).enabled()}
+        casou = {s["name"] for s in
+                 skills_for(cfg, "monte uma tabela dinâmica no excel "
+                                 "com procv")}
+        assert "excel-avancado" in casou
+        # segunda varredura: nada duplicado
+        assert S.autoscan(cfg)["importadas"] == []
+        # ZIP baixado do GitHub também vira nativo (e não reprocessa)
+        import zipfile as _zipz
+        zdir2 = Path(td) / "pacote"; zdir2.mkdir()
+        (zdir2 / "SKILL.md").write_text(
+            "---\nname: skill-do-zip\ndescription: \"Skill que veio dentro "
+            "de um zip baixado do GitHub — teste de importação.\"\n"
+            "---\n# Zip\n", encoding="utf-8")
+        zp = Path(td) / "skills-baixadas.zip"
+        with _zipz.ZipFile(zp, "w") as zf:
+            zf.write(zdir2 / "SKILL.md", "skill-do-zip/SKILL.md")
+        rz = S.autoscan(cfg)
+        assert "skill-do-zip" in rz["importadas"], rz
+        assert "skill-do-zip" in {s["name"]
+                                  for s in SkillLoader(cfg).enabled()}
+        assert S.autoscan(cfg)["importadas"] == []   # marcado: não refaz
+        # autoscan desligado respeita
+        cfg.update({"skills_autoscan": False})
+        nova = Path(td) / "outra-skill"; nova.mkdir()
+        (nova / "SKILL.md").write_text(
+            "---\nname: outra-skill\ndescription: \"qualquer coisa "
+            "genérica aqui\"\n---\n", encoding="utf-8")
+        assert S.autoscan(cfg)["importadas"] == []
+
+
+@case
+def T116_delegacao_para_skill():
+    """v3.15.0 (PR#3): a skill que casa DELEGA — vira MANUAL DA TAREFA no
+    executor e a seção '## Verificação' dela vira critério do revisor."""
+    import tempfile
+    from hermes import orchestrator as orc
+    from hermes import skills as S
+
+    cfg = fresh(creation_approval=False)
+    with tempfile.TemporaryDirectory() as td:
+        fonte = Path(td) / "confeitaria"
+        fonte.mkdir()
+        (fonte / "SKILL.md").write_text(
+            "---\nname: confeitaria-artistica\ndescription: \"Receitas de "
+            "confeitaria — bolo, torta, cobertura, chocolate e sobremesa. "
+            "Use quando a tarefa envolver receita, doce, confeitaria ou "
+            "sobremesa.\"\n---\n# Confeitaria\n\n## Verificação\n"
+            "- A receita lista ingredientes com quantidades reais.\n"
+            "- O tempo de forno aparece na resposta.\n", encoding="utf-8")
+        assert "confeitaria-artistica" in S.import_from(str(fonte), cfg)["importadas"]
+        capturado = {}
+
+        class _Ag:
+            model_override = None
+            def run(self, msgs, on_event=None, cancel=None):
+                capturado["prompt"] = msgs[-1]["content"]
+                on_event({"type": "done",
+                          "message": "receita com ingredientes reais e tempo "
+                                     "de forno (testado)"})
+                return "receita com ingredientes reais e tempo de forno"
+
+        rev_orig = orc.review
+        try:
+            def _review_cap(cfg, objetivo, criterios, resultado):
+                capturado["criterios"] = list(criterios)
+                return {"veredito": "ok"}
+            orc.review = _review_cap
+            orc.run_pipeline(_Ag(), cfg,
+                             "crie a receita do bolo de chocolate com cobertura",
+                             [], on_event=lambda e: None)
+        finally:
+            orc.review = rev_orig
+        assert "MANUAL DA TAREFA" in capturado["prompt"]
+        assert "Confeitaria" in capturado["prompt"]
+        crit = "\n".join(capturado["criterios"])
+        assert "[skill confeitaria-artistica]" in crit   # skill delega critérios
+        assert "tempo de forno" in crit
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista
