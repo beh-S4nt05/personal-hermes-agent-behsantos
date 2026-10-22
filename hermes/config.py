@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 APP_NAME = "hermes-agent"
-VERSION = "3.11.4"
+VERSION = "3.11.5"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
@@ -63,12 +63,14 @@ DEFAULTS = {
     "tool_selector": True,       # seleciona ferramentas MCP relevantes à pergunta
     "memory_top_k": 8,           # fatos de memória injetados por relevância
     "max_model_b": 9.0,          # v3.11.4: teto de tamanho (B) p/ o auto-assign
+    "pipeline_single_model": True,  # v3.11.5: auto-assign econômico — pipeline
+                                    # inteiro herda 💬 chat (zero trocas de modelo)
 }
 
 _INT_KEYS = {"max_steps", "cmd_timeout", "port", "num_ctx", "num_predict",
              "max_tool_calls", "backups_keep", "memory_top_k"}
 _FLOAT_KEYS = {"temperature", "max_model_b"}
-_BOOL_KEYS = {"sandbox", "confirm_dangerous", "auto_start_ollama", "claude_use_ollama", "orchestrator_on", "reviewer_on", "creation_approval", "web_access", "stt_autosend",
+_BOOL_KEYS = {"sandbox", "confirm_dangerous", "auto_start_ollama", "claude_use_ollama", "orchestrator_on", "reviewer_on", "creation_approval", "web_access", "stt_autosend", "pipeline_single_model",
               "mcp_autorestart", "tool_selector"}
 _STR_KEYS = {"ollama_url", "model", "host", "auth_token", "system_prompt_extra", "claude_model", "stt_model", "stt_language", "keep_alive"}
 

@@ -415,7 +415,8 @@ def cmd_models(args) -> None:
 def cmd_models_auto(args) -> None:
     """v3.11.3: escolhe o melhor modelo instalado para cada papel."""
     from .autoselect import run_auto
-    if not run_auto(_cfg(args)).get("ok"):
+    if not run_auto(_cfg(args), multi=bool(getattr(args, "multi", False))
+                    ).get("ok"):
         raise SystemExit(1)
 
 
@@ -516,6 +517,9 @@ def build_parser() -> argparse.ArgumentParser:
                          help="✨ auto-atribui o melhor modelo instalado "
                               "para cada papel (chat/orquestrador/revisor/"
                               "executor/claude)")
+    pa.add_argument("--multi", action="store_true",
+                    help="modelo distinto por papel (padrão: econômico — "
+                         "pipeline inteiro herda o chat, zero trocas)")
     pa.set_defaults(fn=cmd_models_auto)
     p.set_defaults(fn=cmd_models)
 

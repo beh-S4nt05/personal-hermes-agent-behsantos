@@ -1740,11 +1740,11 @@ def T80_memoria_persiste_restart_e_tem_limite():
                          "tentativas": 1, "dur_s": 1.0, "veredito": "ok",
                          "problema": "", "skills": [], "aprovacao": "auto"})
     xp6 = orc.experience(cfg)
-    assert "task-30" in xp6 and "task-25" in xp6      # 6 mais recentes
-    assert "task-24" not in xp6 and "task-01" not in xp6
-    # teto duro: mesmo pedindo 50, o bloco corta em 1600 chars
+    assert "task-30" in xp6 and "task-27" in xp6      # 4 sinais mais recentes
+    assert "task-26" not in xp6 and "task-01" not in xp6
+    # teto duro: mesmo pedindo 50, o bloco corta em 800 chars
     xp50 = orc.experience(cfg, limit=50)
-    assert len(xp50) == 1600 and "task-30" in xp50
+    assert len(xp50) <= 800 and "task-30" in xp50
     # histórico vazio: sem bloco
     assert orc.experience(fresh()) == ""
 
@@ -2199,8 +2199,8 @@ def T90_auto_atribuicao_de_papeis():
     r = c.post("/api/ollama/auto-assign").get_json()
     assert r["ok"] and "assignments" in r and "reasons" in r
     assert r["assignments"]["chat"] == cfg.model
-    assert cfg.executor_model                 # atribuído e persistido
-    assert r["assignments"]["executor"] == cfg.executor_model
+    # v3.11.5: econômico por padrão — pipeline herda o chat (vazio)
+    assert r["assignments"]["executor"] == "" == cfg.executor_model
     # botão na GUI
     html = c.get("/").get_data(as_text=True)
     assert "autoAssign" in html and "auto-atribuir papéis" in html
@@ -2240,6 +2240,57 @@ def T91_auto_assign_respeita_teto_de_tamanho():
     assert float(c9.max_model_b) == 9.0
     c9.update({"max_model_b": 8})
     assert float(c9.max_model_b) == 8.0
+
+
+@case
+def T92_modo_economico_e_experiencia_enxuta():
+    """v3.11.5 ⚡🧽 ACEITAÇÃO — regressão real do operador: com executor
+    ≠ chat, cada task trocava de modelo 2x (lento na RTX 2050 de 4 GB)
+    e o executor-coder escrevia a resposta (prosa suja). Agora:
+    auto-assign ECONÔMICO por padrão (🎯🔍⚡ herdam 💬 chat = 1 modelo
+    residente, zero trocas; --multi libera por papel) e experiência
+    enxuta (sinal forte primeiro, máx 4 linhas, ≤800 chars)."""
+    from hermes import autoselect as aus, orchestrator as orc
+
+    MEUS = ["hermes3:8b", "qwen2.5-coder:7b", "qwen2.5:3b", "llama3.2:1b",
+            "qwen2.5-coder:3b", "hermes3:3b", "llama3.2:3b"]
+    cfg = fresh()
+    assert cfg.pipeline_single_model is True          # padrão econômico
+    out = []
+    res = aus.run_auto(cfg, models=MEUS, print_fn=out.append)
+    assert res["ok"]
+    assert res["assignments"]["chat"] == "hermes3:8b"
+    assert "econômico" in " ".join(out).lower()
+    for papel in ("orchestrator", "reviewer", "executor"):
+        assert res["assignments"][papel] == ""        # herda o chat
+        assert "econômico" in res["reasons"][papel].lower()
+    assert cfg.orchestrator_model == "" and cfg.executor_model == ""
+    assert orc.model_for(cfg, "executor") == cfg.model   # herda de fato
+    # --multi: por papel (máquina melhor no futuro)
+    res2 = aus.run_auto(fresh(), models=MEUS, print_fn=lambda *_: None,
+                        multi=True)
+    assert res2["assignments"]["executor"] == "qwen2.5-coder:7b"
+    # config também libera
+    res3 = aus.run_auto(fresh(pipeline_single_model=False), models=MEUS,
+                        print_fn=lambda *_: None)
+    assert res3["assignments"]["executor"] == "qwen2.5-coder:7b"
+    # experiência enxuta: edição (sinal FORTE) entra mesmo com 5 aprovadas
+    cfg4 = fresh()
+    for i in range(1, 6):
+        orc.record(cfg4, {"objetivo": f"aprovada-{i}", "tipo": "leitura",
+                          "status": "aprovada", "tentativas": 1, "dur_s": 1.0,
+                          "veredito": "ok", "problema": "", "skills": [],
+                          "aprovacao": "auto"})
+    orc.record(cfg4, {"objetivo": "relatório", "tipo": "criacao",
+                      "status": "aprovada", "tentativas": 1, "dur_s": 5.0,
+                      "veredito": "ok", "problema": "", "skills": [],
+                      "aprovacao": "editada·editada",
+                      "entrega_editada": "direto, sem preâmbulo"})
+    xp = orc.experience(cfg4)
+    assert len(xp) <= 800
+    assert sum(1 for l in xp.splitlines() if l.startswith("- ")) <= 4
+    assert "EDITOU a entrega" in xp and "sem preâmbulo" in xp
+    assert "aprovada-1" not in xp                     # fraca caiu fora
 
 
 @case

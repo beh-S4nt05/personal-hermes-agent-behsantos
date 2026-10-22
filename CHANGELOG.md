@@ -1,5 +1,31 @@
 # Changelog
 
+## v3.11.5 — ⚡🧽 fim da lentidão e das respostas sujas (regressão da v3.11.3)
+
+Regressão real reportada pelo operador: "o agente ficou lento e
+incorreto, perdeu as respostas limpas". Causa: o auto-atribuidor
+(v3.11.3) colocou o qwen2.5-coder:7b como ⚡ executor — (1) cada task
+passou a TROCAR de modelo entre etapas (🎯 hermes3:8b → ⚡ coder → 🔍
+hermes3:8b): segundos de swap a cada etapa em GPU de 4 GB sem VRAM
+para dois modelos residentes; (2) o executor é quem ESCREVE a
+resposta — modelo de código escreve prosa pior.
+
+**Correção 1 — modo econômico por padrão:** `pipeline_single_model:
+true` no config. O `hermes models auto` agora deixa 🎯 orquestrador,
+🔍 revisor e ⚡ executor **herdando o 💬 chat** (campo vazio = 1 modelo
+residente, ZERO trocas) — velocidade e prosa do hermes3:8b de volta.
+Por papel continua disponível: `hermes models auto --multi` ou
+`pipeline_single_model: false` (para máquina melhor no futuro).
+
+**Correção 2 — experiência enxuta:** o bloco de experiência do
+planejador passou de 1600 para **800 chars**, no máximo **4 sinais**,
+com sinais FORTES primeiro (edições do operador e reprovações) —
+prompt menor = planejamento mais rápido e menos distração para o 8B.
+
+**Testes:** T92 (econômico por padrão: papéis herdam chat e model_for
+resolve; --multi e config liberam por papel; experiência prioriza
+edição e corta em 800), T80/T90 atualizados ao novo contrato. **92/92.**
+
 ## v3.11.4 — 🛡 auto-assign respeita o hardware (teto max_model_b)
 
 Fato novo do operador: GPU RTX 2050 com 4 GB de VRAM. Modelos acima

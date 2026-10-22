@@ -337,7 +337,7 @@ def experience(cfg, limit: int = 6) -> str:
         return ""
     if not tasks:
         return ""
-    linhas = []
+    fortes, fracas = [], []
     for tk in tasks:
         if not isinstance(tk, dict):
             continue
@@ -354,12 +354,17 @@ def experience(cfg, limit: int = 6) -> str:
         if tk.get("entrega_editada"):
             linha += (f" · o operador EDITOU a entrega para: "
                       f"“{str(tk['entrega_editada'])[:120]}”")
-        linhas.append(linha)
-    return ("[EXPERIÊNCIA DO ORQUESTRADOR — tasks recentes desta máquina]\n"
-            + "\n".join(linhas)[:1400]
-            + "\nUse a experiência: repita o padrão do que foi aprovado; "
-              "evite o que já foi reprovado; as edições do operador são "
-              "PREFERÊNCIAS dele — planeje de acordo.")[:1600]
+        # v3.11.5: sinal FORTE (edição/reprovação) vem primeiro —
+        # bloco enxuto: 4 sinais, 800 chars. Prompt menor = mais rápido
+        # e o planejador (8B) não se distrai com histórico grande.
+        forte = bool(tk.get("entrega_editada") or tk.get("plano_editado")
+                     or tk.get("status") == "reprovada")
+        (fortes if forte else fracas).append(linha)
+    linhas = (fortes + fracas)[:4]
+    return ("[EXPERIÊNCIA DO ORQUESTRADOR — sinais recentes do operador]\n"
+            + "\n".join(linhas)[:560]
+            + "\nAs edições são PREFERÊNCIAS dele — planeje de acordo; "
+              "evite o que já foi reprovado.")[:800]
 
 
 def _next_id(cfg) -> str:

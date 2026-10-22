@@ -1611,7 +1611,7 @@ async function autoAssign(){
     const d = await r.json();
     if (d.ok){
       const ic = {chat:"💬", orchestrator:"🎯", reviewer:"🔍", executor:"⚡", claude:"🔌"};
-      toast("✔ " + Object.entries(d.assignments).map(([k,v])=>ic[k]+" "+v).join(" · "));
+      toast("✔ " + Object.entries(d.assignments).map(([k,v])=>ic[k]+" "+(v||"herda 💬")).join(" · "));
       loadModels();
       loadSettings();
     } else { toast("✖ " + (d.msg || "falhou")); }

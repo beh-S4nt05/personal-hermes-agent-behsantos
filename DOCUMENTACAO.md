@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.11.1** · gerado em 22/10/2026 · este documento é extraído do
+**Versão 3.11.4** · gerado em 22/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -95,11 +95,12 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `hermes schedule` | tarefas agendadas (⏰) |
 | `hermes config` | configuração |
 | `hermes models` | lista modelos locais do Ollama |
+| `hermes auto` | ✨ auto-atribui o melhor modelo instalado  |
 
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.11.1)
+## 3. Modificações — o que foi feito (v1.0.0 → v3.11.4)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -107,6 +108,9 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v3.11.4** | 🛡 auto-assign respeita o hardware (teto max_model_b) |
+| **v3.11.3** | ✨ auto-atribuição dos melhores modelos por papel |
+| **v3.11.2** | 🩹 GUI volta a funcionar no navegador (SyntaxError da v3.9) |
 | **v3.11.1** | 🚨 banner "server OFFLINE" (fim do fantasma do cache) |
 | **v3.11.0** | 🔁🛡 estado sobrevive a restart + auditoria de skills |
 | **v3.10.1** | 🧪 aceitação: melhoria prometida × melhoria medida |
@@ -283,7 +287,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 
 ### hermes/server/app.py — 🌐 a API REST + GUI web (Flask/waitress): todos os endpoints, streaming do chat, aprovações, painel e páginas
 
-**74 endpoints HTTP:**
+**75 endpoints HTTP:**
 
 | Método e rota | O que faz |
 |---|---|
@@ -301,6 +305,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `POST /api/ollama/<action>` | ollama_action |
 | `GET /api/ollama/diagnose` | ollama_diagnose |
 | `POST /api/ollama/test` | Validação completa da conexão, incluindo geração de teste real. |
+| `POST /api/ollama/auto-assign` | v3.11.3 ✨: escolhe e salva o melhor modelo instalado para cada papel (chat/orquestrador/revisor/executor/claude). |
 | `GET /api/ollama/models` | TODOS os modelos instalados + qual papel cada um exerce. v3.9: com o servidor desligado, devolve a ÚLTIMA lista conheci… |
 | `POST /api/ollama/pull` | Baixa um modelo streamando o progresso (NDJSON). |
 | `POST /api/ollama/delete` | ollama_delete |
@@ -393,6 +398,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `cmd_tasks(args)` | — |
 | `cmd_config(args)` | — |
 | `cmd_models(args)` | — |
+| `cmd_models_auto(args)` | v3.11.3: escolhe o melhor modelo instalado para cada papel. |
 | `build_parser()` | — |
 | `main(argv)` | — |
 
@@ -897,7 +903,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `renderBrain()` | bloco 🔬 por baixo dos panos |
 | `toggleBrain()` | liga/desliga a visão 🔬 |
 
-*…e mais 75 funções de
+*…e mais 76 funções de
 renderização e utilidade (`mdFmt`, `bubble`, `toolBlock`, `fmtUp`…).*
 
 ## 7. Segurança

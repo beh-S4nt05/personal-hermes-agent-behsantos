@@ -94,8 +94,14 @@ def choose(models: list[str], chat_atual: str = "",
 
 
 def run_auto(cfg, models: list[str] | None = None,
-             print_fn=print, apply: bool = True) -> dict:
-    """Escolhe (e aplica+salva) os melhores modelos por papel."""
+             print_fn=print, apply: bool = True, multi: bool = False) -> dict:
+    """Escolhe (e aplica+salva) os melhores modelos por papel.
+
+    v3.11.5 ⚡: por padrão é ECONÔMICO — 🎯🔍⚡ herdam o 💬 chat (um
+    modelo residente, zero trocas entre etapas). Trocar de modelo a
+    cada etapa custa segundos em máquina local e o executor (quem
+    ESCREVE a resposta) perde qualidade de prosa se for modelo de
+    código. Por papel: `--multi` ou pipeline_single_model: false."""
     if models is None:
         from .manager import OllamaManager
         st = OllamaManager(cfg).status()
@@ -111,6 +117,14 @@ def run_auto(cfg, models: list[str] | None = None,
     if fora:
         print_fn(f"  ⛔ ignorados acima do teto max_model_b={max_b:g}: "
                  + ", ".join(fora))
+    single = (not multi) and bool(getattr(cfg, "pipeline_single_model", True))
+    if single and esc:
+        for papel in ("orchestrator", "reviewer", "executor"):
+            esc[papel] = ("", "herda 💬 chat — modo econômico: 1 modelo "
+                          "residente, zero trocas de modelo entre etapas "
+                          "(por papel: --multi)")
+        print_fn(f"⚡ modo econômico (padrão): 🎯🔍⚡ herdam 💬 chat "
+                 f"({esc['chat'][0]}) — zero trocas de modelo")
     if not esc:
         print_fn("✖ nenhum modelo instalado.")
         return {"ok": False, "msg": "nenhum modelo instalado"}
