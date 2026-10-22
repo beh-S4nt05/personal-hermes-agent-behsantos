@@ -7,3 +7,4 @@ __pycache__/
 *.egg-info/
 # artefatos de release
 *.zip
+memoria-do-operador.json
