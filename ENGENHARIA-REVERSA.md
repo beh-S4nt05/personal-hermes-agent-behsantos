@@ -140,7 +140,7 @@ determinística (ver 1.2). O modelo pequeno sofre mais; o antídoto é o mesmo.
 
 ## 4. Plano de adoção (adaptado a modelo 8B local)
 
-### ⭐ Bloco A — Trabalhar no SEU projeto (corrige o bug de campo)
+### ⭐ Bloco A — Trabalhar no SEU projeto (corrige o bug de campo) — ✔ PR#1
 A calculadora SOLID falhou porque o agente roda no workspace do Hermes e o
 sandbox bloqueou a pasta do projeto. O CC **sempre** roda no cwd do projeto.
 Portar: detectar caminho de projeto na mensagem → rodar com `cwd` da pasta
@@ -148,7 +148,7 @@ declarada → escopo de leitura/escrita estendido **àquela task** (mantendo
 denylist de pastas sensíveis e aprovação) → injetar ambiente (cwd, data,
 SO, `git status` se for repo).
 
-### ⭐ Bloco B — Aprendizado permanente (diretriz do operador)
+### ⭐ Bloco B — Aprendizado permanente (diretriz do operador) — ✔ PR#2/PR#2b (skills+biblioteca RAG; hermes.md)
 O padrão CLAUDE.md + auto-memory do CC, na nossa forma: **lições de campo
 viram defesa permanente** (o loop que já aplicamos 3× manualmente, virar
 produto: registrar a falha → virar regra/fato/skill versionada) e
@@ -156,14 +156,14 @@ produto: registrar a falha → virar regra/fato/skill versionada) e
 lá — convenções, comandos de build, decisões). O Claude Code ganha os
 **fatos do Hermes** injetados (hoje ele não recebe memória nenhuma).
 
-### ⭐ Bloco C — Compactação de contexto (crítico p/ num_ctx 3072)
+### ⭐ Bloco C — Compactação de contexto (crítico p/ num_ctx 3072) — ✔ PR#3
 Com 3072 tokens de janela, o `history[-20:]` estoura muito antes do que no
 CC. Portar o padrão de 5 estágios em versão enxuta: ao aproximar do teto,
 **resumir** o histórico via LLM **re-injetando do "disco"**: goal da sessão,
 skills ativas, fatos da memória, os 5 arquivos/últimos resultados mais
 recentes. Conversa longa custa o mesmo que curta — e nada importante se perde.
 
-### ⭐ Bloco D — Plano vivo + handoff
+### ⭐ Bloco D — Plano vivo + handoff — parcial (fôlego 8/40 e passos flexíveis ✔; handoff Hermes↔Claude: futuro)
 Checklist de passos **com estado** (feito/andando/bloqueado), re-injetado a
 cada passo do executor e visível na GUI — flexível como a lição 1.7 (o
 modelo pode propor replanejar). Depois: handoff Hermes↔Claude na mesma task

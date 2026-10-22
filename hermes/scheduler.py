@@ -344,7 +344,19 @@ def execute_entry(cfg, entry: dict, on_event=None) -> dict:
             pass
 
     # segundo agente: Claude Code (CLI) em vez do loop Hermes/Ollama
-    if entry.get("agent") == "claude":
+    # v3.15.0 (PR#3): Claude Code é plugin OPCIONAL — sem a CLI instalada,
+    # a tarefa roda no loop nativo do Hermes (com nota no resultado).
+    usar_claude = entry.get("agent") == "claude"
+    if usar_claude:
+        from .claude_agent import claude_path
+        if claude_path() is None:
+            usar_claude = False
+            entry = dict(entry)
+            entry["input"] = (str(entry.get("input") or "")
+                              + "\n\n[nota do agendador: Claude Code não está "
+                                "instalado nesta máquina — executado pelo "
+                                "Hermes.]")
+    if usar_claude:
         from .claude_agent import run_claude
         events: list[dict] = []
         t0 = time.time()

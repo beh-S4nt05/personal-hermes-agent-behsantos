@@ -2545,7 +2545,7 @@ def T99_codigo_verificado_e_selftest():
     assert "codigo-verificado" in nomes, nomes
     # 3. selftest: 5 cenários de campo + pula limpa em mock
     cenarios = st._cenarios()
-    assert len(cenarios) == 5
+    assert len(cenarios) == 6
     nomes_c = [c["nome"] for c in cenarios]
     assert any("código verificado" in n for n in nomes_c)
     assert any("memória" in n for n in nomes_c)
@@ -2622,7 +2622,7 @@ def T101_matriz_de_todos_os_modelos():
     assert "--all-models" in r.stdout
     # a matriz formata cabeçalho com os 5 cenários
     nomes = [c["nome"].split(" (")[0] for c in st._cenarios()]
-    assert len(nomes) == 5 and "diagnóstico" in nomes[0]
+    assert len(nomes) == 6 and "diagnóstico" in nomes[0]
 
 
 @case
@@ -3187,6 +3187,115 @@ def T116_delegacao_para_skill():
         crit = "\n".join(capturado["criterios"])
         assert "[skill confeitaria-artistica]" in crit   # skill delega critérios
         assert "tempo de forno" in crit
+
+
+@case
+def T117_compactacao_de_contexto():
+    """v3.15.0 (PR#3): conversa longa não perde contexto — perto do
+    limite da janela, o MEIO vira resumo e a TAREFA ORIGINAL + resultados
+    recentes ficam (padrão Claude Code, adaptado ao 8B local)."""
+    from hermes.agent import Agent
+
+    cfg = fresh(num_ctx=1024)
+    ag = Agent(cfg)
+
+    class FC:
+        simulated = False
+        def __init__(self):
+            self.calls = []
+        def chat_stream(self, model, messages, tools=None, options=None,
+                        cancel=None, keep_alive=None):
+            self.calls.append([dict(m) for m in messages])
+            yield {"message": {"content":
+                    "resumo feito: tarefa concluída com saída real colada"}}
+
+    fc = FC()
+    ag.client = fc
+    hist = [{"role": "user",
+             "content": "TAREFA ORIGINAL: construa o app calculadora"}]
+    for _ in range(28):
+        hist.append({"role": "assistant", "content": "passo " + "x" * 2000})
+        hist.append({"role": "user", "content": "continue " + "y" * 2000})
+    evs = []
+    final = ag.run(hist, on_event=evs.append)
+    # compactou (evento visível) e o modelo recebeu a versão enxuta
+    assert any("🧠" in str(e.get("message", "")) for e in evs), evs[:4]
+    # calls[0] = resumidor (1 msg); a chamada PRINCIPAL é a última
+    assert len(fc.calls) >= 2
+    recebido = fc.calls[-1]
+    assert len(recebido) <= 8, len(recebido)
+    assert "TAREFA ORIGINAL: construa" in str(recebido[1].get("content"))
+    assert any("CONTEXTO ANTERIOR RESUMIDO" in str(m.get("content"))
+               for m in recebido)
+    assert final
+    # histórico curto: NÃO compacta (custo zero quando não precisa)
+    fc2 = FC(); ag.client = fc2
+    curto = [{"role": "user", "content": "oi, tudo bem?"}]
+    evs2 = []
+    ag.run(curto, on_event=evs2.append)
+    assert not any("🧠" in str(e.get("message", "")) for e in evs2)
+
+
+@case
+def T118_claude_code_plugin_opcional():
+    """v3.15.0 (PR#3): sem a CLI do Claude Code o sistema é 100% Python —
+    tarefa agendada cai no loop Hermes com nota, /api/status anuncia e a
+    GUI esconde a opção."""
+    from hermes import agent as AG, claude_agent as CA, scheduler as SCH
+
+    cap = {}
+
+    class _A:
+        def __init__(self, cfg):
+            pass
+        def run(self, msgs, on_event=None, cancel=None):
+            cap["input"] = msgs[-1]["content"]
+            on_event({"type": "done", "message": "ok"})
+            return "ok"
+
+    orig_cp, orig_agent = CA.claude_path, AG.Agent
+    CA.claude_path = lambda: None
+    AG.Agent = _A
+    try:
+        cfg = fresh()
+        r = SCH.execute_entry(cfg, {"id": "t1", "input": "diga olá",
+                                    "agent": "claude"})
+        assert r["status"] == "ok"
+        assert "Claude Code não está instalado" in cap["input"]
+    finally:
+        CA.claude_path = orig_cp
+        AG.Agent = orig_agent
+    src_app = Path("hermes/server/app.py").read_text(encoding="utf-8")
+    assert '"claude_available": claude_ok,' in src_app
+    src_gui = Path("hermes/server/templates/index.html").read_text(
+        encoding="utf-8")
+    assert "s.claude_available === false" in src_gui
+
+
+@case
+def T119_selftest_cenario_projeto_real():
+    """v3.15.0 (PR#3): selftest mede o cenário que importa — projeto em
+    pasta externa: arquivo criado DE VERDADE, executado e versionado."""
+    import re as _re
+    from hermes import selftest as ST
+
+    cens = ST._cenarios()
+    proj = [c for c in cens if "projeto" in c["nome"].lower()]
+    assert proj, [c["nome"] for c in cens]
+    c = proj[0]
+    m = _re.search(r"em (\S+) com", c["msgs"][0])
+    assert m, c["msgs"][0]
+    pdir = Path(m.group(1))
+    evs = [{"type": "tool_start", "name": "write_file"},
+           {"type": "tool_start", "name": "run_command"},
+           {"type": "tool_start", "name": "git_run"}]
+    (pdir / "app.py").write_text("print('projeto ok')", encoding="utf-8")
+    assert c["checa"]("app.py criado, executado e commitado", evs) == []
+    (pdir / "app.py").unlink()                     # sem arquivo → reprova
+    probs = c["checa"]("afirmação sem prova", evs)
+    assert any("não foi criado de verdade" in p for p in probs), probs
+    import shutil as _sh
+    _sh.rmtree(pdir, ignore_errors=True)
 
 
 @case

@@ -267,6 +267,63 @@ class Agent:
         return prompt + _now_line()
 
     # ---------------------------------------------------------------- loop
+    # ---------------------------------------- v3.15.0: compactação de contexto
+    def _resumir(self, texto: str) -> str:
+        """Resumo curto do meio da conversa — LLM se der, senão corte
+        determinístico (a task nunca falha por causa do resumo)."""
+        try:
+            pedaco: list[str] = []
+            for chunk in self.client.chat_stream(
+                    getattr(self, "model_override", None) or self.cfg.model,
+                    [{"role": "user", "content":
+                      "Resuma em até 8 linhas curtas o ESSENCIAL desta "
+                      "sequência de trabalho (objetivo, achados, arquivos, "
+                      "comandos, erros e correções). Sem introdução:\n"
+                      + texto[:12000]}],
+                    options={"num_predict": 300, "temperature": 0.2}):
+                t = (chunk.get("message") or {}).get("content")
+                if t:
+                    pedaco.append(t)
+            r = "".join(pedaco).strip()
+            if r:
+                return r[:1500]
+        except Exception:  # noqa: BLE001
+            pass
+        linhas = [l.strip()[:120] for l in texto.splitlines() if l.strip()][:8]
+        return "\n".join(linhas) or "(nada a resumir)"
+
+    def _compactar(self, msgs: list[dict], ev) -> list[dict]:
+        """v3.15.0 (PR#3): compactação de contexto (padrão Claude Code).
+        Perto do limite da janela, o MEIO da conversa vira resumo e o
+        essencial fica: sistema, tarefa original e resultados recentes."""
+        limite = max(int(getattr(self.cfg, "num_ctx", 8192)) * 55 // 100, 800)
+        total = sum(len(str(m.get("content") or "")) for m in msgs) // 4
+        if total <= limite or len(msgs) <= 6:
+            return msgs
+        i_tarefa = 1
+        for i, m in enumerate(msgs):
+            if m.get("role") == "user":
+                i_tarefa = i
+                break
+        k = max(i_tarefa + 2, len(msgs) - 4)
+        while k > i_tarefa + 2 and msgs[k].get("role") == "tool":
+            k -= 1                    # não órfã: tool precisa do assistant
+        meio = msgs[i_tarefa + 1:k]
+        if not meio:
+            return msgs
+        ser = "\n".join(f"[{m.get('role')}] " + str(m.get("content") or "")[:600]
+                         for m in meio)
+        resumo = self._resumir(ser)
+        ev({"type": "note",
+            "message": f"🧠 contexto compactado ({len(meio)} mensagens → resumo) "
+                       "— tarefa original e resultados recentes preservados"})
+        return ([msgs[0], msgs[i_tarefa],
+                 {"role": "user",
+                  "content": "[CONTEXTO ANTERIOR RESUMIDO — trabalho já feito:\n"
+                             + resumo
+                             + "\n(continua abaixo com os resultados mais recentes)]"}]
+                + msgs[k:])
+
     def run(self, messages: list[dict], on_event=None, allow_tool=None, cancel=None) -> str:
         """Executa uma tarefa/conversa. `messages` sem o prompt de sistema.
 
@@ -322,6 +379,7 @@ class Agent:
                 except Exception:
                     pass
             msgs[0] = {"role": "system", "content": self.system_prompt(query)}
+            msgs = self._compactar(msgs, ev)   # v3.15.0: sem perder contexto
 
             content = ""
             calls: list[dict] = []
