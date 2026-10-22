@@ -231,11 +231,34 @@ def _heuristic(message: str) -> dict:
     return {"rota": "responder"}
 
 
+# v3.13 💾: cache de planos — pedido REPETIDO não gasta tokens de
+# planejamento. Invalidado quando o operador ensina algo novo (edição
+# de plano/entrega ou reprovação): preferência nova, plano novo.
+_PLAN_CACHE: dict[tuple[str, str], dict] = {}
+_PLAN_CACHE_MAX = 200
+
+
+def _plan_key(cfg, message: str) -> tuple[str, str]:
+    import re as _re
+    norm = _re.sub(r"\s+", " ", str(message or "").strip().lower())[:200]
+    return (str(cfg.data_dir), norm)
+
+
+def _cache_invalidate(cfg) -> None:
+    prefix = str(cfg.data_dir)
+    for k in [k for k in _PLAN_CACHE if k[0] == prefix]:
+        _PLAN_CACHE.pop(k, None)
+
+
 def plan(cfg, message: str, history: list[dict] | None = None) -> dict:
     """🎯 Orquestrador: decide a rota e monta o plano. Nunca lança —
     qualquer falha cai na heurística (o chat nunca quebra)."""
     if not getattr(cfg, "orchestrator_on", True):
         return {"rota": "responder"}
+    chave = _plan_key(cfg, message)
+    hit = _PLAN_CACHE.get(chave)
+    if hit is not None:                     # v3.13: repetiu → 0 tokens
+        return dict(hit)
     try:
         # v3.6: o sênior lê a conversa, não a linha isolada — evita
         # interpretar "você tem acesso a esses dados" como pedido de ls.
@@ -277,10 +300,14 @@ def plan(cfg, message: str, history: list[dict] | None = None) -> dict:
                                    else "leitura")
                 obj["passos"] = [str(p)[:160] for p in (obj.get("passos") or [])[:4]]
                 obj["criterios"] = [str(c)[:160] for c in (obj.get("criterios") or [])[:3]]
+            _PLAN_CACHE[chave] = dict(obj)
+            if len(_PLAN_CACHE) > _PLAN_CACHE_MAX:
+                _PLAN_CACHE.pop(next(iter(_PLAN_CACHE)))
             return obj
     except Exception:  # noqa: BLE001
         pass
-    return _heuristic(message)
+    _PLAN_CACHE[chave] = _heuristic(message)
+    return _PLAN_CACHE[chave]
 
 
 # ───────────────────────────── 🔍 revisão ─────────────────────────────
@@ -321,6 +348,11 @@ def record(cfg, entry: dict, tid: str | None = None) -> str:
                  **{k: v for k, v in entry.items() if k != "id"}}
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        # v3.13: o operador ensinou algo (editou/reprovou) → planos
+        # em cache podem estar velhos; preferência nova, plano novo
+        if (entry.get("entrega_editada") or entry.get("plano_editado")
+                or entry.get("status") == "reprovada"):
+            _cache_invalidate(cfg)
         return tid
     except OSError:
         return tid or "?"

@@ -116,7 +116,10 @@ class SkillLoader:
             "PRIMEIRO leia o SKILL.md dela com a ferramenta read_file e siga as instruções:",
         ]
         for s in skills:
-            desc = (s["description"] or "(sem descrição)").split(".")[0][:90]
+            # v3.13: índice enxuto — o catálogo é só PARA SABER QUE
+            # EXISTE (o casamento por gatilhos usa a descrição completa
+            # à parte). 60 chars bastam e o prompt fica leve.
+            desc = (s["description"] or "(sem descrição)").split(".")[0][:60].rstrip()
             lines.append(f"- {s['name']}: {desc} — ler: {s['skill_md']}")
         return "\n".join(lines)
 

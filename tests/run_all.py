@@ -2341,6 +2341,83 @@ def T93_memoria_importavel():
 
 
 @case
+def T94_plano_cache_zero_tokens_na_repeticao():
+    """v3.13 💾 ACEITAÇÃO — pedido repetido NÃO gasta planejamento:
+    2ª vez com a mesma mensagem (mesma instalação) = 0 chamadas ao
+    modelo; mensagem nova planeja; edição/reprovação do operador
+    INVALIDA o cache (preferência nova, plano novo); instalações
+    diferentes não compartilham cache."""
+    from hermes import orchestrator as orc
+
+    calls = []
+    orig = orc._fast
+
+    def planner(cfg, sys, user, ntok=220, **kw):
+        calls.append(1)
+        return json.dumps({"rota": "executar", "objetivo": "fazer backup",
+                           "passos": ["tar czf"]})
+
+    orc._fast = planner
+    try:
+        cfg = fresh()
+        p1 = orc.plan(cfg, "faça o backup dos meus dados", [])
+        p2 = orc.plan(cfg, "Faça  o   backup dos meus dados", [])  # ≠ caixa/espaço
+        assert p1["rota"] == "executar" and p2 == p1
+        assert len(calls) == 1, "repetição deveria custar 0 chamadas"
+        orc.plan(cfg, "outro pedido qualquer", [])
+        assert len(calls) == 2                      # pedido novo planeja
+        # edição do operador → cache invalidado → replaneja
+        orc.record(cfg, {"objetivo": "b", "tipo": "criacao", "status": "aprovada",
+                         "tentativas": 1, "dur_s": 1.0, "veredito": "ok",
+                         "problema": "", "skills": [],
+                         "aprovacao": "editada·editada",
+                         "entrega_editada": "direto, sem preâmbulo"})
+        orc.plan(cfg, "faça o backup dos meus dados", [])
+        assert len(calls) == 3                      # preferência nova
+        # outra instalação (data_dir) tem cache próprio
+        orc.plan(fresh(), "faça o backup dos meus dados", [])
+        assert len(calls) == 4
+        # registro SEM sinal forte não invalida
+        orc.plan(fresh(), "msg fixa", [])
+        n = len(calls)
+        cfg2 = fresh()
+        orc.plan(cfg2, "outra msg fixa", [])
+        orc.record(cfg2, {"objetivo": "ok", "tipo": "leitura",
+                          "status": "aprovada", "tentativas": 1, "dur_s": 1.0,
+                          "veredito": "ok", "problema": "", "skills": [],
+                          "aprovacao": "auto"})
+        orc.plan(cfg2, "outra msg fixa", [])
+        assert len(calls) == n + 1                  # só a 1ª planejou
+    finally:
+        orc._fast = orig
+
+
+@case
+def T95_skills_do_dia_a_dia():
+    """v3.13 ✦ ACEITAÇÃO — as 5 skills novas casam com pedidos naturais
+    do dia a dia (score >= 2) e o catálogo segue limpo na auditoria."""
+    from hermes.orchestrator import skills_for
+
+    cfg = fresh()
+
+    def pega(msg):
+        return [s["name"] for s in skills_for(cfg, msg)]
+
+    assert "organizador-arquivos" in pega("organize minha pasta de downloads")
+    assert "briefing-diario" in pega("briefing da manhã com agenda e emails")
+    assert "autocorrecao" in pega("o comando deu erro e falhou, tente de novo")
+    assert "atalhos-shell" in pega("verifique o espaço em disco e memória")
+    assert "caminho-curto" in pega("resposta rápida e simples, direto")
+    from hermes.config import Config
+    from hermes.skills_audit import audit_skills
+    c2 = Config(data_dir=tempfile.mkdtemp(prefix="hermes-cat3-"), mock=True)
+    rels = audit_skills(c2.skills_dirs)
+    assert len(rels) >= 23, len(rels)
+    problemas = {r["name"]: r["problemas"] for r in rels if r["problemas"]}
+    assert not problemas, problemas
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

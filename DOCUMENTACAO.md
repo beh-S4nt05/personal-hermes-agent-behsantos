@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.11.5** · gerado em 22/10/2026 · este documento é extraído do
+**Versão 3.12.0** · gerado em 22/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -102,7 +102,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.11.5)
+## 3. Modificações — o que foi feito (v1.0.0 → v3.12.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -110,6 +110,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v3.12.0** | 🧠 transferência de memória + 4 skills do agente sênior |
 | **v3.11.5** | ⚡🧽 fim da lentidão e das respostas sujas (regressão da v3.11.3) |
 | **v3.11.4** | 🛡 auto-assign respeita o hardware (teto max_model_b) |
 | **v3.11.3** | ✨ auto-atribuição dos melhores modelos por papel |
@@ -246,6 +247,8 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `_fast(cfg, system, user, ntok, stage, model)` | Chamada rápida e curta ao modelo (orquestrador/revisor). Nunca lança; em modo mock devolve '' (o chamador cai na heurís… |
 | `_extract_json(text)` | Primeiro objeto JSON balanceado do texto (modelos pequenos cercam o JSON de prosa) — None se não achar nada válido. |
 | `_heuristic(message)` | — |
+| `_plan_key(cfg, message)` | — |
+| `_cache_invalidate(cfg)` | — |
 | `plan(cfg, message, history)` | 🎯 Orquestrador: decide a rota e monta o plano. Nunca lança — qualquer falha cai na heurística (o chat nunca quebra). |
 | `review(cfg, objetivo, criterios, resultado)` | 🔍 Revisor: o resultado cumpre o objetivo? Nunca lança — falha de parse devolve 'ok' (entrega sem travar o chat). |
 | `record(cfg, entry, tid)` | Anexa o registro da task (auditoria leve, sem banco). |

@@ -1,5 +1,38 @@
 # Changelog
 
+## v3.13.0 — ⚡💪 autonomia barata: cache de planos + skills do dia a dia
+
+Pedido do operador: agente executando tarefas do dia a dia de maneira
+rápida e simples, "sem ficar pensando muito", com autonomia no longo
+prazo e MENOS tokens e repetições.
+
+**1. 💾 Cache de planos** — pedido REPETIDO não gasta planejamento: a
+2ª vez com a mesma mensagem (mesma instalação) custa ZERO chamadas ao
+modelo. O cache invalida sozinho quando o operador ensina algo novo
+(edita plano/entrega ou reprova) — preferência nova, plano novo.
+Instalações diferentes não compartilham cache.
+
+**2. ✦ 5 skills de rotina (catálogo: 27)** — problemas do dia a dia
+resolvidos com caminho curto:
+- `caminho-curto` — o mais barato primeiro: já sei → responso; simples
+  → um comando; só tarefa nova merece plano;
+- `atalhos-shell` — receitas de 1 linha: disco, RAM, arquivos grandes,
+  dono da porta, backup rápido;
+- `organizador-arquivos` — downloads/desktop: separar por tipo,
+  duplicados por hash, zonas intocáveis (~/.hermes, ~/.ssh), relatório;
+- `briefing-diario` — resumo da manhã (agenda, e-mails, ⏰, máquina,
+  manchetes) em 8 linhas — AGENDÁVEL, roda sozinho;
+- `autocorrecao` — comando falhou? Lê o erro, corrige local, repete —
+  sem replanejar a tarefa (máx 2 correções, depois relato honesto).
+
+**3. 🧽 Prompt de sistema mais leve** — o catálogo de skills no prompt
+emagreceu (descrições de 90 → 60 chars): 6482 → **5711 chars** por
+conversa, com folga para o catálogo crescer.
+
+**Testes:** T94 (cache: repetição = 0 chamadas, edição invalida,
+instalações separadas) e T95 (as 5 skills casam com pedidos naturais +
+auditoria limpa). **95/95.**
+
 ## v3.12.0 — 🧠 transferência de memória + 4 skills do agente sênior
 
 Pedido do operador: passar a memória/contexto acumulado sobre ele PARA
