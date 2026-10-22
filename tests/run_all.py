@@ -3299,6 +3299,101 @@ def T119_selftest_cenario_projeto_real():
 
 
 @case
+def T120_perguntar_caminho_do_projeto():
+    """v3.15.1: contrato do operador — iniciar projeto SEM caminho → o
+    agente PERGUNTA a pasta; a resposta retoma a task no escopo certo
+    (busca/cria o local). Cancela, assunto-mudou, flag off e TTL cobertos."""
+    import tempfile
+    from hermes import orchestrator as orc
+
+    cfg = fresh(creation_approval=False)
+    capturado = {}
+
+    class _Ag:
+        model_override = None
+        def run(self, msgs, on_event=None, cancel=None):
+            capturado.setdefault("prompts", []).append(msgs[-1]["content"])
+            on_event({"type": "done",
+                      "message": "app.py criado, executado (saída real) e "
+                                 "commitado"})
+            return "app.py criado, executado (saída real) e commitado"
+
+    ag = _Ag()
+    # 1. projeto de código sem caminho → PERGUNTA, executor não roda
+    evs = []
+    r1 = orc.run_pipeline(ag, cfg, "crie um aplicativo de calculadora python com POO",
+                          [], on_event=evs.append, session_id="s-t120")
+    assert "caminho" in r1.lower() and "pasta" in r1.lower(), r1[:120]
+    assert not capturado.get("prompts")                  # nada executado
+    assert any("📁" in str(e.get("message", "")) for e in evs)
+    # 2. operador responde o caminho → retoma e executa LÁ
+    import os as _os
+    import shutil as _sh
+    proj = Path.home() / f".hermes-t120-{_os.getpid()}"
+    _sh.rmtree(proj, ignore_errors=True)
+    evs2 = []
+    r2 = orc.run_pipeline(ag, cfg, str(proj), [], on_event=evs2.append,
+                          session_id="s-t120")
+    assert "saída real" in r2
+    assert "Pasta do projeto definida pelo operador" in capturado["prompts"][0]
+    assert any("📁" in str(e.get("message", "")) and str(proj) in str(e.get("message", ""))
+               for e in evs2), [str(e.get("message"))[:60] for e in evs2][:4]
+    _sh.rmtree(proj, ignore_errors=True)
+    # 3. pendência consumida: próxima mensagem é conversa normal
+    orc.run_pipeline(ag, cfg, "bom dia, tudo bem?", [],
+                     on_event=lambda e: None, session_id="s-t120")
+    assert len(capturado["prompts"]) == 2
+    assert "Pasta do projeto" not in capturado["prompts"][1]
+    # 4. cancelar durante a pergunta
+    evs4 = []
+    orc.run_pipeline(ag, cfg, "crie um sistema web de tarefas em python",
+                     [], on_event=evs4.append, session_id="s-t120b")
+    assert not capturado.get("prompts", []) or len(capturado["prompts"]) == 2
+    r4 = orc.run_pipeline(ag, cfg, "cancela", [], on_event=evs4.append,
+                          session_id="s-t120b")
+    assert "cancelado" in r4
+    # 5. flag desligada: executa direto no workspace (comportamento antigo)
+    cfg2 = fresh(creation_approval=False, ask_project_path=False)
+    evs5 = []
+    orc.run_pipeline(_Ag(), cfg2, "crie um código python de calculadora",
+                     [], on_event=evs5.append, session_id="s-t120c")
+    assert not any("caminho ao operador" in str(e.get("message", ""))
+                   for e in evs5)
+    # 6. "quero INICIAR um projeto" (sem verbo criar): pergunta também —
+    #    e a resposta retoma com escopo FORÇADO (decisão do operador)
+    import shutil as _sh2
+    from hermes import tools as _T
+    cfg3 = fresh(creation_approval=False)
+    cap3 = {}
+    class _Ag3:
+        model_override = None
+        def run(self, msgs, on_event=None, cancel=None):
+            cap3["scope"] = _T.scope_dir()
+            cap3["prompt"] = msgs[-1]["content"]
+            on_event({"type": "done", "message": "app criado com saída real"})
+            return "app criado com saída real"
+    rq = orc.run_pipeline(_Ag3(), cfg3,
+                          "quero iniciar um projeto: uma calculadora node com POO",
+                          [], on_event=lambda e: None, session_id="s-t120e")
+    assert "caminho" in rq.lower() and not cap3          # perguntou, não rodou
+    proj3 = Path.home() / f".hermes-t120e-{__import__('os').getpid()}"
+    _sh2.rmtree(proj3, ignore_errors=True)
+    rr = orc.run_pipeline(_Ag3(), cfg3, str(proj3), [],
+                          on_event=lambda e: None, session_id="s-t120e")
+    assert cap3.get("scope") == proj3 and proj3.exists()  # escopo real + criada
+    assert "AMBIENTE DA TAREFA" in cap3.get("prompt", "")
+    _sh2.rmtree(proj3, ignore_errors=True)
+    # 7. TTL: pendência velha não retoma (é recém-chegada, não resposta)
+    orc._PEND_PROJETO["s-t120d"] = {"message": "crie um app python",
+                                    "t": __import__("time").time() - 700}
+    ag6 = _Ag()
+    r6 = orc.run_pipeline(ag6, cfg, "crie outro código python de agenda",
+                          [], on_event=lambda e: None, session_id="s-t120d")
+    prompts6 = [m for m in capturado["prompts"]]
+    assert "Pasta do projeto definida" not in prompts6[-1]
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

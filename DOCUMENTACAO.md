@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.14.2** · gerado em 22/10/2026 · este documento é extraído do
+**Versão 3.15.0** · gerado em 22/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -106,7 +106,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.14.2)
+## 3. Modificações — o que foi feito (v1.0.0 → v3.15.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -114,6 +114,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v3.15.0** | 🚀 assistente completo, independente e sem perda de contexto |
 | **v3.14.2** | 🗺 Mapa da aplicação + auditoria profunda (12 correções) |
 | **v3.14.1** | 🎭✦ Claude sênior com skills e goal (fim do "não sou especialista") |
 | **v3.14.0** | 🧪 passada de QA sênior: análise estática + QA do QA + matriz de todos os modelos |
@@ -284,6 +285,9 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `pop_pending(cfg, tid)` | — |
 | `request_approval(tid, timeout, check, cfg, meta)` | Bloqueia até o operador decidir (ou esgotar o tempo). Devolve (ação, edição): aprovar\|editar\|cancelar\|refazer\|entregar … |
 | `approve(tid, action, edit)` | Registra a decisão do operador (chamado pelo endpoint da GUI). |
+| `_pergunta_caminho(message, goal, session_id)` | — |
+| `_pedir_caminho(ev, message, goal, session_id)` | Emite os eventos e devolve a pergunta (uso nos 2 caminhos de rota). |
+| `_quer_projeto_sem_caminho(cfg, message, resume_plan)` | v3.15.1: task de código/projeto para INICIAR, sem pasta no pedido. |
 | `run_pipeline(agent, cfg, message, history, on_event, cancel, max_tentativas, goal, session_id, resume_plan, resume_tid)` | Conversa → 🎯 plano → [🔒 aprovação p/ criação] → ⚡ execução → 🔍 revisão → [🔒 entrega editável p/ criação] → done. Emite … |
 
 ### hermes/agent.py — 💬 o executor: conversa com o Ollama com streaming de tokens e uso das ferramentas

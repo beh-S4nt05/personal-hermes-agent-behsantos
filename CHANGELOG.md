@@ -1,5 +1,28 @@
 # Changelog
 
+## v3.15.1 — 📁 contrato do projeto: o agente sempre pede (ou recebe) o caminho
+
+Diretriz do operador: não é "uma pasta" — TODA vez que ele iniciar um
+projeto, o agente pede o caminho, busca o local e/ou cria a pasta.
+
+- **Projeto sem caminho no pedido → PERGUNTA**: task de código/projeto
+  sem referência de pausa pausa e devolve a pergunta ("📁 preciso do
+  caminho da pasta — será buscada e criada se não existir"). Válida nos
+  dois caminhos do orquestrador (criação E "quero iniciar um projeto…",
+  com sinal de início robusto contra planner vacilante).
+- **A resposta retoma a task no lugar certo**: o caminho informado é
+  mesclado ao pedido original, a rota vira executar (a decisão do
+  operador prevalece sobre o planner), a pasta é criada se não existir
+  e todo o trabalho roda lá (arquivos, execução, git, `hermes.md`).
+- **Pendência com educação**: por sessão, TTL de 10 min; "cancela"
+  encerra; assunto mudou expira na hora (sem pegadinha); flag
+  `ask_project_path` (default ligado) devolve o comportamento antigo.
+- Vale só no chat interativo — agendador/`hermes run` seguem direto.
+
+**Testes:** T120 (pergunta→retoma com escopo real→ pasta criada;
+cancela; assunto mudou; flag off; TTL; "quero iniciar" sem verbo criar
+também pergunta e força a rota). **120/120.**
+
 ## v3.15.0 — 🚀 assistente completo, independente e sem perda de contexto
 
 Fechamento do plano de 3 PRs da engenharia reversa (Claude Code ×

@@ -110,6 +110,9 @@ GUI/CLI → POST /api/chat {message, history[-20], session_id, agent}
          - reprovação injusta → garantidor devolve resposta boa
          - máx. 2 tentativas (economia de tokens)
       e. 📦 entrega (aprovação se criação) → resposta final no chat
+   4e. 📁 projeto sem caminho (v3.15.1): task de código/projeto sem
+       pasta no pedido → o agente PERGUNTA o caminho; a resposta retoma
+       a task com escopo forçado (pasta buscada/criada)
    4f. 🧠 compactação (v3.15.0): perto de 55% do num_ctx, o MEIO da
        conversa vira resumo (LLM com fallback) — tarefa original e
        resultados recentes preservados

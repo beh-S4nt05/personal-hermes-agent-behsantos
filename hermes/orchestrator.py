@@ -722,6 +722,56 @@ def approve(tid: str, action: str, edit: dict | None = None) -> bool:
 
 # ───────────────────────── pipeline completo ─────────────────────────
 
+# ──────────── v3.15.1: projeto sem caminho → PERGUNTA ao operador ────────────
+# Contrato: iniciar projeto sempre passa pela pasta (informada no pedido OU
+# em resposta à pergunta). A pendência vive em memória, por sessão, com TTL.
+
+_PEND_PROJ_LOCK = _threading.Lock()
+_PEND_PROJETO: dict[str, dict] = {}
+_PEND_PROJ_TTL = 600.0          # 10 min para responder o caminho
+_CANCELA_RE = re.compile(
+    r"(?i)^\s*(cancela\w*|esquece|deixa|parar?|não\b|nao\b|nop\w*)\b")
+
+# "quero INICIAR um projeto/app..." — sinal de início de projeto mesmo se o
+# plano vacilar entre leitura/criação (robustez contra o classificador)
+_INICIAR_PROJ_RE = re.compile(
+    r"(?i)\b(iniciar|in[íi]cio|come[cç]ar|montar|construir|desenvolver)\b"
+    r"[^\n]{0,60}\b(projeto|app|aplicativo|sistema|website|servi[çc]o|api)\b"
+    r"|\b(projeto|app|aplicativo|sistema|website|servi[çc]o|api)\b"
+    r"[^\n]{0,40}\b(iniciar|come[cç]ar)\b")
+
+
+def _pergunta_caminho(message: str, goal: str, session_id: str) -> str:
+    with _PEND_PROJ_LOCK:
+        _PEND_PROJETO[session_id or "default"] = {
+            "message": message, "t": time.time()}
+    return (
+        "📁 Para iniciar este projeto preciso do caminho da pasta — pode ser "
+        "em qualquer ponto do diretório (ex.: /media/Arquivos/projetos/2026/"
+        "meu-app ou ~/projetos/meu-app). A pasta será **buscada e criada** "
+        "se ainda não existir, e todo o trabalho (arquivos, execução, git) "
+        "acontecerá lá.\n\nResponda com o caminho para eu começar "
+        "(ou diga *cancela* para desistir).")
+
+
+def _pedir_caminho(ev, message: str, goal: str, session_id: str) -> str:
+    """Emite os eventos e devolve a pergunta (uso nos 2 caminhos de rota)."""
+    ev({"type": "note",
+        "message": "📁 projeto sem pasta definida — perguntando o "
+                   "caminho ao operador"})
+    pergunta = _pergunta_caminho(message, goal, session_id)
+    ev({"type": "done", "message": pergunta})
+    return pergunta
+
+
+def _quer_projeto_sem_caminho(cfg, message: str, resume_plan) -> bool:
+    """v3.15.1: task de código/projeto para INICIAR, sem pasta no pedido."""
+    return bool(getattr(cfg, "ask_project_path", True)
+                and not resume_plan
+                and _extra_criterios(message)
+                and not _detectar_projetos(message))
+
+
 def run_pipeline(agent, cfg, message: str, history: list[dict],
                  on_event=None, cancel=None, max_tentativas: int = 2,
                  goal: str = "", session_id: str = "",
@@ -742,16 +792,62 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     TRACE.clear()
     goal_txt = (f"\n[🎯 OBJETIVO DA SESSÃO definido pelo operador: {goal}]"
                 if goal else "")
+
+    # ── v3.15.1: o operador respondeu o CAMINHO do projeto pendente? ──
+    forcar_executar, pend_msg = False, ""
+    if session_id:
+        with _PEND_PROJ_LOCK:
+            pend = _PEND_PROJETO.get(session_id)
+            if pend and time.time() - pend["t"] > _PEND_PROJ_TTL:
+                _PEND_PROJETO.pop(session_id, None)
+                pend = None
+        if pend:
+            caminho = _detectar_projetos(message)
+            if caminho:
+                with _PEND_PROJ_LOCK:
+                    _PEND_PROJETO.pop(session_id, None)
+                ev({"type": "note",
+                    "message": "📁 pasta recebida — retomando o projeto"})
+                pend_msg = pend["message"]
+                forcar_executar = True   # a decisão do operador prevalece
+                message = (pend["message"]
+                           + f"\n\n[Pasta do projeto definida pelo operador: "
+                             f"{caminho[0]}]")
+            elif _CANCELA_RE.match(message):
+                with _PEND_PROJ_LOCK:
+                    _PEND_PROJETO.pop(session_id, None)
+                ev({"type": "note",
+                    "message": "⛔ projeto cancelado pelo operador"})
+                final = "⛔ projeto cancelado — quando quiser, é só pedir de novo."
+                ev({"type": "done", "message": final})
+                return final
+            else:
+                # assunto mudou: pendência expira na hora (sem pegadinha)
+                with _PEND_PROJ_LOCK:
+                    _PEND_PROJETO.pop(session_id, None)
+
     if resume_plan:                    # v3.11: retomada pós-restart
         plano = dict(resume_plan)
         plano["rota"] = "executar"     # o plano já foi aprovado
     else:
         plano = plan(cfg, message, history)
+    if forcar_executar and plano.get("rota") != "executar":
+        # v3.15.1: o operador INFORMOU a pasta do projeto — executar, e o
+        # planner não re-decide (robustez contra classificação vacilante)
+        plano = {"rota": "executar", "tipo": "criacao",
+                 "objetivo": (pend_msg or message)[:300],
+                 "passos": [], "criterios": []}
     ev({"type": "brain", "stage": "🎯 orquestrador",
         "data": {"decisao": plano, "chamadas": list(TRACE)}})
 
     # rota direta: conversa comum — custo zero adicional
     if plano.get("rota") != "executar":
+        # v3.15.1: "quero iniciar um projeto..." sem pasta não é conversa —
+        # o planner pode vacilar, o sinal de início prevalece
+        if (_quer_projeto_sem_caminho(cfg, message, resume_plan)
+                and not _cancelado()
+                and _INICIAR_PROJ_RE.search(message)):
+            return _pedir_caminho(ev, message, goal, session_id)
         return agent.run(history + [{"role": "user",
                                      "content": message + goal_txt}],
                          on_event=on_event, cancel=cancel)
@@ -763,6 +859,12 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     sks_antecipadas = skills_for(cfg, message + " " + objetivo)
     criterios += _skill_criterios(sks_antecipadas)  # v3.15.0: skill delega
     tipo = plano.get("tipo") if plano.get("tipo") in ("leitura", "criacao") else "leitura"
+
+    # ── v3.15.1: projeto de criação SEM caminho → pergunta e espera ──
+    if (_quer_projeto_sem_caminho(cfg, message, resume_plan)
+            and not _cancelado()
+            and (tipo == "criacao" or _INICIAR_PROJ_RE.search(message))):
+        return _pedir_caminho(ev, message, goal, session_id)
 
     # ✦ skills ativas relevantes → instruções injetadas no executor
     sks = skills_for(cfg, message + " " + objetivo)
