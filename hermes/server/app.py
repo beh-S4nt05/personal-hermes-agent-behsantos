@@ -901,8 +901,10 @@ self.addEventListener("fetch", (e) => {
             try:
                 if chat_agent == "claude":
                     from ..claude_agent import run_claude
+                    from ..orchestrator import get_goal
                     result["final"] = run_claude(cfg, message, history=clean_history,
-                                                 on_event=collect, cancel=cancel)
+                                                 on_event=collect, cancel=cancel,
+                                                 goal=get_goal(session_id, cfg))
                 else:
                     # v3.3: 🎯 orquestrador → ⚡ execução → 🔍 revisão
                     # v3.4: + goal da sessão (/goal) + skills + 🔒 aprovação

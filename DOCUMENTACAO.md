@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.13.3** · gerado em 22/10/2026 · este documento é extraído do
+**Versão 3.14.0** · gerado em 22/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -103,7 +103,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.13.3)
+## 3. Modificações — o que foi feito (v1.0.0 → v3.14.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -111,6 +111,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v3.14.0** | 🧪 passada de QA sênior: análise estática + QA do QA + matriz de todos os modelos |
 | **v3.13.3** | 🔬 código só entrega executado + `hermes selftest` (LLM real) |
 | **v3.13.2** | 🔎 diagnóstico do dispositivo em UMA chamada |
 | **v3.13.1** | 🩹🔓 dois bugs reais do campo (recusa vazia + home bloqueada) |
@@ -687,10 +688,11 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `_cli_version(exe)` | Versão da CLI claude (cacheada; '?' se não conseguir ler). |
 | `_claude_cmd(exe, cfg, prompt, light)` | Linha de comando do Claude Code (headless, stream JSON). MODO LEVE (Ollama): --bare — o payload enviado ao modelo cai d… |
 | `claude_path()` | Caminho do binário `claude` (None se não estiver instalado). |
+| `_enrich_prompt(cfg, message, goal)` | v3.14.1: o Claude Code ganha o CONTEXTO do Hermes — a skill que casa com o pedido (CONTEÚDO, não só o nome) e o objetiv… |
 | `_build_prompt(message, history)` | Serializa a conversa anterior + a mensagem nova em um único prompt. |
 | `_simulate(message, ev, cancel)` | Resposta simulada (modo demonstração) — mesmo formato de eventos. |
-| `run_claude(cfg, message, history, on_event, cancel)` | Executa o Claude Code e devolve a resposta final (texto). Emite os mesmos eventos do chat: step, note, token, tool_star… |
-| `_run_impl(cfg, message, history, on_event, cancel, _light, _guard)` | — |
+| `run_claude(cfg, message, history, on_event, cancel, goal)` | Executa o Claude Code e devolve a resposta final (texto). Emite os mesmos eventos do chat: step, note, token, tool_star… |
+| `_run_impl(cfg, message, history, on_event, cancel, _light, _guard, goal)` | — |
 
 ### hermes/mcp_client.py — 🔌 cliente MCP: e-mail, agenda, Figma…
 

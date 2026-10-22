@@ -2626,6 +2626,71 @@ def T101_matriz_de_todos_os_modelos():
 
 
 @case
+def T102_claude_senior_com_skills_e_goal():
+    """v3.14.1 🎭✦ BUG REAL do campo: o Claude Code respondeu 'não sou
+    especialista em Node.js' e entregou links — recusa de quem não tem
+    persona, skills, memória nem goal. Agora: persona SÊNIOR com
+    anti-recusa, skill que casa INJETADA no prompt e objetivo da sessão."""
+    from hermes import claude_agent as ca
+
+    # 1. persona sênior + anti-recusa no prompt do modo leve
+    assert "ENGENHEIRO DE SOFTWARE SÊNIOR" in ca.CLAUDE_LIGHT_PROMPT
+    assert "não sou especialista" in ca.CLAUDE_LIGHT_PROMPT
+    assert "FALHA GRAVE" in ca.CLAUDE_LIGHT_PROMPT
+    assert "EXECUTE (Bash)" in ca.CLAUDE_LIGHT_PROMPT
+    # 2. skill que casa é injetada (CONTEÚDO, não só nome)
+    cfg = fresh()
+    enriquecido = ca._enrich_prompt(cfg, "crie o código de uma calculadora "
+                                          "javascript com POO")
+    assert "[SKILL codigo-verificado" in enriquecido
+    assert "Fluxo obrigatório" in enriquecido          # conteúdo real
+    # 3. pedido genérico: nada injetado (modo leve segue enxuto)
+    assert ca._enrich_prompt(cfg, "bom dia, tudo bem?") == ""
+    # 4. goal da sessão chega ao prompt do Claude
+    com_goal = ca._enrich_prompt(cfg, "bom dia", goal="construir a calculadora")
+    assert "OBJETIVO DA SESSÃO" in com_goal and "calculadora" in com_goal
+    # 5. a chamada do chat passa o goal (fonte)
+    src = Path("hermes/server/app.py").read_text(encoding="utf-8")
+    assert "goal=get_goal(session_id, cfg))" in src
+    # 6. run_claude aceita goal e continua funcionando em mock
+    out = []
+    evs = []
+    r = ca.run_claude(cfg, "oi", history=[], on_event=evs.append,
+                      goal="teste")
+    assert r  # simulação responde
+
+
+@case
+def T103_casamento_por_nome_de_skill():
+    """v3.14.1 ✦: pedido técnico com UMA palavra-chave que é o NOME da
+    skill agora casa (antes exigia 2 palavras — 'crie um código de
+    calculadora' ficava de fora). E a classe 'projeto/aplicativo'
+    ganha o critério de execução de código."""
+    from hermes.orchestrator import _extra_criterios, skills_for
+
+    cfg = fresh()
+    nomes = [s["name"] for s in
+             skills_for(cfg, "crie o código de uma calculadora javascript")]
+    assert "codigo-verificado" in nomes, nomes
+    nomes2 = [s["name"] for s in
+              skills_for(cfg, "analise essa planilha e calcule a média")]
+    assert "analise-dados" in nomes2, nomes2
+    # conversa genérica: nada casa (sem falso positivo)
+    assert skills_for(cfg, "bom dia, tudo bem com você?") == []
+    # e o ambíguo continua NÃO casando (memória RAM ≠ skill do agente)
+    assert skills_for(cfg, "quero um resumo detalhado do uso de memória "
+                           "ram do meu notebook") == []
+    # classe projeto/aplicativo → critério de execução
+    assert _extra_criterios("crie um projeto de aplicativo de calculadora")
+    assert _extra_criterios("faça uma calculadora com POO")
+    assert _extra_criterios("resuma meu inbox") == []
+    # regressão: diagnóstico continua casando com atalhos-shell
+    nomes3 = [s["name"] for s in
+              skills_for(cfg, "busca geral no sistema e uso do dispositivo")]
+    assert "atalhos-shell" in nomes3
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

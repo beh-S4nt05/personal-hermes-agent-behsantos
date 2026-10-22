@@ -1,6 +1,6 @@
 ---
 name: codigo-verificado
-description: Escrever código que FUNCIONA de verdade — escrever o arquivo, executar com um exemplo real, ler a saída e corrigir o erro antes de entregar. Use quando a tarefa envolver código, script, função, classe, programa, implementar, python, vba, algoritmo ou projeto de software.
+description: Escrever código que FUNCIONA de verdade — escrever o arquivo, executar com um exemplo real, ler a saída e corrigir o erro antes de entregar. Use quando a tarefa envolver código, script, função, classe, programa, implementar, python, javascript, node, vba, algoritmo, calculadora, aplicativo, website, sistema web ou projeto de software.
 ---
 
 # Código verificado (nada de código não-executado)

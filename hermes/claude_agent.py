@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import threading
+from pathlib import Path
 import time
 
 CLAUDE_TIMEOUT_S = 900  # teto de 15 min por execução
@@ -52,10 +53,16 @@ def _claude_env(cfg) -> dict:
 # Diretiva curta que substitui o prompt gigante do Claude Code no modo local
 # (medido: prompt padrão 5.780 chars -> ~300 com --bare + isto).
 CLAUDE_LIGHT_PROMPT = (
-    "Você é um agente prático rodando LOCALMENTE (Ollama). Responda em "
-    "português do Brasil, direto ao ponto. Você tem SOMENTE as ferramentas "
-    "Bash, Read e Edit. Para obter dados (sistema, arquivos, rede), EXECUTE "
-    "Bash (ex.: uname -a, free -h, df -h, ls) e responda com a saída REAL. "
+    "Você é um ENGENHEIRO DE SOFTWARE SÊNIOR rodando LOCALMENTE (Ollama), "
+    "com anos de prática em Node.js, Python, shell, SQL e web — o "
+    "especialista da casa. Responda em português do Brasil, direto ao "
+    "ponto. Assunto novo? SÊNIOR aprende NA HORA: leia com Read, teste "
+    "com Bash, entregue. RECUSAR tarefa ('não sou especialista', 'não "
+    "sei programar') é FALHA GRAVE — aqui o especialista é você. "
+    "Você tem SOMENTE as ferramentas Bash, Read e Edit. Para obter dados "
+    "(sistema, arquivos, rede), EXECUTE Bash (ex.: uname -a, free -h, "
+    "df -h, ls) e responda com a saída REAL. Código: escreva o arquivo "
+    "COMPLETO (Edit) e EXECUTE (Bash), colando a saída real na resposta. "
     "PROIBIDO escrever JSON Schema, XML, exemplos de chamada de ferramenta "
     "ou qualquer explicação sobre como usar ferramentas. Nunca invente dados."
     "\nREGRA INVIOLÁVEL DE EXECUÇÃO: escrever um comando dentro de um bloco "
@@ -194,6 +201,30 @@ def claude_path() -> str | None:
     return shutil.which("claude")
 
 
+def _enrich_prompt(cfg, message: str, goal: str = "") -> str:
+    """v3.14.1: o Claude Code ganha o CONTEXTO do Hermes — a skill que
+    casa com o pedido (CONTEÚDO, não só o nome) e o objetivo da sessão.
+    Enxuto por design (modo leve): no máx. 1 skill, cortada em 1800."""
+    extras: list[str] = []
+    try:
+        from .orchestrator import skills_for
+        sks = skills_for(cfg, message, max_skills=1)
+        if sks:
+            try:
+                conteudo = Path(sks[0]["skill_md"]).read_text(encoding="utf-8")
+                extras.append("[SKILL " + str(sks[0]["name"])
+                              + " — siga estas instruções]\n"
+                              + conteudo[:1800])
+            except OSError:
+                pass
+    except Exception:  # noqa: BLE001
+        pass
+    if goal and goal.strip():
+        extras.append("[🎯 OBJETIVO DA SESSÃO definido pelo operador: "
+                      + goal.strip()[:300] + "]")
+    return ("\n\n".join(extras) + "\n\n") if extras else ""
+
+
 def _build_prompt(message: str, history: list[dict]) -> str:
     """Serializa a conversa anterior + a mensagem nova em um único prompt."""
     if not history:
@@ -234,18 +265,20 @@ def _simulate(message: str, ev, cancel) -> str:
 
 
 def run_claude(cfg, message: str, history: list[dict] | None = None,
-               on_event=None, cancel: threading.Event | None = None) -> str:
+               on_event=None, cancel: threading.Event | None = None,
+               goal: str = "") -> str:
     """Executa o Claude Code e devolve a resposta final (texto).
 
     Emite os mesmos eventos do chat: step, note, token, tool_start,
     tool_end, done, error, cancelled. O rodapé da resposta indica o modo
     (leve/completo) e a versão da CLI — autodiagnóstico para o usuário.
     """
-    return _run_impl(cfg, message, history, on_event, cancel, _light=None)
+    return _run_impl(cfg, message, history, on_event, cancel, _light=None,
+                     goal=goal)
 
 
 def _run_impl(cfg, message, history, on_event, cancel, _light=None,
-              _guard: bool = False) -> str:
+              _guard: bool = False, goal: str = "") -> str:
     ev = on_event or (lambda _e: None)
     history = history or []
 
@@ -257,7 +290,8 @@ def _run_impl(cfg, message, history, on_event, cancel, _light=None,
         ev({"type": "error", "message": _CLAUDE_INSTALL_HINT})
         return _CLAUDE_INSTALL_HINT
 
-    prompt = _build_prompt(message, history)
+    prompt = (_build_prompt(message, history)
+              + _enrich_prompt(cfg, message, goal))
     ollama_mode = bool(getattr(cfg, "claude_use_ollama", True))
     use_light = ollama_mode and (_light if _light is not None else True)
     ver = _cli_version(exe)
@@ -416,7 +450,7 @@ def _run_impl(cfg, message, history, on_event, cancel, _light=None,
             ev({"type": "note",
                 "message": "esta CLI não suporta --bare — repetindo em modo completo"})
             return _run_impl(cfg, message, history, on_event, cancel,
-                             _light=False)
+                             _light=False, goal=goal)
         msg = f"Claude Code terminou sem resposta{(f': {err}' if err else '')}"
         ev({"type": "error", "message": msg})
         return msg

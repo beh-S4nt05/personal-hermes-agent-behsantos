@@ -213,7 +213,8 @@ _FOLLOWUP_RE = re.compile(
 # passa a cobrar a SAÍDA REAL do código rodado (rastro > opinião do modelo)
 _CODIGO_RE = re.compile(
     r"\b(c[óo]digo|script|fun[çc][ãa]o|funcao|classe|programa|implement\w*|"
-    r"python|\.py\b|\bvba\b|algoritmo|m[óo]dulo|api|classe)\b",
+    r"python|\.py\b|\bvba\b|algoritmo|m[óo]dulo|api|classe|"
+    r"projeto|aplicativo|calculadora)\b",
     re.IGNORECASE)
 
 

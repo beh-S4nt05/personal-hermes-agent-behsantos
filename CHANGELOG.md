@@ -1,5 +1,35 @@
 # Changelog
 
+## v3.14.1 — 🎭✦ Claude sênior com skills e goal (fim do "não sou especialista")
+
+Pergunta do operador: como os agentes ativos estão usando as skills —
+e por que não usam? Diagnóstico com evidência (auditoria de campo):
+
+**1. 🎭 Persona SÊNIOR no Claude Code** — o transcript mostrou o Claude
+recusando ("não sou especialista em Node.js") e entregando links. O
+prompt do modo leve dizia apenas "agente prático". Agora: ENGENHEIRO
+DE SOFTWARE SÊNIOR ("o especialista da casa"), RECUSAR TAREFA É FALHA
+GRAVE, assunto novo → aprende na hora (Read/Bash), código → arquivo
+completo + execução com saída colada.
+
+**2. ✦ Skills e 🎯 goal chegam ao Claude** — antes o Claude Code não
+recebia NENHUMA skill nem o objetivo da sessão (por design do modo
+leve mínimo). Agora `_enrich_prompt` injeta a skill que casa com o
+pedido (conteúdo, máx. 1, cortada em 1800 chars) e o goal da sessão —
+o mesmo contexto que o Hermes pipeline já tinha.
+
+**3. ✦ codigo-verificado casa com pedidos reais** — descrição ganhou
+os gatilhos que faltavam (javascript, node, calculadora, aplicativo,
+website…). Nota de engenharia: uma regra de casamento por NOME de
+skill foi experimentada e REVERTIDA — "memória" (RAM do sistema)
+casava com memoria-contexto (memória do agente): ambiguidade pega
+pelos testes de precisão T59/T74. O casamento continua só por
+descrição (score >= 2), agora com vocabulário completo.
+
+**Testes:** T102 (persona, skill injetada no prompt do Claude, goal,
+enxuto em pedido genérico) e T103 (calculadora/projeto casam;
+ambíguo "memória ram" continua NÃO casando; regressões). **103/103.**
+
 ## v3.14.0 — 🧪 passada de QA sênior: análise estática + QA do QA + matriz de todos os modelos
 
 Pedido do operador: validação meticulosa para situações REAIS, com
