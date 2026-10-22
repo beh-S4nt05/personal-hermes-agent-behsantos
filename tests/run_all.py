@@ -2294,6 +2294,53 @@ def T92_modo_economico_e_experiencia_enxuta():
 
 
 @case
+def T93_memoria_importavel():
+    """v3.12 🧠: transferência de contexto PARA o agente —
+    hermes memory import (JSON lista ou um fato por linha), com dedupe
+    (mesmo fato não entra duas vezes) e erro claro em arquivo ruim."""
+    import json as _json
+    from hermes.memory import MemoryStore
+
+    cfg = fresh()
+    d = Path(tempfile.mkdtemp(prefix="hermes-mem-"))
+    fatos = ["O operador prefere respostas diretas, sem preâmbulo.",
+             "Hardware: RTX 2050 com 4 GB de VRAM.",
+             "Linguas: português do Brasil."]
+    (d / "fatos.json").write_text(_json.dumps(fatos, ensure_ascii=False),
+                                  encoding="utf-8")
+    (d / "fatos.txt").write_text("# comentário\nfato de texto simples\n\n"
+                                 "segundo fato", encoding="utf-8")
+    # JSON: 3 novos
+    import subprocess as _sp
+    r = _sp.run(["./.venv/bin/hermes", "--data-dir", cfg.data_dir,
+                 "memory", "import", str(d / "fatos.json")],
+                capture_output=True, text=True, timeout=30)
+    assert "3 fato(s) importado(s)" in r.stdout + r.stderr, r.stdout + r.stderr
+    ms = MemoryStore(cfg)
+    textos = {f["text"] for f in ms.list_all()}
+    assert textos == set(fatos)
+    # de novo: 0 novos, 3 duplicados
+    r = _sp.run(["./.venv/bin/hermes", "--data-dir", cfg.data_dir,
+                 "memory", "import", str(d / "fatos.json")],
+                capture_output=True, text=True, timeout=30)
+    assert "0 fato(s) importado(s)" in r.stdout + r.stderr
+    assert "3 duplicado(s)" in r.stdout + r.stderr
+    assert len(ms.list_all()) == 3
+    # texto por linha: ignora comentário e vazia
+    r = _sp.run(["./.venv/bin/hermes", "--data-dir", cfg.data_dir,
+                 "memory", "import", str(d / "fatos.txt")],
+                capture_output=True, text=True, timeout=30)
+    assert "2 fato(s) importado(s)" in r.stdout + r.stderr
+    assert len(ms.list_all()) == 5
+    # JSON inválido: erro claro, exit != 0
+    (d / "ruim.json").write_text("{fatos:", encoding="utf-8")
+    r = _sp.run(["./.venv/bin/hermes", "--data-dir", cfg.data_dir,
+                 "memory", "import", str(d / "ruim.json")],
+                capture_output=True, text=True, timeout=30)
+    assert r.returncode != 0 and "JSON inválido" in r.stdout + r.stderr
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

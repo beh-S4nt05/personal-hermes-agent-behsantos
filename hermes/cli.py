@@ -298,6 +298,38 @@ def cmd_update(args) -> None:
                                 assume_yes=bool(getattr(args, "yes", False))))
 
 
+def cmd_memory_import(args) -> None:
+    """v3.12: importa fatos para a memória do agente (JSON lista de
+    strings, ou texto com um fato por linha). Duplicados são pulados."""
+    import json as _json
+    from pathlib import Path as _P
+    from .memory import MemoryStore
+
+    arq = _P(args.arquivo).expanduser()
+    try:
+        texto = arq.read_text(encoding="utf-8")
+    except OSError as exc:
+        _fail(f"não consegui ler {arq}: {exc}")
+        raise SystemExit(1)
+    if arq.suffix == ".json":
+        try:
+            dados = _json.loads(texto)
+        except ValueError as exc:
+            _fail(f"JSON inválido: {exc}")
+            raise SystemExit(1)
+        if isinstance(dados, dict):
+            dados = dados.get("fatos") or dados.get("facts") or []
+        fatos = [str(f) for f in dados]
+    else:
+        fatos = [l for l in texto.splitlines()
+                 if l.strip() and not l.strip().startswith("#")]
+    novos, dup = MemoryStore(_cfg(args)).import_facts(fatos)
+    _p(f"\n🧠 memória: {novos} fato(s) importado(s)"
+       + (f" · {dup} duplicado(s) pulado(s)" if dup else ""))
+    if not novos and not dup:
+        _fail("nenhum fato válido no arquivo")
+
+
 def cmd_skills_audit(args) -> None:
     """v3.11: audita o catálogo de skills (estrutura, tamanho, injeção)."""
     from .skills_audit import run_audit
@@ -438,6 +470,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-y", "--yes", action="store_true",
                    help="aplica sem pedir confirmação")
     p.set_defaults(fn=cmd_update)
+
+    p = sub.add_parser("memory", help="memória de longo prazo do agente")
+    msub = p.add_subparsers(dest="memory_cmd", required=True)
+    pm = msub.add_parser("import",
+                         help="importa fatos para a memória (JSON lista ou "
+                              "um fato por linha) — duplicados pulados")
+    pm.add_argument("arquivo", help="caminho do arquivo de fatos")
+    pm.set_defaults(fn=cmd_memory_import)
 
     p = sub.add_parser("skills", help="catálogo de skills")
     ssub = p.add_subparsers(dest="skills_cmd", required=True)

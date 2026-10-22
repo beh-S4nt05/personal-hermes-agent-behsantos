@@ -1,5 +1,34 @@
 # Changelog
 
+## v3.12.0 — 🧠 transferência de memória + 4 skills do agente sênior
+
+Pedido do operador: passar a memória/contexto acumulado sobre ele PARA
+o agente, junto com skills do próprio agente de IA que o atende.
+
+**1. 🧠 `hermes memory import <arquivo>`** — importa fatos para a
+memória de longo prazo (injetada em TODAS as conversas e tarefas).
+Formato: JSON lista de strings OU texto com um fato por linha
+(comentários `#` ignorados). Duplicados são pulados — importar duas
+vezes não duplica. O arquivo com o contexto do operador fica FORA do
+repo (dado pessoal; repo é público), entregue junto como
+`memoria-do-operador.json`.
+
+**2. ✦ 4 skills novas no catálogo (22 no total)** — disciplinas do
+agente sênior traduzidas para o formato do Hermes, todas aprovadas na
+auditoria:
+- `edicao-cirurgica` — âncora exata, um ponto por vez, verificação
+  após cada edição, rollback se quebrou;
+- `diagnostico-raiz` — sintoma → hipóteses → prova uma a uma → causa
+  raiz → teste de regressão (a lição do "localhost fantasma");
+- `entrega-verificada` — checklist de 5 perguntas antes de qualquer
+  "pronto" (respondi o pedido? evidência? cumpri promessas? claro?
+  executei em vez de instruir?);
+- `release-disciplinada` — testes verdes, bump, changelog honesto,
+  anti-segredo, tag e pacote verificado.
+
+**Testes:** T93 (import JSON/texto, dedupe, erro claro em arquivo
+ruim, via CLI). Auditoria: 22/22 limpas. **93/93.**
+
 ## v3.11.5 — ⚡🧽 fim da lentidão e das respostas sujas (regressão da v3.11.3)
 
 Regressão real reportada pelo operador: "o agente ficou lento e

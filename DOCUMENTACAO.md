@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.11.4** · gerado em 22/10/2026 · este documento é extraído do
+**Versão 3.11.5** · gerado em 22/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -79,6 +79,8 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 |---|---|
 
 | `hermes update` | atualiza o agente a partir do GitHub |
+| `hermes memory` | memória de longo prazo do agente |
+| `hermes import` | importa fatos para a memória (JSON lista ou  |
 | `hermes skills` | catálogo de skills |
 | `hermes audit` | audita todas as skills: estrutura, tamanho,  |
 | `hermes chat` | chat interativo no terminal |
@@ -100,7 +102,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.11.4)
+## 3. Modificações — o que foi feito (v1.0.0 → v3.11.5)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -108,6 +110,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v3.11.5** | ⚡🧽 fim da lentidão e das respostas sujas (regressão da v3.11.3) |
 | **v3.11.4** | 🛡 auto-assign respeita o hardware (teto max_model_b) |
 | **v3.11.3** | ✨ auto-atribuição dos melhores modelos por papel |
 | **v3.11.2** | 🩹 GUI volta a funcionar no navegador (SyntaxError da v3.9) |
@@ -391,6 +394,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `cmd_run(args)` | — |
 | `cmd_chat(args)` | — |
 | `cmd_update(args)` | Atualiza o projeto a partir do GitHub (tags oficiais do repo). |
+| `cmd_memory_import(args)` | v3.12: importa fatos para a memória do agente (JSON lista de strings, ou texto com um fato por linha). Duplicados são p… |
 | `cmd_skills_audit(args)` | v3.11: audita o catálogo de skills (estrutura, tamanho, injeção). |
 | `cmd_daemon(args)` | — |
 | `cmd_server(args)` | — |
@@ -508,6 +512,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `_read` | — |
 | `_write` | — |
 | `list_all` | Fatos ordenados do mais recente para o mais antigo. |
+| `import_facts` | v3.12: importa fatos (ex.: transferência de contexto de outro agente)… |
 | `add` | — |
 | `update` | — |
 | `delete` | — |

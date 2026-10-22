@@ -54,6 +54,31 @@ class MemoryStore:
         return [f for _, f in indexed]
 
     # ------------------------------------------------------------ ações
+    def import_facts(self, fatos: list[str]) -> tuple[int, int]:
+        """v3.12: importa fatos (ex.: transferência de contexto de outro
+        agente). Devolve (adicionados, duplicados) — fato idêntico não
+        entra duas vezes."""
+        fatos = [str(f).strip()[:1000] for f in fatos if str(f).strip()]
+        with _LOCK:
+            data = self._read()
+            ja_tem = {f.get("text") for f in data["facts"]}
+            novos = 0
+            for fato in fatos:
+                if fato in ja_tem:
+                    continue
+                data["facts"].append({
+                    "id": "m" + uuid.uuid4().hex[:8],
+                    "text": fato,
+                    "created": time.strftime("%Y-%m-%d %H:%M"),
+                    "ts": int(time.time()),
+                })
+                ja_tem.add(fato)
+                novos += 1
+            data["facts"] = data["facts"][-MAX_FACTS:]
+            if novos:
+                self._write(data)
+            return novos, len(fatos) - novos
+
     def add(self, text: str) -> dict:
         text = str(text or "").strip()
         if not text:
