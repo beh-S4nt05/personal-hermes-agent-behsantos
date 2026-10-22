@@ -2136,6 +2136,38 @@ def T88_banner_offline_casca_em_cache():
 
 
 @case
+def T89_js_da_gui_tem_sintaxe_valida():
+    """v3.11.2 🩹: o JavaScript da GUI PARSEIA de verdade (QuickJS) e
+    todo onclick aponta para função existente. A v3.9–v3.11.1 saíram
+    com um SyntaxError que matava a página inteira no navegador — e os
+    testes de API não viam, porque nunca executam JS."""
+    import re as _re
+    cfg = fresh()
+    c = _app(cfg)
+    html = c.get("/").get_data(as_text=True)
+    blocos = _re.findall(r"<script>(.*?)</script>", html, _re.DOTALL)
+    assert blocos, "nenhum bloco <script> na página"
+    try:
+        import quickjs as _qjs
+    except ImportError:
+        print("      (quickjs ausente — só a checagem de onclick roda)")
+    else:
+        for i, js in enumerate(blocos):
+            try:
+                _qjs.Context().eval("(function(){" + js + "})")
+            except Exception as exc:  # noqa: BLE001
+                raise AssertionError(
+                    f"bloco <script> {i + 1} com erro de sintaxe: {exc}")
+    _KW = {"if", "for", "while", "switch", "catch", "return", "new",
+           "typeof", "void", "delete", "do", "function"}
+    fns = set(_re.findall(r"function (\w+)\(", html))
+    for nome in set(_re.findall(r'onclick="(\w+)\(', html)) - _KW:
+        assert nome in fns, f"onclick chama função inexistente: {nome}"
+    # regressão específica da v3.9: aspas escapadas do assignRole
+    assert "assignRole(\\'" in html
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

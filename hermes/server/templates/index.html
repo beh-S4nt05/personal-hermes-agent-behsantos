@@ -1881,7 +1881,7 @@ async function loadModels(){
       const btns = Object.keys(ROLE_INFO).map(r=>{
         const ativo = roles[r]===m.name;
         return '<button class="b small '+(ativo?"primary":"ghost")+'" title="definir como '+ROLE_INFO[r].nome+
-               '" onclick="assignRole(''+esc(m.name)+'',''+r+'')">'+ROLE_INFO[r].ic+'</button>';
+               '\' onclick="assignRole(\''+esc(m.name)+'\',\''+r+'\')">'+ROLE_INFO[r].ic+'</button>';
       }).join("");
       return `
       <div class="task"><div class="top">

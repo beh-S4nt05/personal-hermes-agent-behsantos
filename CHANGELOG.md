@@ -1,5 +1,27 @@
 # Changelog
 
+## v3.11.2 — 🩹 GUI volta a funcionar no navegador (SyntaxError da v3.9)
+
+Bug real encontrado PELO OPERADOR na própria máquina: a página abria
+com o JavaScript morto — console: `Uncaught SyntaxError (index):1884`,
+`ollamaAction is not defined`, `agentAction is not defined` e o log da
+GUI parado em "conectando ao stream…".
+
+**Causa:** na v3.9.0, a linha do botão de papel da aba Ollama saiu com
+`''` (duas strings justapostas, sem operador) onde deveria estar `\'`
+(aspas escapadas) — erro de camada de escape no patch. Um erro de
+sintaxe mata o bloco `<script>` INTEIRO: todos os handlers inline
+(agentAction, ollamaAction, assignRole…) ficavam indefinidos e a GUI
+não respondia a nada. Os testes E2E não viam porque só conversam com a
+API — nunca executam JavaScript.
+
+**Correção:** escape correto na linha do `onclick` do `assignRole`.
+
+**Blindagem (T89):** o JS da página agora é PARSEADO de verdade a cada
+release (QuickJS — `pip install quickjs` no ambiente de teste; o teste
+avisa e pula só o parse se ausente) e todo `onclick` do HTML precisa
+apontar para uma função existente. **89/89.**
+
 ## v3.11.1 — 🚨 banner "server OFFLINE" (fim do fantasma do cache)
 
 Sintoma real do operador: com o servidor desligado, abrir
