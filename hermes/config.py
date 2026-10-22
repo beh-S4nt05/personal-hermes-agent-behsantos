@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 APP_NAME = "hermes-agent"
-VERSION = "3.13.0"
+VERSION = "3.13.1"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
@@ -49,6 +49,9 @@ DEFAULTS = {
     "keep_alive": "30m",         # mantém o modelo na RAM entre mensagens (evita cold start)
     "cmd_timeout": 60,           # timeout (s) de cada comando shell
     "sandbox": True,             # restringe leitura/escrita de arquivos ao workspace
+    "sandbox_home_read": True,   # v3.13.1: LEITURA liberada na home (diagnósticos);
+                                 # escrita segue só no workspace; pastas sensíveis
+                                 # (~/.ssh, ~/.hermes/secrets…) continuam BLOQUEADAS
     "confirm_dangerous": True,   # pede confirmação no terminal para comandos arriscados
     "system_prompt_extra": "",   # instruções extras anexadas ao prompt de sistema
     # Conectores MCP (lista de {name, command, args, env} ou {name, url})
@@ -70,7 +73,7 @@ DEFAULTS = {
 _INT_KEYS = {"max_steps", "cmd_timeout", "port", "num_ctx", "num_predict",
              "max_tool_calls", "backups_keep", "memory_top_k"}
 _FLOAT_KEYS = {"temperature", "max_model_b"}
-_BOOL_KEYS = {"sandbox", "confirm_dangerous", "auto_start_ollama", "claude_use_ollama", "orchestrator_on", "reviewer_on", "creation_approval", "web_access", "stt_autosend", "pipeline_single_model",
+_BOOL_KEYS = {"sandbox", "sandbox_home_read", "confirm_dangerous", "auto_start_ollama", "claude_use_ollama", "orchestrator_on", "reviewer_on", "creation_approval", "web_access", "stt_autosend", "pipeline_single_model",
               "mcp_autorestart", "tool_selector"}
 _STR_KEYS = {"ollama_url", "model", "host", "auth_token", "system_prompt_extra", "claude_model", "stt_model", "stt_language", "keep_alive"}
 

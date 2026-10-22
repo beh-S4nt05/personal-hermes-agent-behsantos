@@ -848,7 +848,9 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
                      {"role": "assistant", "content": (caixa["done"] or resultado)[:2500]},
                      {"role": "user", "content":
                          "O OPERADOR reprovou a ENTREGA. Refaça a tarefa original "
-                         "com mais capricho e complete de verdade."}]
+                         "com mais capricho e complete de verdade. Use os dados JÁ "
+                         "COLETADOS na conversa (não repita chamadas de ferramenta) "
+                         "e escreva a resposta final COMPLETA com eles."}]
             resultado, veredito, problema, tent2 = _ciclo(msgs2, 1)
             execucoes += tent2
             selo2 = ("\n\n─\n🔍 *revisada — aprovada após refazer a pedido do operador*"

@@ -65,8 +65,10 @@ def _now_line() -> str:
 _ANTILOOP_NUDGE = (
     "ATENÇÃO: você já executou exatamente esta ferramenta com os mesmos "
     "argumentos e o resultado está no histórico acima. NÃO repita a chamada "
-    "nem repita o texto. Responda AGORA ao usuário, de forma direta e "
-    "completa, usando o resultado que já obteve."
+    "nem repita o texto — mas NUNCA se recuse a responder: escreva AGORA a "
+    "RESPOSTA COMPLETA ao usuário usando os dados que já obteve. "
+    "'Estou pronto para ajudar' ou 'não vou repetir' NÃO são respostas — "
+    "são falha de entrega. Cite os números/outputs coletados e conclua."
 )
 
 # Plano B caso o modelo/servidor não aceite ferramentas nativas da API:

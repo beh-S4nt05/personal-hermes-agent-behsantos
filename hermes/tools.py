@@ -216,7 +216,19 @@ def _truncate(text: str, limit: int = MAX_TOOL_OUTPUT) -> str:
     return text[:half] + f"\n… [saída truncada, {len(text)} caracteres no total] …\n" + text[-half:]
 
 
-def resolve_path(path: str, cfg) -> Path:
+# v3.13.1: pastas JAMAIS lidas pelo agente, nem com sandbox_home_read —
+# credenciais não entram no contexto do modelo
+_SENSITIVE_READ = ["~/.hermes/secrets", "~/.ssh", "~/.gnupg", "~/.config",
+                   "~/.aws", "~/.docker", "~/.netrc", "~/.git-credentials"]
+
+
+def resolve_path(path: str, cfg, write: bool = False) -> Path:
+    """Resolve caminho com as regras de sandbox.
+
+    write=True (write_file): sempre restrito ao workspace + skills.
+    write=False (read_file/list_dir): com sandbox_home_read=True, a HOME
+    inteira é LEGÍVEL (diagnósticos do sistema) — exceto pastas
+    sensíveis, que nunca são."""
     p = Path(path).expanduser()
     if not p.is_absolute():
         p = cfg.workdir / p
@@ -226,10 +238,25 @@ def resolve_path(path: str, cfg) -> Path:
         # skills ficam fora do workspace, mas são leitura/escrita liberada
         for d in getattr(cfg, "skills_dirs", []):
             allowed.append(str(Path(d).resolve()))
-        if not any(str(p) == a or str(p).startswith(a + os.sep) for a in allowed):
+        ok = any(str(p) == a or str(p).startswith(a + os.sep) for a in allowed)
+        if not ok and not write and getattr(cfg, "sandbox_home_read", True):
+            home = str(Path.home().resolve())
+            dentro_home = str(p) == home or str(p).startswith(home + os.sep)
+            sensiveis = [str(Path(s).expanduser().resolve())
+                         for s in _SENSITIVE_READ]
+            bloqueada = any(str(p) == s or str(p).startswith(s + os.sep)
+                            for s in sensiveis)
+            if bloqueada:
+                raise ToolError(
+                    f"pasta sensível bloqueada (credenciais nunca entram no "
+                    f"contexto do modelo): {p}")
+            if dentro_home:
+                return p               # leitura da home liberada (v3.13.1)
+        if not ok:
             raise ToolError(
                 f"caminho fora do workspace bloqueado pelo sandbox: {p} "
-                f"(desative 'sandbox' nas configurações para liberar)"
+                f"(para ESCRITA, use o workspace; leitura da home: "
+                f"sandbox_home_read)"
             )
     return p
 
@@ -296,7 +323,7 @@ def read_file(args: dict, cfg) -> str:
 def write_file(args: dict, cfg) -> str:
     from .backups import backup_file
 
-    p = resolve_path(str(args.get("path", "")), cfg)
+    p = resolve_path(str(args.get("path", "")), cfg, write=True)
     content = str(args.get("content", ""))
     if len(content) > 512 * 1024:
         return "ERRO: conteúdo acima do limite de 512 KB."

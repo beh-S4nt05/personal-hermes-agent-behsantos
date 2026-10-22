@@ -2418,6 +2418,73 @@ def T95_skills_do_dia_a_dia():
 
 
 @case
+def T96_fim_da_recusa_vazia():
+    """v3.13.1 🩹 BUG REAL do operador: executor respondia 'não vou
+    repetir chamadas/textos' e ENTREGAVA NADA — revisor reprovava 2x e
+    a task morria sem resposta. O nudge anti-loop e a mensagem de
+    refazer agora exigem a RESPOSTA COMPLETA com os dados já coletados."""
+    from hermes import agent as ag, orchestrator as orc
+
+    assert "NUNCA se recuse a responder" in ag._ANTILOOP_NUDGE
+    assert "NÃO são respostas" in ag._ANTILOOP_NUDGE
+    src = Path("hermes/orchestrator.py").read_text(encoding="utf-8")
+    assert "COLETADOS" in src and "JÁ " in src
+    assert "resposta final COMPLETA" in src
+
+
+@case
+def T97_leitura_da_home_e_sensiveis_bloqueados():
+    """v3.13.1 🔓🛡 BUG REAL do operador: 'busca geral no sistema' era
+    impossível — sandbox bloqueava a HOME inteira (auditoria: list_dir
+    ✖ /home/beh-solutions). Agora: LEITURA da home liberada por padrão
+    (sandbox_home_read), ESCRITA continua só no workspace e pastas
+    sensíveis (~/.ssh, ~/.hermes/secrets, ~/.config…) NUNCA são lidas —
+    credenciais não entram no contexto do modelo."""
+    from hermes.tools import ToolError, execute_tool, resolve_path
+
+    cfg = fresh()
+    assert cfg.sandbox is True and cfg.sandbox_home_read is True
+    # 1. leitura na HOME liberada
+    alvo = Path.home() / "t97-prova-leitura.txt"
+    alvo.write_text("dado do sistema", encoding="utf-8")
+    try:
+        p = resolve_path(str(alvo), cfg)           # não levanta
+        assert p == alvo.resolve()
+        r = execute_tool("read_file", {"path": str(alvo)}, cfg)
+        assert r["ok"] and "dado do sistema" in r["output"]
+        # 2. pastas sensíveis: bloqueadas mesmo para leitura
+        for sens in ("~/.ssh/config", "~/.hermes/secrets/email.json",
+                     "~/.netrc"):
+            try:
+                resolve_path(sens, cfg)
+                raise AssertionError(f"{sens} deveria estar bloqueado")
+            except ToolError as e:
+                assert "sensível" in str(e)
+        # 3. ESCRITA fora do workspace: continua bloqueada
+        try:
+            resolve_path(str(Path.home() / "t97-nao-escrever.txt"), cfg,
+                         write=True)
+            raise AssertionError("escrita na home deveria bloquear")
+        except ToolError as e:
+            assert "workspace" in str(e)
+        # 4. fora da HOME (ex.: /etc): leitura bloqueada
+        try:
+            resolve_path("/etc/passwd", cfg)
+            raise AssertionError("/etc deveria bloquear")
+        except ToolError:
+            pass
+        # 5. desligar sandbox_home_read volta ao comportamento antigo
+        cfg.update({"sandbox_home_read": False})
+        try:
+            resolve_path(str(alvo), cfg)
+            raise AssertionError("com flag off, home bloqueia")
+        except ToolError:
+            pass
+    finally:
+        alvo.unlink(missing_ok=True)
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

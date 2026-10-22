@@ -1,5 +1,36 @@
 # Changelog
 
+## v3.13.1 — 🩹🔓 dois bugs reais do campo (recusa vazia + home bloqueada)
+
+Primeira bateria real do operador no próprio notebook, com Auditoria
+como evidência. Dois bugs encontrados e corrigidos:
+
+**1. 🩹 Executor "não vou repetir" e não respondia NADA** — pedido de
+diagnóstico: o guard anti-loop dizia "não repita a chamada nem o
+texto" e o modelo respondia com uma RECUSA ("Estou pronto para
+ajudar") em vez da resposta. Revisor reprovava 2× e a task morria sem
+entregar nada (199,5s perdidos). Correção: o nudge agora é explícito
+("NUNCA se recuse a responder… 'não vou repetir' NÃO é resposta — cite
+os números coletados e conclua") e a mensagem de refazer instrui a
+usar os dados JÁ COLETADOS e escrever a resposta final COMPLETA.
+
+**2. 🔓 "Busca geral no sistema" era impossível** — o sandbox bloqueava
+a HOME inteira (auditoria: `list_dir ✖ /home/beh-solutions`), e o
+agente ficava perdido chamando sys_info 7×. Correção: nova config
+`sandbox_home_read` (padrão ligado) — LEITURA da home liberada para
+diagnósticos, ESCRITA continua só no workspace, e pastas sensíveis
+(~/.ssh, ~/.hermes/secrets, ~/.gnupg, ~/.config, ~/.netrc…) JAMAIS são
+lidas — credenciais não entram no contexto do modelo.
+
+**Dica de velocidade documentada** (RTX 2050 4 GB): `hermes config set
+num_ctx 3072` — o padrão 8192 força offload pesado do hermes3:8b para
+a CPU (0,5–0,7 tok/s medidos pelo operador); contexto menor = mais
+camadas na GPU = respostas bem mais rápidas.
+
+**Testes:** T96 (nudge e refazer exigem resposta completa) e T97
+(leitura da home ✔ · sensíveis bloqueados ✔ · escrita presa no
+workspace ✔ · flag desliga ✔). **97/97.**
+
 ## v3.13.0 — ⚡💪 autonomia barata: cache de planos + skills do dia a dia
 
 Pedido do operador: agente executando tarefas do dia a dia de maneira
