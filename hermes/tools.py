@@ -15,6 +15,8 @@ import platform
 import re
 import shutil
 import subprocess
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -228,6 +230,64 @@ _SENSITIVE_READ = ["~/.hermes/secrets", "~/.ssh", "~/.gnupg", "~/.config",
                    "~/.aws", "~/.docker", "~/.netrc", "~/.git-credentials"]
 
 
+# ──────────── v3.15.0 (PR#1): PASTA DO PROJETO declarada no pedido ────────────
+# O operador passa a referência (já criada ou a criar); o Hermes percorre/cria
+# o caminho em QUALQUER ponto do diretório e trabalha lá — sem interferir na
+# própria configuração (~/.hermes). Escopo é por THREAD: tasks concorrentes
+# não vazam escopo umas para as outras.
+
+_SCOPE_DENY = ("/tmp", "/proc", "/sys", "/dev", "/etc", "/var", "/usr",
+               "/boot", "/run", "/snap")
+_TASK_SCOPE = threading.local()
+
+
+def validar_escopo_projeto(path, cfg=None) -> Path:
+    """Valida (sem criar) a pasta de projeto declarada pelo operador."""
+    p = Path(path).expanduser()
+    if not p.is_absolute():
+        raise ToolError(
+            "caminho de projeto deve ser absoluto (ex.: /media/Arquivos/projetos "
+            "/app ou ~/projetos/app)")
+    p = p.resolve()
+    if p == Path.home().resolve():
+        raise ToolError(
+            "escopo recusado: a HOME inteira não pode ser o workspace da task — "
+            "aponte a pasta do projeto")
+    for sysdir in _SCOPE_DENY:
+        if p == Path(sysdir) or Path(sysdir) in p.parents:
+            raise ToolError(f"escopo recusado: {sysdir} é diretório do sistema")
+    if cfg is not None:
+        d = Path(cfg.data_dir).resolve()
+        if p == d or d in p.parents:
+            raise ToolError(
+                "escopo recusado: ~/.hermes é a configuração do Hermes — o "
+                "projeto não pode apontar para cá")
+    return p
+
+
+@contextmanager
+def task_scope(path, cfg=None):
+    """Ativa a pasta do projeto para ESTA task: percorre/cria o caminho,
+    vira o cwd dos comandos e libera leitura+escrita DENTRO dela."""
+    p = validar_escopo_projeto(path, cfg)
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ToolError(
+            f"não foi possível criar/percorrer a pasta do projeto {p}: "
+            f"{exc}") from exc
+    _TASK_SCOPE.workdir = p
+    try:
+        yield p
+    finally:
+        _TASK_SCOPE.workdir = None
+
+
+def scope_dir() -> Path | None:
+    """Pasta do projeto ativa nesta thread (None = workspace padrão)."""
+    return getattr(_TASK_SCOPE, "workdir", None)
+
+
 def resolve_path(path: str, cfg, write: bool = False) -> Path:
     """Resolve caminho com as regras de sandbox.
 
@@ -236,14 +296,17 @@ def resolve_path(path: str, cfg, write: bool = False) -> Path:
     inteira é LEGÍVEL (diagnósticos do sistema) — exceto pastas
     sensíveis, que nunca são."""
     p = Path(path).expanduser()
+    esc = scope_dir()
     if not p.is_absolute():
-        p = cfg.workdir / p
+        p = (esc or cfg.workdir) / p   # v3.15.0: relativo → pasta do projeto
     p = p.resolve()
     if cfg.sandbox:
         allowed = [str(cfg.workdir)]
         # skills ficam fora do workspace, mas são leitura/escrita liberada
         for d in getattr(cfg, "skills_dirs", []):
             allowed.append(str(Path(d).resolve()))
+        if esc is not None:
+            allowed.append(str(esc))  # v3.15.0: pasta do projeto desta task
         ok = any(str(p) == a or str(p).startswith(a + os.sep) for a in allowed)
         if not ok and not write and getattr(cfg, "sandbox_home_read", True):
             home = str(Path.home().resolve())
@@ -294,7 +357,7 @@ def run_command(args: dict, cfg) -> str:
             text=True,
             timeout=timeout,
             check=False,
-            cwd=str(cfg.workdir),
+            cwd=str(scope_dir() or cfg.workdir),  # v3.15.0: projeto da task
         )
     except subprocess.TimeoutExpired:
         return f"$ {command}\n[TIMEOUT] execução excedeu {timeout}s e foi cancelada."

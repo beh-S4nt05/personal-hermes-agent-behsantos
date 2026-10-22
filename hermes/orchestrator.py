@@ -444,6 +444,68 @@ def _goals_path(cfg) -> Path:
     return cfg.data_dir / "session_goals.json"
 
 
+# ──────────── v3.15.0 (PR#1): detecção da pasta do projeto no pedido ────────────
+
+_PROJETO_RE = re.compile(
+    r"(?:^|[\s'\"(\[])(~/[^\s'\"()\[\]]+|/[A-Za-z][^\s'\"()\[\]]*)")
+
+
+def _detectar_projetos(message: str) -> list[Path]:
+    """Referências de pasta no pedido (absolutas ou ~/...), em ordem.
+
+    Ignora URLs (nada precede a barra), frações/datas (24/09) e âncoras
+    de markdown. O operador declara o projeto assim: 'crie X em
+    /media/Arquivos/projetos/app' ou '~/projetos/app'."""
+    achados: list[Path] = []
+    for m in _PROJETO_RE.finditer(message or ""):
+        cand = m.group(1).rstrip(".,;:!?")
+        if cand.startswith("~"):
+            cand = str(Path.home() / cand[2:])
+        if len(cand) < 4 or not re.search(r"[A-Za-z]", cand):
+            continue
+        p = Path(cand)
+        if p.exists() and p.is_file():
+            p = p.parent            # referência a arquivo → pasta dele
+        if p not in achados:
+            achados.append(p)
+    return achados
+
+
+def _ambiente_txt(projeto: Path) -> str:
+    """v3.15.0 (PR#1): ambiente do projeto injetado no executor — o padrão
+    do Claude Code (cwd, data, SO, git, memória do projeto), enxuto."""
+    import platform
+    import subprocess
+    linhas = ["[AMBIENTE DA TAREFA]",
+              f"Pasta do projeto (cwd): {projeto}",
+              f"Data: {time.strftime('%Y-%m-%d')} · SO: {platform.platform()}"]
+    if (projeto / ".git").exists():
+        try:
+            r = subprocess.run(["git", "-C", str(projeto), "status", "--short"],
+                               capture_output=True, text=True, timeout=6,
+                               check=False)
+            b = subprocess.run(["git", "-C", str(projeto), "branch",
+                                "--show-current"], capture_output=True,
+                               text=True, timeout=6, check=False)
+            alter = "\n".join((r.stdout or "").strip().splitlines()[:5])
+            git = f"Git: branch {(b.stdout or '').strip() or '?'}"
+            linhas.append(git + (f" · alterações:\n{alter}" if alter
+                                 else " (árvore limpa)"))
+        except Exception:  # noqa: BLE001
+            pass
+    hm = projeto / "hermes.md"
+    if hm.exists():
+        try:
+            conteudo = hm.read_text(encoding="utf-8").strip()[:1500]
+            if conteudo:
+                linhas.append("Memória do projeto (hermes.md — convenções do "
+                              "operador):\n" + conteudo)
+        except OSError:
+            pass
+    linhas.append("Paths relativos resolvem DENTRO da pasta do projeto.")
+    return "\n".join(linhas)
+
+
 def load_goals(cfg) -> None:
     """v3.11: goals de sessão voltam do disco ao subir o servidor."""
     try:
@@ -696,6 +758,23 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
             "message": f"🔁 task {tid} RETOMADA após restart — plano já aprovado pelo operador"})
     activity.log(cfg, "chat", f"🎯 task {tid} ({tipo}) — {objetivo[:80]}")
 
+    # ── v3.15.0 (PR#1): pasta do projeto declarada no pedido ──
+    from .tools import ToolError, task_scope, validar_escopo_projeto
+    projeto = None
+    cands_proj = _detectar_projetos(message)
+    for cand in cands_proj:
+        try:
+            projeto = validar_escopo_projeto(cand, cfg)
+            break
+        except ToolError:
+            continue
+    if cands_proj and projeto is None:
+        ev({"type": "note",
+            "message": "⚠ pasta declarada no pedido não pôde ser usada "
+                       "(sistema/configuração do Hermes) — executando no "
+                       "workspace padrão"})
+    projeto_txt = ("\n" + _ambiente_txt(projeto)) if projeto is not None else ""
+
     def _plano_txt() -> str:
         pt = ("[PLANO DO ORQUESTRADOR — ordem de serviço de um sênior]\n"
               f"Objetivo: {objetivo}")
@@ -712,7 +791,7 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
                "que os dados SIGNIFICAM em português claro (ex.: 'a memória "
                "está 41% em uso, sobra 9 GB — saudável'), sem jargão e sem "
                "colar saída crua sem explicação.")
-        return pt + goal_txt + skills_txt
+        return pt + goal_txt + skills_txt + projeto_txt
 
     # ── 🔒 portão 1: aprovação do PLANO (só tarefas de criação) ──
     aprovacao = "auto"
@@ -838,7 +917,23 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
 
     mensagens = history[-6:] + [{"role": "user",
                                  "content": f"{message}\n\n{_plano_txt()}"}]
-    resultado, veredito, problema, tentativas = _ciclo(mensagens, max_tentativas)
+    if projeto is not None:
+        # v3.15.0 (PR#1): executa DENTRO da pasta do projeto — cwd dos
+        # comandos, leitura/escrita liberadas só nela, caminho criado se
+        # ainda não existir. Fora dela, nada muda.
+        try:
+            with task_scope(projeto, cfg):
+                ev({"type": "note",
+                    "message": f"📁 workspace da task: {projeto} — pasta "
+                               "percorrida/criada pelo Hermes"})
+                resultado, veredito, problema, tentativas = _ciclo(
+                    mensagens, max_tentativas)
+        except ToolError as exc:
+            ev({"type": "note", "message": f"⚠ {exc} — workspace padrão"})
+            resultado, veredito, problema, tentativas = _ciclo(
+                mensagens, max_tentativas)
+    else:
+        resultado, veredito, problema, tentativas = _ciclo(mensagens, max_tentativas)
     execucoes = tentativas
 
     # ── 🔒 portão 2: entrega editável (só criação aprovada) ──

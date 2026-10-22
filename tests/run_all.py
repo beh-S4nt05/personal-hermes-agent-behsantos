@@ -2762,6 +2762,144 @@ def T106_update_defende_zip_slip():
 
 
 @case
+def T107_detectar_pasta_do_projeto():
+    """v3.15.0 (PR#1): referência de pasta no pedido → workspace da task;
+    URLs, frações e pastas de sistema/configuração não valem."""
+    from hermes.orchestrator import _detectar_projetos
+    from hermes.tools import ToolError, validar_escopo_projeto
+
+    cands = _detectar_projetos(
+        "crie uma calculadora node com POO em "
+        "/media/Arquivos/projetos/2026/node_calculadora_simples")
+    assert cands and cands[0].name == "node_calculadora_simples", cands
+    assert _detectar_projetos("crie uma calculadora javascript com POO") == []
+    assert _detectar_projetos("veja https://exemplo.com/page agora") == []
+    assert _detectar_projetos("atualize 24/09 e me avise") == []
+    cands2 = _detectar_projetos("rode os testes em ~/projetos/app-node")
+    assert cands2 and cands2[0].name == "app-node" and "projetos" in str(cands2[0])
+    # pastas ocultas/com pontos no nome não podem ser truncadas no 1º ponto
+    cands3 = _detectar_projetos("crie em /home/user/.projetos-2026/app.calc.")
+    assert cands3 and cands3[0].name == "app.calc", cands3
+    # sistema/config recusados na validação
+    cfg = fresh()
+    for ruim in ("/etc/app", "/tmp/x", str(Path.home()), str(cfg.data_dir)):
+        try:
+            validar_escopo_projeto(ruim, cfg)
+            raise AssertionError(f"aceitou escopo inválido: {ruim}")
+        except ToolError:
+            pass
+    # projeto DENTRO da home é legítimo (só a raiz home é negada)
+    ok = validar_escopo_projeto(str(Path.home() / "projetos" / "app"), cfg)
+    assert ok.name == "app"
+
+
+@case
+def T108_escopo_de_projeto_funcional():
+    """v3.15.0 (PR#1): dentro do escopo — cwd e escrita seguem a pasta do
+    projeto; fora dele o sandbox continua; ~/.hermes intocável; escopo é
+    thread-local (tasks concorrentes não vazam)."""
+    import os as _os
+    import shutil as _sh
+    import threading as _th
+    from hermes import tools as T
+
+    cfg = fresh()
+    proj = Path.home() / f".hermes-t108-{_os.getpid()}"
+    _sh.rmtree(proj, ignore_errors=True)
+    try:
+        with T.task_scope(proj, cfg) as esc:
+            assert esc == proj and proj.exists()     # criada pelo harness
+            T.execute_tool("write_file",
+                           {"path": "calc.js", "content": "console.log(5)"},
+                           cfg)
+            assert (proj / "calc.js").exists()       # escrita liberada lá
+            out = T.execute_tool("run_command", {"command": "pwd"}, cfg)
+            assert str(proj) in out.get("output", "")   # cwd = projeto
+            lido = T.execute_tool("read_file", {"path": "calc.js"}, cfg)
+            assert "console.log" in lido.get("output", "")
+            res = {}
+            def _outra():
+                res["esc"] = T.scope_dir()
+            tr = _th.Thread(target=_outra); tr.start(); tr.join()
+            assert res["esc"] is None and T.scope_dir() == proj  # thread-local
+        # fora do escopo: escrita fora do workspace volta a ser bloqueada
+        try:
+            T.resolve_path(str(proj / "fora.txt"), cfg, write=True)
+            raise AssertionError("escrita fora do escopo foi liberada")
+        except T.ToolError:
+            pass
+        # configuração do Hermes NUNCA vira escopo de projeto
+        try:
+            with T.task_scope(cfg.data_dir, cfg):
+                pass
+            raise AssertionError("~/.hermes aceito como escopo")
+        except T.ToolError:
+            pass
+    finally:
+        _sh.rmtree(proj, ignore_errors=True)
+
+
+@case
+def T109_pipeline_na_pasta_do_projeto():
+    """v3.15.0 (PR#1) E2E: pedido com referência de pasta → executor recebe
+    AMBIENTE (cwd + hermes.md), task roda com escopo na pasta (evento
+    visível), pasta inexistente é CRIADA — e sem referência nada muda."""
+    import os as _os
+    import shutil as _sh
+    from hermes import orchestrator as orc
+
+    cfg = fresh(creation_approval=False)
+    proj = Path.home() / f".hermes-t109-{_os.getpid()}"
+    proj2 = Path.home() / f".hermes-t109b-{_os.getpid()}"
+    _sh.rmtree(proj, ignore_errors=True)
+    _sh.rmtree(proj2, ignore_errors=True)
+    proj.mkdir(parents=True)
+    (proj / "hermes.md").write_text(
+        "Convenção: código em ESM e testes com node.", encoding="utf-8")
+    capturado = {}
+
+    class _Ag:
+        model_override = None
+        def run(self, msgs, on_event=None, cancel=None):
+            capturado["prompt"] = msgs[-1]["content"]
+            on_event({"type": "done",
+                      "message": "arquivo teste.txt criado com 'olá' (saída real)"})
+            return "arquivo teste.txt criado com 'olá' (saída real)"
+
+    evs = []
+    try:
+        final = orc.run_pipeline(_Ag(), cfg,
+                                 f"crie o arquivo teste.txt em {proj} com o texto olá",
+                                 [], on_event=evs.append)
+        notas = [str(e.get("message", "")) for e in evs if e.get("type") == "note"]
+        assert any("📁" in n and str(proj) in n for n in notas), notas[:6]
+        assert "Pasta do projeto (cwd)" in capturado["prompt"]     # ambiente
+        assert "Convenção: código em ESM" in capturado["prompt"]   # hermes.md
+        assert final
+        # pasta inexistente é criada pelo harness na hora da execução
+        evs2 = []
+        orc.run_pipeline(_Ag(), cfg, f"crie o app em {proj2}",
+                         [], on_event=evs2.append)
+        assert proj2.exists()
+        notas2 = [str(e.get("message", "")) for e in evs2 if e.get("type") == "note"]
+        assert any("📁" in n and str(proj2) in n for n in notas2)
+        # pedido SEM referência de pasta: nada de projeto
+        evs3 = []
+        orc.run_pipeline(_Ag(), cfg, "verifique o uso de disco", [],
+                         on_event=evs3.append)
+        assert not any("📁" in str(e.get("message", "")) for e in evs3)
+        # pasta RECUSADA (configuração do Hermes): avisa e segue no padrão
+        evs4 = []
+        orc.run_pipeline(_Ag(), cfg, f"crie algo dentro de {cfg.data_dir}",
+                         [], on_event=evs4.append)
+        notas4 = [str(e.get("message", "")) for e in evs4 if e.get("type") == "note"]
+        assert any("⚠" in n for n in notas4), notas4[:6]
+    finally:
+        _sh.rmtree(proj, ignore_errors=True)
+        _sh.rmtree(proj2, ignore_errors=True)
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

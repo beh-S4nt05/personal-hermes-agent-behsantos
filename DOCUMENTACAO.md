@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.14.1** · gerado em 22/10/2026 · este documento é extraído do
+**Versão 3.14.2** · gerado em 22/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -103,7 +103,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.14.1)
+## 3. Modificações — o que foi feito (v1.0.0 → v3.14.2)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -111,6 +111,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v3.14.2** | 🗺 Mapa da aplicação + auditoria profunda (12 correções) |
 | **v3.14.1** | 🎭✦ Claude sênior com skills e goal (fim do "não sou especialista") |
 | **v3.14.0** | 🧪 passada de QA sênior: análise estática + QA do QA + matriz de todos os modelos |
 | **v3.13.3** | 🔬 código só entrega executado + `hermes selftest` (LLM real) |
@@ -264,6 +265,8 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `_next_id(cfg)` | — |
 | `list_tasks(cfg, limit)` | — |
 | `_goals_path(cfg)` | — |
+| `_detectar_projetos(message)` | Referências de pasta no pedido (absolutas ou ~/...), em ordem. Ignora URLs (nada precede a barra), frações/datas (24/09… |
+| `_ambiente_txt(projeto)` | v3.15.0 (PR#1): ambiente do projeto injetado no executor — o padrão do Claude Code (cwd, data, SO, git, memória do proj… |
 | `load_goals(cfg)` | v3.11: goals de sessão voltam do disco ao subir o servidor. |
 | `set_goal(session_id, texto, cfg)` | — |
 | `get_goal(session_id, cfg)` | — |
@@ -427,6 +430,9 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `is_dangerous(command)` | — |
 | `touches_secrets(command)` | — |
 | `_truncate(text, limit)` | — |
+| `validar_escopo_projeto(path, cfg)` | Valida (sem criar) a pasta de projeto declarada pelo operador. |
+| `task_scope(path, cfg)` | Ativa a pasta do projeto para ESTA task: percorre/cria o caminho, vira o cwd dos comandos e libera leitura+escrita DENT… |
+| `scope_dir()` | Pasta do projeto ativa nesta thread (None = workspace padrão). |
 | `resolve_path(path, cfg, write)` | Resolve caminho com as regras de sandbox. write=True (write_file): sempre restrito ao workspace + skills. write=False (… |
 | `run_command(args, cfg)` | — |
 | `read_file(args, cfg)` | — |

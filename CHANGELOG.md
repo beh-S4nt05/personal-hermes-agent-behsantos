@@ -1,5 +1,32 @@
 # Changelog
 
+## PR #1 (v3.15.0-rc1) — 📁 pasta do projeto: trabalhe onde o operador mandar
+
+Regra do operador: ao criar projeto/aplicativo, ele passa a referência de
+pasta (já criada ou a criar) no próprio pedido — o agente percorre/cria o
+caminho em qualquer ponto do diretório, sem interferir na própria
+configuração. Era a falha de campo da calculadora (`/media/Arquivos/
+projetos/...` nunca alcançada).
+
+- **Detecção**: referências de pasta no pedido (absolutas ou `~/...`);
+  URLs, datas (24/09) e pontuação final ignoradas. Vários candidatos são
+  validados em ordem.
+- **`task_scope`** (thread-local): percorre/cria o caminho, vira o cwd
+  dos comandos e libera leitura+escrita DENTRO da pasta — só desta task.
+  Tasks concorrentes não vazam escopo.
+- **Blindagem**: home raiz, `~/.hermes` (configuração) e diretórios de
+  sistema nunca viram escopo; sandbox segue valendo fora da pasta.
+- **Ambiente injetado no executor** (padrão Claude Code): cwd, data, SO,
+  git do projeto (branch + alterações) e **`hermes.md`** — memória do
+  projeto com as convenções do operador.
+- Evento visível `📁 workspace da task: ...`; pasta recusada → `⚠` e
+  segue no workspace padrão.
+
+**Testes:** T107 (detecção: pontos no caminho, URLs/datas ignoradas,
+sistema/config recusados), T108 (escopo funcional: cwd, escrita,
+thread-local, pós-escopo bloqueado), T109 (E2E: ambiente + hermes.md no
+prompt, pasta criada, sem referência nada muda). **109/109.**
+
 ## v3.14.2 — 🗺 Mapa da aplicação + auditoria profunda (12 correções)
 
 Pedido do operador: antes de novas melhorias, criar mapas da aplicação
