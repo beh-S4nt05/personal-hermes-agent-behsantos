@@ -1744,7 +1744,7 @@ def serve(cfg: Config, host: str, port: int) -> None:
     try:
         from waitress import serve as _wserve
 
-        print(f"  ⚙ servidor: waitress (produção)")
+        print("  ⚙ servidor: waitress (produção)")
         _wserve(app, host=host, port=port, threads=16)
     except ImportError:
         app.run(host=host, port=port, threaded=True, debug=False)

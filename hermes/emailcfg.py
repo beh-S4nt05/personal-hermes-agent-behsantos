@@ -13,7 +13,6 @@ Segurança das credenciais — projeto à prova de vazamento:
 
 from __future__ import annotations
 
-import base64
 import imaplib
 import json
 import os

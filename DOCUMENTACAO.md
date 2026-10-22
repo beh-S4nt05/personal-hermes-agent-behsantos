@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.13.2** · gerado em 22/10/2026 · este documento é extraído do
+**Versão 3.13.3** · gerado em 22/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -103,7 +103,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.13.2)
+## 3. Modificações — o que foi feito (v1.0.0 → v3.13.3)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -111,6 +111,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v3.13.3** | 🔬 código só entrega executado + `hermes selftest` (LLM real) |
 | **v3.13.2** | 🔎 diagnóstico do dispositivo em UMA chamada |
 | **v3.13.1** | 🩹🔓 dois bugs reais do campo (recusa vazia + home bloqueada) |
 | **v3.13.0** | ⚡💪 autonomia barata: cache de planos + skills do dia a dia |

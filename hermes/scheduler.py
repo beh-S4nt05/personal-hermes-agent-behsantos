@@ -516,7 +516,6 @@ class Scheduler:
     # ---------------------------------------------------- watcher (gatilho)
     def _watch_new_files(self, entry: dict) -> list[str]:
         """Arquivos novos que casam com o padrão desde a última verificação."""
-        import glob as _glob
         trig = entry.get("trigger") or {}
         path = str(trig.get("path") or "").strip()
         pattern = str(trig.get("glob") or "*").strip() or "*"

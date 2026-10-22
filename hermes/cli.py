@@ -310,13 +310,13 @@ def cmd_memory_import(args) -> None:
         texto = arq.read_text(encoding="utf-8")
     except OSError as exc:
         _fail(f"não consegui ler {arq}: {exc}")
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
     if arq.suffix == ".json":
         try:
             dados = _json.loads(texto)
         except ValueError as exc:
             _fail(f"JSON inválido: {exc}")
-            raise SystemExit(1)
+            raise SystemExit(1) from exc
         if isinstance(dados, dict):
             dados = dados.get("fatos") or dados.get("facts") or []
         fatos = [str(f) for f in dados]
@@ -334,7 +334,9 @@ def cmd_selftest(args) -> None:
     """v3.13.3: bateria de aceitação com LLM REAL (pula sem Ollama)."""
     from .selftest import run as run_selftest
     raise SystemExit(run_selftest(_cfg(args),
-                                  timeout=int(getattr(args, "timeout", 240))))
+                                  timeout=int(getattr(args, "timeout", 240)),
+                                  all_models=bool(getattr(args, "all_models",
+                                                          False))))
 
 
 def cmd_skills_audit(args) -> None:
@@ -501,6 +503,9 @@ def build_parser() -> argparse.ArgumentParser:
                             "recusa, com evidência (pula se Ollama desligado)")
     p.add_argument("--timeout", type=int, default=240,
                    help="segundos máximos por cenário (padrão 240)")
+    p.add_argument("--all-models", action="store_true",
+                   help="🧪 testa TODOS os modelos instalados e mostra a "
+                        "matriz (modelo × cenário) com recomendação")
     p.set_defaults(fn=cmd_selftest)
 
     p = sub.add_parser("doctor", help="diagnostica a conexão Ollama↔Python (com geração de teste)")

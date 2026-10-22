@@ -2562,6 +2562,70 @@ def T99_codigo_verificado_e_selftest():
 
 
 @case
+def T100_qa_do_qa_selftest_falha_quando_deve():
+    """v3.14 🧪 QA do QA — um teste que não consegue falhar não prova
+    nada. Os checkers do selftest têm que FLAGEAR as falhas reais do
+    campo (recusa literal do transcript, código sem execução, dado
+    errado) e NÃO acusar as entregas boas."""
+    from hermes import selftest as st
+
+    cen = {c["nome"]: c for c in st._cenarios()}
+    # 1. a RECUSA REAL do transcript do operador é detectada
+    recusa_real = ("Entendido. Não vou repetir chamadas ou textos já "
+                   "fornecidos. Estou pronto para ajudar com qualquer "
+                   "outra solicitação ou comando que você tenha.")
+    assert any(r in recusa_real.lower() for r in st._RECUSA)
+    # 2. código sem execução → flagrado; com execução e saída → passa
+    cod = cen["código verificado (executa e mostra saída)"]
+    problemas = cod["checa"]("aqui está o código:\nprint(2+3)", [])
+    assert len(problemas) == 3, problemas
+    ev_ok = [{"type": "tool_start", "name": "write_file"},
+             {"type": "tool_start", "name": "run_command"}]
+    assert cod["checa"]("escrevi soma.py e executei — SAÍDA: 5", ev_ok) == []
+    # 3. dados: número certo + leitura real → passa; errado sem ler → flagra
+    dad = cen["dados reais (lê e calcula certo)"]
+    ev_l = [{"type": "tool_start", "name": "read_file"}]
+    assert dad["checa"]("li o dados.csv — o total da coluna valor é 60", ev_l) == []
+    assert len(dad["checa"]("o total é 50", [])) == 2
+    # 4. diagnóstico: curto sem ferramenta → flagra (alucinação)
+    diag = cen["diagnóstico do dispositivo"]
+    assert len(diag["checa"]("tudo ok por aqui", [])) == 2
+    # 5. conhecimento e memória
+    assert cen["conhecimento (responde completo)"]["checa"]("curto", [])
+    assert cen["memória (guarda e usa)"]["checa"](
+        "seu apelido é... hmm", []) == ["apelido não foi lembrado na 2ª conversa"]
+    # 6. recomendação: mais ✔ ganha; empate → mais rápido
+    r = {"a": {"c1": True, "c2": True}, "b": {"c1": True, "c2": False}}
+    assert st._recomenda(r, {"a": 10, "b": 5}) == "a"
+    r2 = {"a": {"c1": True}, "b": {"c1": True}}
+    assert st._recomenda(r2, {"a": 8, "b": 30}) == "a"
+    assert st._recomenda({"x": {"c1": False}}, {"x": 1}) is None
+
+
+@case
+def T101_matriz_de_todos_os_modelos():
+    """v3.14 🧪 `hermes selftest --all-models`: matriz modelo × cenário
+    com recomendação — a resposta à pergunta 'testes de todos os
+    modelos'. Em mock/sem Ollama pula limpo (nunca mente)."""
+    from hermes import selftest as st
+
+    saida = []
+    assert st.run(fresh(), print_fn=saida.append) == 0
+    assert any("mock" in s.lower() for s in saida)
+    saida = []
+    assert st.run(fresh(), all_models=True, print_fn=saida.append) == 0
+    assert any("mock" in s.lower() for s in saida)      # pulou, não mentiu
+    # a flag existe no CLI
+    import subprocess as _sp
+    r = _sp.run(["./.venv/bin/hermes", "selftest", "--help"],
+                capture_output=True, text=True, timeout=30)
+    assert "--all-models" in r.stdout
+    # a matriz formata cabeçalho com os 5 cenários
+    nomes = [c["nome"].split(" (")[0] for c in st._cenarios()]
+    assert len(nomes) == 5 and "diagnóstico" in nomes[0]
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

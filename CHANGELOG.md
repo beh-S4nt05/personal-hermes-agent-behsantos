@@ -1,5 +1,39 @@
 # Changelog
 
+## v3.14.0 — 🧪 passada de QA sênior: análise estática + QA do QA + matriz de todos os modelos
+
+Pedido do operador: validação meticulosa para situações REAIS, com
+testes de todos os modelos e mínimo de alucinação.
+
+**1. 🔍 Análise estática (ruff) em todo o código** — 29 achados,
+todos triados e resolvidos: 4 reais (docstring quebrada no autoselect
+que veio da v3.11.4, `raise` sem `from` no memory import, variável
+vestigial no claude_agent, closures B023 no selftest) + 25 cosméticos
+(imports mortos, f-strings vazias, item duplicado em set). Código
+limpo no conjunto E9/F/B/PLE.
+
+**2. 🧪 `hermes selftest --all-models`** — a matriz: TODOS os modelos
+instalados × 5 cenários de campo (diagnóstico, código verificado,
+dados reais, conhecimento, memória), com tempo por modelo e
+RECOMENDAÇÃO (mais ✔; empate → mais rápido). Sai a resposta
+mensurável para "qual modelo alucina menos na MINHA máquina".
+
+**3. ✅ QA do QA (T100)** — os checkers do selftest foram testados
+contra as falhas REAIS do campo: a recusa literal do transcript do
+operador é flagrada; código sem execução flagra; dado errado flagra;
+entregas boas passam limpas. Um teste que não consegue falhar não
+prova nada — agora ele falha quando deve.
+
+**4. ✅ Validação EFETIVA (não só lógica)** — executada ao vivo:
+SSE real pela rede (waitress de verdade: 59 eventos, done chegou
+exatamente 1× — o garantidor validado na pilha real), roundtrip real
+de ferramentas (write_file + run_command com saída "5" real), sandbox
+bloqueando escrita fora do workspace, e diagnostico_sistema já
+validado com dados reais do sistema.
+
+**Testes:** T100 (QA do QA), T101 (matriz: pula limpa em mock, flag
+--all-models, 5 cenários, recomendação). **101/101.**
+
 ## v3.13.3 — 🔬 código só entrega executado + `hermes selftest` (LLM real)
 
 Pergunta do operador: "e se eu pedir OUTROS tipos de tarefa (geração

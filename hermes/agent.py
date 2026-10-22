@@ -21,7 +21,7 @@ from .config import Config
 from .mcp_client import get_manager
 from .ollama_client import OllamaError, get_client
 from .skills import SkillLoader
-from .tools import TOOLS, TOOL_NAMES, execute_tool, tool_summary
+from .tools import TOOLS, TOOL_NAMES, execute_tool
 
 SYSTEM_PROMPT = """\
 Você é o Hermes, um agente de operação Linux controlável por terminal e por uma \
@@ -155,7 +155,7 @@ class Agent:
             s = "".join(c for c in s if c.isascii())
             stop = {"de", "da", "do", "para", "com", "que", "uma", "um", "os",
                     "as", "em", "no", "na", "por", "e", "o", "a", "meu", "minha",
-                    "the", "of", "to", "for", "and", "a", "in"}
+                    "the", "of", "to", "for", "and", "in"}
             return {w for w in re.split(r"[^a-z0-9]+", s) if len(w) > 2 and w not in stop}
 
         fn = tool.get("function") or {}

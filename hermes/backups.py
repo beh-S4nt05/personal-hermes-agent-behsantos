@@ -134,7 +134,6 @@ def prune(cfg, origin: Path, keep: int | None = None) -> int:
 
 # ferramenta exposta ao agente: listar/restaurar pelo próprio chat
 def tool_backups(args: dict, cfg) -> str:
-    import json as _json
     act = str(args.get("action") or "list")
     if act == "list":
         items = list_backups(cfg, str(args.get("path") or "") or None)[:30]

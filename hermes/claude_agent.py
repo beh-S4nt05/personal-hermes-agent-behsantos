@@ -259,7 +259,6 @@ def _run_impl(cfg, message, history, on_event, cancel, _light=None,
 
     prompt = _build_prompt(message, history)
     ollama_mode = bool(getattr(cfg, "claude_use_ollama", True))
-    fell_back = _light is False            # veio do fallback (CLI antiga)
     use_light = ollama_mode and (_light if _light is not None else True)
     ver = _cli_version(exe)
     try:

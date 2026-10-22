@@ -63,7 +63,7 @@ def choose(models: list[str], chat_atual: str = "",
 
     v3.11.4: max_b filtra modelos acima do teto de tamanho (B) — o
     auto-assign jamais entrega um modelo que não roda bem no hardware
-    do operador só porque é "maior".""",
+    do operador só porque é "maior"."""
     out: dict[str, tuple[str, str]] = {}
     if max_b is not None:
         models = [m for m in models if _params(str(m)) <= float(max_b)]

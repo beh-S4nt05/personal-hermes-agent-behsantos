@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 
 from .agent import Agent
 from .config import Config

@@ -71,7 +71,7 @@ def run_checks(cfg) -> list[dict]:
                 detail = f"CLI {v} é antiga — modo leve indisponível"
                 fix = "claude update"
             else:
-                detail = f"CLI presente mas sem versão legível"
+                detail = "CLI presente mas sem versão legível"
         except Exception as exc:  # noqa: BLE001
             detail = str(exc)[:120]
     checks.append({
@@ -104,6 +104,6 @@ def summary(checks: list[dict]) -> str:
         parts.append(f"✖ {len(problems)} problema(s): " +
                      ", ".join(c["name"] for c in problems))
     if opts:
-        parts.append(f"⚠ opcional(is): " +
+        parts.append("⚠ opcional(is): " +
                      ", ".join(c["name"] for c in opts))
     return " · ".join(parts)

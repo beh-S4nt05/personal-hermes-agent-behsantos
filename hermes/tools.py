@@ -13,10 +13,8 @@ import html as _html
 import os
 import platform
 import re
-import shlex
 import shutil
 import subprocess
-import time
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
