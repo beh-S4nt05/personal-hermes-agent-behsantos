@@ -62,7 +62,7 @@ def run_checks(cfg) -> list[dict]:
         import subprocess as _sp
         try:
             out = _sp.run([exe, "--version"], capture_output=True, text=True,
-                          timeout=20)
+                          timeout=20, check=False)
             m = _re.search(r"(\d+)\.(\d+)\.", out.stdout or "")
             if m and (int(m.group(1)), int(m.group(2))) >= (2, 1):
                 ok, detail = True, f"CLI {m.group(0)[:-1]} (modo leve disponível)"

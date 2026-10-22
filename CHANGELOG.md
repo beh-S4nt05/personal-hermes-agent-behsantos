@@ -1,5 +1,41 @@
 # Changelog
 
+## v3.14.2 — 🗺 Mapa da aplicação + auditoria profunda (12 correções)
+
+Pedido do operador: antes de novas melhorias, criar mapas da aplicação
+com contexto de cada ponto, entender o funcionamento profundamente e
+caçar as pequenas falhas.
+
+**Novo documento: `MAPA_APLICACAO.md`** — mapa geral, módulos com papel
+e dependências, fluxo do chat (pipeline), fluxo do Claude Code, skills,
+memória, dados em disco, 76 rotas da API, camadas de segurança,
+agendador, MCP, update/backups, testes e as decisões de arquitetura
+(incluindo limites conhecidos).
+
+**Auditoria**: grafo de imports completo · 161 achados de lint triados
+um a um (111 intencionais — sandbox defensivo) · persistência ·
+scheduler (sem race de disparo duplo — flag running gravada antes de
+executar) · auth 71/71 rotas · SSE · cleanup de processos · sandbox de
+caminhos · update.
+
+**Correções:**
+1. 🐛 **/goal ecoado 3× com linhas duplicadas** (bug de campo): cada
+   Enter durante a resposta disparava um POST novo (runSlash sem
+   guarda) e o comando era renderizado 2× (span + prefixo). Corrigido
+   na raiz, com guarda e render único.
+2. `set_goal` e `_pending_save` agora gravam **tmp+replace atômico**
+   (crash não corrompe goals/aprovações).
+3. Processo do Claude recolhido no finally (`wait`+`kill`) — sem zombie.
+4. fd do log do Ollama fechado no pai após spawn (vazamento por boot).
+5. Auto-update defende **zip-slip** (`_assert_zip_seguro`, testado com
+   zip malicioso).
+6-12. import deprecated→collections.abc · import morto removido ·
+   mcp-servers executáveis · if aninhado/startswith/check=False
+   explicitados.
+
+**Testes:** T104 (goal sem eco, funcional), T105 (escrita atômica +
+recolhimento de processo + fd), T106 (zip-slip). **106/106.**
+
 ## v3.14.1 — 🎭✦ Claude sênior com skills e goal (fim do "não sou especialista")
 
 Pergunta do operador: como os agentes ativos estão usando as skills —

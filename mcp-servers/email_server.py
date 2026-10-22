@@ -18,7 +18,6 @@ Stdlib pura (imaplib/smtplib/email) — zero dependências extras.
 
 from __future__ import annotations
 
-import base64
 import email
 import email.header
 import imaplib

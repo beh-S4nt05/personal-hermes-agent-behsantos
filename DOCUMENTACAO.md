@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.14.0** · gerado em 22/10/2026 · este documento é extraído do
+**Versão 3.14.1** · gerado em 22/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -103,7 +103,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.14.0)
+## 3. Modificações — o que foi feito (v1.0.0 → v3.14.1)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -111,6 +111,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v3.14.1** | 🎭✦ Claude sênior com skills e goal (fim do "não sou especialista") |
 | **v3.14.0** | 🧪 passada de QA sênior: análise estática + QA do QA + matriz de todos os modelos |
 | **v3.13.3** | 🔬 código só entrega executado + `hermes selftest` (LLM real) |
 | **v3.13.2** | 🔎 diagnóstico do dispositivo em UMA chamada |
@@ -484,6 +485,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `_parse_version(tag)` | 'v3.10.0' → (3,10,0); tags com sufixo (-beta, -rc) ficam (0,). |
 | `latest_tag(fetch)` | Última tag do repositório (None se não conseguir consultar). `fetch(url) -> str` injetável para testes offline. |
 | `_project_root()` | Raiz da instalação (pasta que contém hermes/ e pyproject.toml). |
+| `_assert_zip_seguro(zf, dest_dir)` | v3.14.2: defesa zip-slip — nenhum membro do zip pode escapar do diretório de destino (caminho absoluto ou com '..' é re… |
 | `download(tag, dest_dir)` | Baixa e extrai o zip da tag; devolve a raiz extraída. |
 | `apply_update(src_root, dest_root, log)` | Copia a nova versão sobre a instalação — preserva data/, .venv e .git. Devolve a lista de itens atualizados. |
 | `run(check_only, assume_yes, print_fn)` | Executa o update; devolve código de saída (0 = ok/atualizado). |

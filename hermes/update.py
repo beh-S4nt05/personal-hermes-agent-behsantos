@@ -56,6 +56,15 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def _assert_zip_seguro(zf: zipfile.ZipFile, dest_dir: Path) -> None:
+    """v3.14.2: defesa zip-slip — nenhum membro do zip pode escapar do
+    diretório de destino (caminho absoluto ou com '..' é recusado)."""
+    base = dest_dir.resolve()
+    for nome in zf.namelist():
+        if (dest_dir / nome).resolve() != base / nome.lstrip("/"):
+            raise RuntimeError(f"zip com caminho inválido: {nome!r}")
+
+
 def download(tag: str, dest_dir: Path) -> Path:
     """Baixa e extrai o zip da tag; devolve a raiz extraída."""
     url = ZIP_URL.format(tag=tag)
@@ -63,6 +72,7 @@ def download(tag: str, dest_dir: Path) -> Path:
     with urllib.request.urlopen(url, timeout=120) as r, zpath.open("wb") as f:
         shutil.copyfileobj(r, f)
     with zipfile.ZipFile(zpath) as zf:
+        _assert_zip_seguro(zf, dest_dir)
         zf.extractall(dest_dir)
     raiz = dest_dir / f"{REPO.split('/')[-1]}-{tag}"
     if not raiz.is_dir():

@@ -217,9 +217,9 @@ class SkillLoader:
             for m in members:
                 n = norm(m.name)
                 for d in skills_members:
-                    if n.startswith(d + "/") and "/.git/" not in n:
-                        if m.size <= 3 * 1024 * 1024:
-                            skills_members[d].append((n, m))
+                    if (n.startswith(d + "/") and "/.git/" not in n
+                            and m.size <= 3 * 1024 * 1024):
+                        skills_members[d].append((n, m))
 
             for d, files in list(skills_members.items())[:12]:
                 skill_name = d.split("/")[-1] or f"{owner}-{repo}"

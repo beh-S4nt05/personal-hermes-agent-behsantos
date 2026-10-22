@@ -2691,6 +2691,77 @@ def T103_casamento_por_nome_de_skill():
 
 
 @case
+def T104_goal_sem_eco_triplo():
+    """v3.14.2 🐛 BUG DE CAMPO: '/goal' ecoado 3× com linhas duplicadas.
+    Causa raiz dupla: (1) runSlash disparava um POST novo a cada Enter
+    (a guarda state.sending só valia para chat normal); (2) o comando
+    era renderizado 2× (span + prefixo do textContent)."""
+    src = Path("hermes/server/templates/index.html").read_text(encoding="utf-8")
+    # guarda: novos Enters não disparam POST durante a resposta
+    assert "if (state.cmdBusy) return;" in src
+    assert "finally { state.cmdBusy = false; }" in src
+    # render único: comando no span estilizado, saída em textNode —
+    # o padrão antigo reescrevia "/goal\n" dentro do textContent
+    assert 'd.textContent = (j.ok ? (text.split(" ")[0]' not in src
+    assert 'c.textContent = text.split(" ")[0];' in src
+    # lado servidor: /goal continua atômico e disponível
+    from hermes import orchestrator as orc
+    cfg = fresh()
+    orc.set_goal(cfg.data_dir.name, "construir a calculadora", cfg)
+    assert "calculadora" in orc.get_goal(cfg.data_dir.name, cfg)
+    orc.set_goal(cfg.data_dir.name, "", cfg)          # limpa
+    assert orc.get_goal(cfg.data_dir.name, cfg) == ""
+
+
+@case
+def T105_robustez_escrita_atomica_e_processos():
+    """v3.14.2 ✦: state nunca corrompe (tmp+replace), processo do Claude
+    é recolhido (sem zombie), fd do log do Ollama fecha no pai."""
+    from hermes import orchestrator as orc
+    cfg = fresh()
+    orc.set_goal("s1", "objetivo de teste", cfg)
+    goals = cfg.data_dir / "session_goals.json"
+    assert goals.exists()
+    import json as _json
+    dados = _json.loads(goals.read_text(encoding="utf-8"))   # JSON válido
+    assert dados.get("s1") == "objetivo de teste"
+    assert not (cfg.data_dir / "session_goals.json.tmp").exists()  # replace ✔
+    # Claude: finally recolhe o processo
+    ca = Path("hermes/claude_agent.py").read_text(encoding="utf-8")
+    assert "proc.wait(timeout=5)" in ca and "proc.kill()" in ca
+    # Manager: fd do log fechado no pai (filho herda)
+    mg = Path("hermes/manager.py").read_text(encoding="utf-8")
+    assert "logf.close()" in mg
+
+
+@case
+def T106_update_defende_zip_slip():
+    """v3.14.2 🔒: o auto-update recusa zip com membro que escapa do
+    diretório de destino (zip-slip); zip normal do GitHub passa."""
+    import tempfile
+    import zipfile as _zip
+    from hermes.update import _assert_zip_seguro
+    with tempfile.TemporaryDirectory() as td:
+        dest = Path(td)
+        maligno = Path(td) / "maligno.zip"
+        with _zip.ZipFile(maligno, "w") as zf:
+            zf.writestr("../evil.txt", "fora do destino")
+            zf.writestr("repo/arquivo.txt", "ok")
+        with _zip.ZipFile(maligno) as zf:
+            try:
+                _assert_zip_seguro(zf, dest)
+                raise AssertionError("zip malicioso foi aceito")
+            except RuntimeError as e:
+                assert "evil.txt" in str(e)
+        ok = Path(td) / "ok.zip"
+        with _zip.ZipFile(ok, "w") as zf:
+            zf.writestr("personal-hermes-agent-behsantos-v3.14.2/README.md", "x")
+            zf.writestr("personal-hermes-agent-behsantos-v3.14.2/hermes/cli.py", "x")
+        with _zip.ZipFile(ok) as zf:
+            _assert_zip_seguro(zf, dest)               # não levanta ✔
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

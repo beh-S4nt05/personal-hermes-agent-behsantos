@@ -97,9 +97,9 @@ def audit_skill(pasta: Path) -> dict:
     # nível: erro = injeção/estrutura quebrada/duplicata
     #        aviso = funciona, mas com ressalva (tamanho, description curta)
     def _eErro(p: str) -> bool:
-        return (p.startswith("injeção") or p.startswith("frontmatter")
-                or p.startswith("SKILL.md não") or p.startswith("SKILL.md ilegível")
-                or p.startswith("name ") or "duplicado" in p)
+        return (p.startswith(("injeção", "frontmatter", "SKILL.md não",
+                              "SKILL.md ilegível", "name "))
+                or "duplicado" in p)
     if any(_eErro(p) for p in rel["problemas"]):
         rel["nivel"] = "erro"
     elif rel["problemas"]:

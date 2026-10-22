@@ -2161,16 +2161,24 @@ function pickSlash(c){
   input.focus();
 }
 async function runSlash(text){
+  // v3.14.2 (bug de campo): guarda contra eco múltiplo — cada Enter
+  // durante a resposta disparava um POST novo (/goal aparecia 3×).
+  if (state.cmdBusy) return;
+  state.cmdBusy = true;
   const d = document.createElement("div");
   d.className = "syscmd";
-  d.innerHTML = '<span class="cmd">'+esc(text.split(" ")[0])+'</span>';
+  const c = document.createElement("span"); c.className = "cmd";
+  c.textContent = text.split(" ")[0];
+  d.appendChild(c);
   $("chatlog").appendChild(d); scrollChat();
+  const add = (txt)=> d.appendChild(document.createTextNode(txt));
   try{
     const r = await api("/api/chat/command", {method:"POST",
       body: JSON.stringify({text: text, session_id: state.sessionId || ""})});
     const j = await r.json().catch(()=>({msg:"sem resposta"}));
-    d.textContent = (j.ok ? (text.split(" ")[0]+"\n"+(j.output||"")) : ("✖ "+(j.msg||"erro")));
-  }catch(e){ d.textContent = "✖ "+e.message; }
+    add(j.ok ? ("\n"+(j.output||"")) : ("\n✖ "+(j.msg||"erro")));
+  }catch(e){ add("\n✖ "+e.message); }
+  finally { state.cmdBusy = false; }
   scrollChat();
 }
 function mkBtn(label, cls, fn){

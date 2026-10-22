@@ -464,9 +464,11 @@ def set_goal(session_id: str, texto: str, cfg=None) -> None:
     if cfg is not None:                     # v3.11: sobrevive a restart
         try:
             _goals_path(cfg).parent.mkdir(parents=True, exist_ok=True)
-            _goals_path(cfg).write_text(
+            tmp = _goals_path(cfg).with_suffix(".json.tmp")
+            tmp.write_text(
                 json.dumps(SESSION_GOALS, ensure_ascii=False, indent=1),
                 encoding="utf-8")
+            tmp.replace(_goals_path(cfg))  # v3.14.2: atômico, crash não corrompe
         except OSError:
             pass
 
@@ -548,8 +550,10 @@ def _pending_save(cfg, dados: dict) -> None:
     try:
         p = _pending_path(cfg)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(dados, ensure_ascii=False, indent=1),
-                     encoding="utf-8")
+        tmp = p.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(dados, ensure_ascii=False, indent=1),
+                       encoding="utf-8")
+        tmp.replace(p)  # v3.14.2: atômico, crash não corrompe
     except OSError:
         pass
 

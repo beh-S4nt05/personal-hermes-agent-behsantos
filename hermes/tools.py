@@ -293,6 +293,7 @@ def run_command(args: dict, cfg) -> str:
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
             cwd=str(cfg.workdir),
         )
     except subprocess.TimeoutExpired:
@@ -411,7 +412,7 @@ def diagnostico_sistema(_args: dict, cfg) -> str:
     for nome, cmd, tmax in _DIAG_BATERIA:
         try:
             r = subprocess.run(cmd, shell=True, capture_output=True,
-                               text=True, timeout=tmax)
+                               text=True, timeout=tmax, check=False)
             out = (r.stdout or "").strip()
         except subprocess.TimeoutExpired:
             out = "(comando demorou — pulado)"

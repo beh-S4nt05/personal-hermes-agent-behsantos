@@ -462,3 +462,7 @@ def _run_impl(cfg, message, history, on_event, cancel, _light=None,
     finally:
         if proc.poll() is None:
             proc.terminate()
+        try:                                # v3.14.2: recolhe o processo —
+            proc.wait(timeout=5)            # sem zombie esperando GC
+        except subprocess.TimeoutExpired:
+            proc.kill()

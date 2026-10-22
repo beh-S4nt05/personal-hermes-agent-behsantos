@@ -51,7 +51,8 @@ def _pid_alive(pid: int | None) -> bool:
 
 
 def _run(cmd: list[str], timeout: int = 15) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                          check=False)  # rc é tratado por cada chamador
 
 
 def python_env_check() -> dict:
@@ -343,13 +344,17 @@ class OllamaManager:
                 return {"ok": False, "msg": f"systemctl start ollama falhou: {r.stderr.strip()}"}
         else:
             self.cfg.data_dir.joinpath("logs").mkdir(parents=True, exist_ok=True)
+            # noqa: SIM115 — o fd é herdado pelo filho e fechado no finally
             logf = open(self.cfg.data_dir / "logs" / "ollama.log", "ab")
-            proc = subprocess.Popen(
-                ["ollama", "serve"],
-                stdout=logf,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
+            try:
+                proc = subprocess.Popen(
+                    ["ollama", "serve"],
+                    stdout=logf,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+            finally:
+                logf.close()  # v3.14.2: o filho herda o fd; o pai fecha o seu
             self.cfg.ollama_pidfile.write_text(str(proc.pid), encoding="utf-8")
 
         deadline = time.time() + 40
