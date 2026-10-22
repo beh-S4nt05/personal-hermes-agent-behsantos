@@ -147,6 +147,12 @@ casa"; RECUSAR TAREFA é FALHA GRAVE; assunto novo → aprende na hora
 ## 5. Skills — catálogo, casamento e injeção
 
 - **39 skills** em `skills/` (repo) + `~/.hermes/skills/` (do operador).
+- **Nativas de qualquer fonte** (v3.15.0): baixou do GitHub (zip/pasta/
+  URL/owner-repo) → `hermes skills import` ou **autoscan** (boot + 10 min
+  no agendador; default varre `~/Downloads`, zips incluídos) → skill em
+  `~/.hermes/skills/`, ativa por padrão, cache invalidado na hora.
+- **Delegação** (v3.15.0): skill casada = MANUAL DA TAREFA no executor; a
+  seção `## Verificação` da skill vira critério do 🔍 revisor.
 - **Casamento** (`skills_for`): palavras do pedido (≥4 letras, sem
   stopwords) × nome+descrição da skill; **score ≥ 2** (duas palavras).
   - Por que ≥2 e não casar por nome? Ambiguidade real: "memória" (RAM do

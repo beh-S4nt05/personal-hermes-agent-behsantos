@@ -576,6 +576,28 @@ def skills_for(cfg, text: str, max_skills: int = 2) -> list[dict]:
     return resultados[:max_skills]
 
 
+def _skill_criterios(skills: list[dict]) -> list[str]:
+    """v3.15.0 (PR#3): DELEGAÇÃO — a seção '## Verificação' da skill que
+    casou vira critérios que o 🔍 revisor vai cobrar na entrega."""
+    if not skills:
+        return []
+    try:
+        md = Path(skills[0]["skill_md"]).read_text(encoding="utf-8",
+                                                   errors="replace")
+    except OSError:
+        return []
+    itens, capturando = [], False
+    for ln in md.splitlines():
+        if ln.strip().startswith("## "):
+            capturando = "verifica" in ln.strip().lower()
+            continue
+        if capturando and ln.strip().startswith(("-", "*")):
+            item = ln.strip().lstrip("-* ").strip()
+            if item:
+                itens.append(f"[skill {skills[0]['name']}] {item[:140]}")
+    return itens[:3]
+
+
 def _skill_conteudo(cfg, skills: list[dict]) -> str:
     """Conteúdo das SKILLs selecionadas (para injetar no executor)."""
     try:
@@ -585,7 +607,8 @@ def _skill_conteudo(cfg, skills: list[dict]) -> str:
         for s in skills[:2]:
             try:
                 md = loader.read_skill_md(s["skill_md"])[:2400]
-                partes.append(f"[✦ SKILL {s['name']} — SIGA estas instruções]\n{md}")
+                partes.append(f"[✦ SKILL {s['name']} — MANUAL DA TAREFA: siga "
+                          f"estas instruções à risca]\n{md}")
             except Exception:  # noqa: BLE001
                 continue
         return "\n\n".join(partes)
@@ -737,6 +760,8 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     passos = [str(p)[:160] for p in (plano.get("passos") or [])[:4]]
     criterios = [str(c)[:160] for c in (plano.get("criterios") or [])[:3]]
     criterios += _extra_criterios(message)      # v3.13.3: rastro obrigatório
+    sks_antecipadas = skills_for(cfg, message + " " + objetivo)
+    criterios += _skill_criterios(sks_antecipadas)  # v3.15.0: skill delega
     tipo = plano.get("tipo") if plano.get("tipo") in ("leitura", "criacao") else "leitura"
 
     # ✦ skills ativas relevantes → instruções injetadas no executor

@@ -1,5 +1,37 @@
 # Changelog
 
+## PR #2b (v3.15.0-rc3) — ✦ skills nativas de qualquer fonte + delegação
+
+Diretriz do operador: skill baixada do GitHub (ou de qualquer lugar) deve
+ser NATIVA na hora, casar com o pedido e DELEGAR a entrega para a skill
+certa — sem passo manual.
+
+**1. Baixou → é nativa** (`hermes/skills.py`):
+- `hermes skills import <fonte>` — pasta local, arquivo .zip, URL
+  git/GitHub ou owner/repo (delega no instalador original);
+- **autoscan**: no boot do servidor e a cada 10 min no agendador, o
+  Hermes varre as pastas assistidas (default `~/Downloads`) — pastas com
+  SKILL.md válido E **zips baixados** são importados para
+  `~/.hermes/skills/` (idempotente, zip marcado para não reprocessar,
+  nada sobrescrito, atividade registrada). Config: `skills_autoscan`
+  (default on) e `skills_watch_dirs`;
+- `hermes skills scan` — varredura manual.
+
+**2. Casa → delega** (`orchestrator.py`):
+- a skill casada entra no executor como **MANUAL DA TAREFA** ("siga
+  estas instruções à risca");
+- a seção **`## Verificação` da skill vira critério do 🔍 revisor** —
+  a skill define o padrão de aceitação da própria entrega.
+
+**3. Bug pego e corrigido**: `SkillLoader.scan()` cacheava por 5 s —
+skill recém-instalada/importada só aparecia depois do TTL. Agora toda
+instalação/importação **invalida o cache** (nativa NA HORA) — inclusive
+no `install_from_github` original da GUI.
+
+**Testes:** T114 (import pasta+zip, nativa, casa, idempotente), T115
+(autoscan pasta+zip, sem duplicar, respeita flag off), T116 (delegação:
+manual no executor + critérios `[skill x]` no revisor). **116/116.**
+
 ## PR #2 (v3.15.0-rc2) — 🧠 assistente completo: engenharia, RAG, git e fôlego
 
 Diretriz do operador: o agente precisa saber e produzir código em

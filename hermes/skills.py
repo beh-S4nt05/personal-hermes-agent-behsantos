@@ -15,8 +15,11 @@ from __future__ import annotations
 
 import io
 import re
+import shutil
 import tarfile
+import tempfile
 import time
+import zipfile
 from pathlib import Path
 
 import requests
@@ -32,6 +35,196 @@ _GITHUB_HOSTS = ("https://github.com/", "http://github.com/", "https://www.githu
 # cache simples do catálogo (a GUI consulta a cada poucos segundos)
 _CACHE: dict[tuple, tuple[float, list[dict]]] = {}
 _CACHE_TTL = 5.0
+
+
+# ──────────── v3.15.0 (PR#3): skills baixadas viram NATIVAS ────────────
+# O operador baixa skills do GitHub (zip/clone) ou de onde for; o Hermes
+# descobre pastas com SKILL.md válido e importa para ~/.hermes/skills —
+# nunca sobrescreve, audita e liga por padrão.
+
+_SKILL_NAME_RE = re.compile(r"[^a-z0-9-]+")
+
+
+def _slug(nome: str, fallback: str = "skill") -> str:
+    s = _SKILL_NAME_RE.sub("-", str(nome or "").strip().lower()).strip("-")
+    return (s or fallback)[:48]
+
+
+def find_skill_dirs(root, depth: int = 3) -> list[Path]:
+    """Pastas com SKILL.md válido (name+description) sob `root`."""
+    root = Path(root).expanduser().resolve()
+    achados: list[Path] = []
+    try:
+        cand = list(root.rglob("SKILL.md"))
+    except OSError:
+        return []
+    for md in cand[:200]:
+        try:
+            rel = md.parent.relative_to(root)
+        except ValueError:
+            continue
+        if len(rel.parts) > depth:
+            continue
+        if any(p.startswith(".") for p in rel.parts):
+            continue
+        try:
+            meta, _ = parse_skill_md(
+                md.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+        if meta.get("name") and meta.get("description"):
+            achados.append(md.parent)
+    return achados
+
+
+def import_skill_dir(src_dir, cfg) -> dict:
+    """Copia UMA pasta de skill para ~/.hermes/skills/<nome>."""
+    src_dir = Path(src_dir).resolve()
+    md = src_dir / "SKILL.md"
+    if not md.is_file():
+        return {"ok": False, "msg": f"sem SKILL.md em {src_dir}"}
+    meta, _ = parse_skill_md(md.read_text(encoding="utf-8", errors="replace"))
+    nome = _slug(meta.get("name"), src_dir.name)
+    dest = SkillLoader(cfg).user_dir / nome
+    if dest.exists():
+        return {"ok": False, "skipped": True, "name": nome,
+                "msg": f"skill '{nome}' já existe — nada sobrescrito"}
+    shutil.copytree(src_dir, dest)
+    _CACHE.clear()          # v3.15.0: skill nova é nativa NA HORA
+    return {"ok": True, "name": nome, "dest": str(dest)}
+
+
+def _importar_todas(dirs: list[Path], cfg) -> dict:
+    importadas, puladas = [], []
+    for d in dirs:
+        r = import_skill_dir(d, cfg)
+        if r.get("ok"):
+            importadas.append(r["name"])
+        elif r.get("skipped"):
+            puladas.append(r.get("name", d.name))
+    msg = (f"{len(importadas)} skill(s) importada(s)"
+           + (f": {', '.join(importadas)}" if importadas else "")
+           + (f" · {len(puladas)} já existente(s)" if puladas else "")
+           + ("" if importadas else " — nenhuma skill nova encontrada"))
+    return {"ok": bool(importadas or not dirs), "importadas": importadas,
+            "puladas": puladas, "msg": msg}
+
+
+def import_from(src: str, cfg) -> dict:
+    """Importa skills de QUALQUER fonte: pasta local, arquivo .zip,
+    URL git/GitHub ou owner/repo (delega no install_from_github)."""
+    src = (src or "").strip()
+    if not src:
+        return {"ok": False,
+                "msg": "informe a fonte: pasta, .zip, URL ou owner/repo"}
+    if src.startswith(("http://", "https://", "git@")):
+        return SkillLoader(cfg).install_from_github(src)
+    if re.fullmatch(r"[\w.-]+/[\w.-]+", src):
+        return SkillLoader(cfg).install_from_github(src)
+    p = Path(src).expanduser()
+    if p.suffix.lower() == ".zip" and p.is_file():
+        with tempfile.TemporaryDirectory(prefix="hermes-skills-") as td:
+            try:
+                with zipfile.ZipFile(p) as zf:
+                    for nome in zf.namelist():
+                        if ".." in nome.split("/"):
+                            raise RuntimeError(f"zip com caminho inválido: {nome!r}")
+                    zf.extractall(td)
+            except (zipfile.BadZipFile, RuntimeError) as exc:
+                return {"ok": False, "msg": f"zip inválido: {exc}"}
+            return _importar_todas(find_skill_dirs(Path(td)), cfg)
+    if p.is_dir():
+        alvos = find_skill_dirs(p)
+        if (p / "SKILL.md").is_file():
+            alvos = [p] + [a for a in alvos if a != p]
+        return _importar_todas(alvos, cfg)
+    return {"ok": False, "msg": f"fonte não encontrada: {src}"}
+
+
+def autoscan(cfg) -> dict:
+    """Varre as pastas assistidas (default ~/Downloads) e importa skills
+    novas — o 'baixei do GitHub, agora é nativa' sem comando nenhum."""
+    if not getattr(cfg, "skills_autoscan", True):
+        return {"ok": True, "importadas": [], "msg": "autoscan desligado"}
+    pastas = getattr(cfg, "skills_watch_dirs", None) or [
+        str(Path.home() / "Downloads")]
+    existentes = {s.get("name") for s in SkillLoader(cfg).enabled()}
+    importadas: list[str] = []
+
+    def _marca_path() -> Path:
+        return SkillLoader(cfg).user_dir / ".autoscan-zips.json"
+
+    def _zips_processados() -> dict:
+        try:
+            import json as _json
+            dados = _json.loads(_marca_path().read_text(encoding="utf-8"))
+            return dados if isinstance(dados, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    for pasta in pastas:
+        d = Path(str(pasta)).expanduser()
+        if not d.is_dir():
+            continue
+        for sd in find_skill_dirs(d):
+            try:
+                meta, _ = parse_skill_md(
+                    (sd / "SKILL.md").read_text(encoding="utf-8",
+                                                errors="replace"))
+            except OSError:
+                continue
+            nome = _slug(meta.get("name"), sd.name)
+            if nome in existentes:
+                continue
+            r = import_skill_dir(sd, cfg)
+            if r.get("ok"):
+                importadas.append(r["name"])
+                existentes.add(r["name"])
+        # v3.15.0: zip baixado do GitHub também é fonte — extrai, importa
+        # e marca (mesmo nome+size não é reprocessado nos scans seguintes)
+        marcados = _zips_processados()
+        mudou = False
+        for zp in sorted(d.glob("*.zip"))[:20]:
+            try:
+                chave = f"{zp.name}:{zp.stat().st_size}"
+            except OSError:
+                continue
+            if marcados.get(str(zp)) == chave:
+                continue
+            with tempfile.TemporaryDirectory(prefix="hermes-zip-") as td:
+                try:
+                    with zipfile.ZipFile(zp) as zf:
+                        for nome in zf.namelist():
+                            if ".." in nome.split("/"):
+                                raise RuntimeError("caminho inválido")
+                        zf.extractall(td)
+                except (zipfile.BadZipFile, RuntimeError, OSError):
+                    continue
+                for sd in find_skill_dirs(Path(td)):
+                    r = import_skill_dir(sd, cfg)
+                    if r.get("ok") and r["name"] not in existentes:
+                        importadas.append(r["name"])
+                        existentes.add(r["name"])
+            marcados[str(zp)] = chave
+            mudou = True
+        if mudou:
+            try:
+                import json as _json
+                mp = _marca_path()
+                tmp = mp.with_suffix(".json.tmp")
+                tmp.write_text(_json.dumps(marcados), encoding="utf-8")
+                tmp.replace(mp)
+            except OSError:
+                pass
+    if importadas:
+        try:
+            from . import activity
+            activity.log(cfg, "skills",
+                         f"✦ {len(importadas)} skill(s) baixada(s) pelo "
+                         f"operador e importada(s): {', '.join(importadas)}")
+        except Exception:  # noqa: BLE001
+            pass
+    return {"ok": True, "importadas": importadas}
 
 
 def parse_skill_md(text: str) -> tuple[dict, str]:
@@ -260,6 +453,8 @@ class SkillLoader:
                         out.write_bytes(f.read())
                 installed.append(skill_name)
 
+        if installed:
+            _CACHE.clear()   # v3.15.0: skill instalada é nativa NA HORA
         if not installed:
             return {"ok": False, "msg": "nenhuma skill nova para instalar (já existentes?)"}
         return {"ok": True, "msg": f"{len(installed)} skill(s) instalada(s): {', '.join(installed)}",
