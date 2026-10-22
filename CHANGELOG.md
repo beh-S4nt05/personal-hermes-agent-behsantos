@@ -1,5 +1,42 @@
 # Changelog
 
+## v3.15.0 — 🚀 assistente completo, independente e sem perda de contexto
+
+Fechamento do plano de 3 PRs da engenharia reversa (Claude Code ×
+Hermes): os pontos positivos de cada um, aplicados ao Hermes.
+
+**PR#1 📁 pasta do projeto (rc1)** — o operador passa a referência de
+pasta no pedido (em qualquer ponto do diretório, criada se não
+existir); task roda lá com ambiente (cwd/git) e `hermes.md`; configura
+do Hermes blindada.
+
+**PR#2 🧠 assistente completo (rc2)** — 11 skills de engenharia (5
+linguagens, 4 arquiteturas, CI/CD, RAG); biblioteca local com RAG
+determinístico (`hermes rag` + ferramenta `knowledge_search`, trecho
+verbatim com fonte); `git_run` autônomo no projeto; fôlego 8 passes/40
+ferramentas para código; prompt com catálogo orçado.
+
+**PR#2b ✦ skills nativas + delegação (rc3)** — skill baixada do GitHub
+(zip/pasta, autoscan de ~/Downloads no boot e a cada 10 min) vira
+nativa NA HORA; a skill casada é o MANUAL DA TAREFA e a seção
+`## Verificação` dela vira critério do 🔍 revisor.
+
+**PR#3 🔌 independência + contexto (este release)**:
+- 🧠 **compactação de contexto** no loop do agente: perto de 55% do
+  `num_ctx`, o MEIO da conversa vira resumo (LLM com fallback
+  determinístico) e fica o essencial — tarefa original + resultados
+  recentes. Conversa longa custa como curta; nada importante se perde.
+- 🔌 **Claude Code é plugin opcional**: `/api/status` anuncia
+  `claude_available`, a GUI esconde a opção sem a CLI e tarefas
+  agendadas caem no loop Hermes com nota. **O Python gerencia tudo;
+  o Ollama só serve o modelo.**
+- 🎯 selftest ganha 6º cenário: **projeto real** (pasta externa,
+  arquivo criado DE VERDADE, executado e versionado no git).
+
+**Testes:** T117 (compactação enxuta + tarefa preservada + custo zero
+em conversa curta), T118 (fallback do agendador + status + GUI),
+T119 (cenário projeto). **119/119.**
+
 ## PR #2b (v3.15.0-rc3) — ✦ skills nativas de qualquer fonte + delegação
 
 Diretriz do operador: skill baixada do GitHub (ou de qualquer lugar) deve

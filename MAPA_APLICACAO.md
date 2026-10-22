@@ -110,6 +110,9 @@ GUI/CLI → POST /api/chat {message, history[-20], session_id, agent}
          - reprovação injusta → garantidor devolve resposta boa
          - máx. 2 tentativas (economia de tokens)
       e. 📦 entrega (aprovação se criação) → resposta final no chat
+   4f. 🧠 compactação (v3.15.0): perto de 55% do num_ctx, o MEIO da
+       conversa vira resumo (LLM com fallback) — tarefa original e
+       resultados recentes preservados
    5. tudo vira eventos SSE: session, brain, step, note, token,
       tool_start, tool_end, done, error, cancelled
 ```
@@ -141,6 +144,10 @@ run_claude(cfg, message, history, goal)  ← goal chega desde a v3.14.1
 Persona (v3.14.1): **ENGENHEIRO DE SOFTWARE SÊNIOR** — "o especialista da
 casa"; RECUSAR TAREFA é FALHA GRAVE; assunto novo → aprende na hora
 (Read/Bash); código → arquivo completo + execução com saída colada.
+
+A CLI do Claude Code é **plugin opcional** (v3.15.0): sem ela o Hermes
+cobre tudo — a GUI nem mostra a opção e tarefas agendadas caem no loop
+nativo com nota. O Ollama fica só com o papel de servir o modelo.
 
 ---
 
@@ -286,7 +293,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **106 casos** (v3.14.2), famílias:
+`tests/run_all.py` — **119 casos** (v3.15.0), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·

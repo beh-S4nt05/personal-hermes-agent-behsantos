@@ -498,6 +498,11 @@ self.addEventListener("fetch", (e) => {
     @app.get("/api/status")
     @protected
     def status():
+        try:                                  # v3.15.0: plugin opcional
+            from ..claude_agent import claude_path
+            claude_ok = claude_path() is not None
+        except Exception:  # noqa: BLE001
+            claude_ok = False
         mgr = DaemonManager(cfg)
         agent = mgr.status()
         ollama = OllamaManager(cfg).status()
@@ -505,6 +510,7 @@ self.addEventListener("fetch", (e) => {
             {
                 "version": VERSION,
                 "mock": cfg.mock,
+                "claude_available": claude_ok,
                 "agent": agent,
                 "ollama": ollama,
                 "mcp": get_manager(cfg).status(),

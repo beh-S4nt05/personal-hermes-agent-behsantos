@@ -297,6 +297,8 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `_select_mcp_tools` | v3.0: com muitas ferramentas MCP, injeta só as relevantes à pergunta … |
 | `_prompt_key` | Chave de invalidação do cache: muda só quando algo relevante muda. |
 | `system_prompt` | — |
+| `_resumir` | Resumo curto do meio da conversa — LLM se der, senão corte determinís… |
+| `_compactar` | v3.15.0 (PR#3): compactação de contexto (padrão Claude Code). Perto d… |
 | `run` | Executa uma tarefa/conversa. `messages` sem o prompt de sistema. allo… |
 
 | Função | O que faz |

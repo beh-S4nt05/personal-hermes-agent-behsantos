@@ -78,6 +78,23 @@ def _cenarios() -> list[dict]:
             return ["apelido não foi lembrado na 2ª conversa"]
         return []
 
+    import tempfile as _tf
+    from pathlib import Path as _P
+    _proj_dir = _P(_tf.mkdtemp(prefix="hermes-selftest-proj-"))
+
+    def projeto(f, evs):
+        ev = _evidencias(evs)
+        out = []
+        if "write_file" not in ev:
+            out.append("não escreveu arquivo no projeto")
+        if "run_command" not in ev:
+            out.append("não executou o código do projeto")
+        if not (_P(_proj_dir) / "app.py").exists():
+            out.append("arquivo do projeto não foi criado de verdade")
+        if not any("git" in e.lower() for e in ev):
+            out.append("não versionou (git_run ausente)")
+        return out
+
     return [
         {"nome": "diagnóstico do dispositivo",
          "msgs": ["faça uma busca geral no meu sistema e entenda "
@@ -95,6 +112,10 @@ def _cenarios() -> list[dict]:
         {"nome": "memória (guarda e usa)",
          "msgs": ["lembre que meu apelido é Tigrão",
                   "qual é o meu apelido?"], "checa": memoria},
+        {"nome": "projeto real (pasta externa, executa e versiona)",
+         "msgs": [f"crie o arquivo app.py em {_proj_dir} com "
+                  f"print('projeto ok'), execute-o e faça o commit no git"],
+         "checa": projeto},
     ]
 
 

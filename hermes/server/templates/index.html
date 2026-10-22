@@ -1007,6 +1007,13 @@ document.querySelectorAll("nav button").forEach(b=>{
 async function refresh(){
   try{
     const r = await api("/api/status"); const s = await r.json(); state.status = s;
+    // v3.15.0: Claude Code é plugin opcional — sem a CLI, a opção some
+    const selAg = $("agent-sel");
+    if (selAg && s.claude_available === false){
+      const oc = selAg.querySelector('option[value="claude"]');
+      if (oc) oc.remove();
+      if (selAg.value === "claude") selAg.value = "hermes";
+    }
     $("ver").textContent = "v"+s.version+(s.mock ? " · ⚠ MODO DEMO (IA simulada)" : " · ✔ modo real (Ollama)")+" · agente linux · ollama";
     $("footver").textContent = "v"+s.version;
     $("mockbanner").style.display = s.mock ? "" : "none";
