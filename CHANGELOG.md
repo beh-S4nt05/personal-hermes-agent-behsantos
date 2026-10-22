@@ -1,5 +1,46 @@
 # Changelog
 
+## PR #2 (v3.15.0-rc2) — 🧠 assistente completo: engenharia, RAG, git e fôlego
+
+Diretriz do operador: o agente precisa saber e produzir código em
+Python, JavaScript, TypeScript, Kotlin e Java; entender arquiteturas
+(MVVM, MVI, MDC, SaaS…); consultar livros como RAG; criar pastas,
+gerar arquivos, versionar e fazer CI/CD sozinho — escalável,
+auto-suficiente, sem perder contexto e sem alucinar.
+
+**1. 📚 Biblioteca RAG local** (`hermes/knowledge.py` + CLI `hermes rag` +
+ferramenta `knowledge_search`): livros em `~/.hermes/biblioteca/`
+(.md/.txt/.pdf-via-pdftotext), fatiados e indexados por TF-IDF
+(stdlib pura, determinístico). O que entra no contexto é TRECHO
+VERBATIM com fonte — anti-alucinação por construção. Consulta no
+chat, no terminal (`hermes rag "query"`) e reindexação com `hermes rag`.
+
+**2. 🔧 11 skills de engenharia** (catálogo 28→39): codigo-python,
+codigo-javascript, codigo-typescript, codigo-kotlin, codigo-java,
+arquitetura-mvvm, arquitetura-mvi, arquitetura-mdc, arquitetura-saas,
+cicd-github-actions, biblioteca-rag — fluxo, estrutura de referência,
+decisões de sênior, armadilhas e verificação para cada tema.
+
+**3. 🌿 Versionamento autônomo** (ferramenta `git_run`): init, status,
+add, commit, log, diff, branch, tag, config LOCAL no projeto da task —
+com subcomandos fora da lista bloqueados (push fica via run_command,
+se o operador quiser) e `config --global/--system` proibido.
+
+**4. 🫁 Fôlego para projetos** (task de código/projeto): 8 passes e 40
+ferramentas no lugar de 4/12 — override sempre restaurado (try/finally).
+
+**5. 📉 Prompt escalável**: o catálogo no prompt virou seção ORÇADA
+(top 18 relevantes ao pedido + rodapé com o total) — o catálogo pode
+crescer indefinidamente sem inflar o prompt (T12 voltou a caber com
+folga: 4568 chars).
+
+Bug pego na revisão: descriptions YAML com ": " quebravam o parse
+(skill carregava sem description) — corrigido com aspas + validação.
+
+**Testes:** T110 (RAG: índice, busca com fonte, tool, honestidade sem
+match), T111 (git no projeto + bloqueios), T112 (casamento das 11
+skills com pedidos reais), T113 (fôlego + restauração). **113/113.**
+
 ## PR #1 (v3.15.0-rc1) — 📁 pasta do projeto: trabalhe onde o operador mandar
 
 Regra do operador: ao criar projeto/aplicativo, ele passa a referência de

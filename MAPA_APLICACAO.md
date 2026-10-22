@@ -30,7 +30,8 @@
                                ▼
                       hermes/tools.py  (FERRAMENTAS)
         run_command · read/write_file · list_dir · sys_info ·
-        web_search · web_fetch · diagnostico_sistema · backups
+        web_search · web_fetch · diagnostico_sistema · backups ·
+        git_run (versionar no projeto) · knowledge_search (RAG)
                                ▼
                     🐧 SUA MÁQUA LOCAL (Linux)
         arquivos · sistema · Ollama · e-mail/agenda (MCP, só leitura)
@@ -145,7 +146,7 @@ casa"; RECUSAR TAREFA é FALHA GRAVE; assunto novo → aprende na hora
 
 ## 5. Skills — catálogo, casamento e injeção
 
-- **28 skills** em `skills/` (repo) + `~/.hermes/skills/` (do operador).
+- **39 skills** em `skills/` (repo) + `~/.hermes/skills/` (do operador).
 - **Casamento** (`skills_for`): palavras do pedido (≥4 letras, sem
   stopwords) × nome+descrição da skill; **score ≥ 2** (duas palavras).
   - Por que ≥2 e não casar por nome? Ambiguidade real: "memória" (RAM do
@@ -191,6 +192,7 @@ injetadas (memória própria dele: limite conhecido, ver §14).
 ├── pending_approvals.json       ← fila de aprovação (atômico, v3.14.2)
 ├── schedules/                   ← tarefas agendadas
 ├── skills/                      ← skills do operador (escrita permitida)
+├── biblioteca/                  ← livros do operador (RAG local)
 ├── secrets/                     ← credenciais 600 — NUNCA no modelo
 ├── audit/                       ← trilha de ferramentas
 ├── backups/                     ← cópias de arquivos editados

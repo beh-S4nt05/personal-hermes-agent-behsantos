@@ -85,6 +85,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `hermes audit` | audita todas as skills: estrutura, tamanho,  |
 | `hermes chat` | chat interativo no terminal |
 | `hermes selftest` | 🧪 bateria de aceitação com o LLM real: sem  |
+| `hermes rag` | biblioteca de livros (RAG local): indexa ou consulta |
 | `hermes doctor` | diagnostica a conexão Ollama↔Python (com geração de teste) |
 | `hermes email` | configura contas de e-mail (MCP email_*) |
 | `hermes agenda` | agenda Google Calendar — somente leitura (MCP agenda_*) |
@@ -409,6 +410,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `cmd_chat(args)` | — |
 | `cmd_update(args)` | Atualiza o projeto a partir do GitHub (tags oficiais do repo). |
 | `cmd_memory_import(args)` | v3.12: importa fatos para a memória do agente (JSON lista de strings, ou texto com um fato por linha). Duplicados são p… |
+| `cmd_rag(args)` | v3.15.0 (PR#2): biblioteca local (RAG) — indexar e consultar. |
 | `cmd_selftest(args)` | v3.13.3: bateria de aceitação com LLM REAL (pula sem Ollama). |
 | `cmd_skills_audit(args)` | v3.11: audita o catálogo de skills (estrutura, tamanho, injeção). |
 | `cmd_daemon(args)` | — |
@@ -451,6 +453,8 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `lembrar(args, cfg)` | — |
 | `esquecer(args, cfg)` | — |
 | `_backups_tool(args, cfg)` | — |
+| `git_run(args, cfg)` | v3.15.0 (PR#2): git com subcomandos permitidos, no projeto da task. |
+| `knowledge_search(args, cfg)` | v3.15.0 (PR#2): RAG local — trechos verbatim com fonte. |
 | `execute_tool(name, arguments, cfg, source, agent)` | Executa uma ferramenta e devolve {'ok': bool, 'output': str}. v3.0: toda execução vai para a trilha de auditoria (data/… |
 | `tool_summary()` | — |
 

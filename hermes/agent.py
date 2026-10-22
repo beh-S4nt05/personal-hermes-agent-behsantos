@@ -250,7 +250,7 @@ class Agent:
         except Exception:
             pass
         try:
-            catalog = self.skills.catalog()
+            catalog = self.skills.catalog(query)
             if catalog:
                 prompt += "\n\n" + catalog
         except Exception:
@@ -300,10 +300,12 @@ class Agent:
         last_sigs: list[tuple[str, str]] = []   # assinaturas do passo anterior
         nudged = False                           # já avisamos sobre repetição?
         calls_used = 0                           # v3.0: orçamento de ferramentas
-        max_calls = int(getattr(cfg, "max_tool_calls", 12) or 12)
+        max_calls = int(getattr(self, "tool_budget_override", 0)
+                        or getattr(cfg, "max_tool_calls", 12) or 12)
         budget_strikes = False                    # já avisamos o orçamento?
 
-        for step in range(1, cfg.max_steps + 1):
+        passos_max = int(getattr(self, "steps_override", 0) or cfg.max_steps)
+        for step in range(1, passos_max + 1):
             if cancel is not None and cancel.is_set():
                 ev({"type": "cancelled", "message": final or ""})
                 return final or "[interrompido pelo operador]"
@@ -509,6 +511,7 @@ class Agent:
 
                     msgs.append({"role": "tool", "name": name, "content": result})
 
-        hint = f"Limite de {cfg.max_steps} passes atingido; aumente 'max_steps' se precisar."
+        hint = (f"Limite de {passos_max} passes atingido; aumente 'max_steps' "
+                f"se precisar.")
         ev({"type": "error", "message": hint})
         return final or hint

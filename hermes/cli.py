@@ -330,6 +330,24 @@ def cmd_memory_import(args) -> None:
         _fail("nenhum fato válido no arquivo")
 
 
+def cmd_rag(args) -> None:
+    """v3.15.0 (PR#2): biblioteca local (RAG) — indexar e consultar."""
+    from . import knowledge
+    cfg = _cfg(args)
+    consulta = str(getattr(args, "consulta", "") or "").strip()
+    if consulta:
+        for r in knowledge.buscar(cfg, consulta, k=3):
+            print(f"── FONTE: {r['fonte']} (relevância {r['score']})")
+            print(r["texto"][:600] + "\n")
+        return
+    st = knowledge.indexar(cfg)
+    print(f"📚 biblioteca indexada: {st['livros']} livro(s), "
+          f"{st['blocos']} trechos (índice {st['tamanho']} B)")
+    print(f"   pasta: {knowledge.biblioteca_dir(cfg)}")
+    print("   consulta no chat: ferramenta knowledge_search · "
+          "aqui: hermes rag \"sua consulta\"")
+
+
 def cmd_selftest(args) -> None:
     """v3.13.3: bateria de aceitação com LLM REAL (pula sem Ollama)."""
     from .selftest import run as run_selftest
@@ -508,6 +526,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "matriz (modelo × cenário) com recomendação")
     p.set_defaults(fn=cmd_selftest)
 
+    p = sub.add_parser("rag", help="biblioteca de livros (RAG local): indexa ou consulta")
+    p.add_argument("consulta", nargs="?", default="", help="texto a buscar (vazio = reindexar)")
+    p.set_defaults(fn=cmd_rag)
     p = sub.add_parser("doctor", help="diagnostica a conexão Ollama↔Python (com geração de teste)")
     p.set_defaults(fn=cmd_doctor)
 

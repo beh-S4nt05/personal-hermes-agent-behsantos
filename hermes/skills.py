@@ -107,7 +107,7 @@ class SkillLoader:
         return [s for s in self.scan() if s["enabled"]]
 
     # ------------------------------------------------------- prompt / leitura
-    def catalog(self) -> str:
+    def catalog(self, query: str | None = None) -> str:
         skills = self.enabled()
         if not skills:
             return ""
@@ -115,12 +115,31 @@ class SkillLoader:
             "Habilidades (skills) instaladas — quando a tarefa combinar com uma skill, "
             "PRIMEIRO leia o SKILL.md dela com a ferramenta read_file e siga as instruções:",
         ]
-        for s in skills:
+        # v3.15.0 (PR#2): seção ORÇADA — o catálogo cresce (39+ skills)
+        # sem inflar o prompt: até 18 linhas, priorizando as relevantes
+        # ao pedido; o rodapé aponta o diretório para listar as demais.
+        import re as _re
+        palavras = {w for w in _re.findall(r"[a-zà-ú]{4,}", (query or "").lower())}
+
+        def _sc(s: dict) -> int:
+            alvo = (str(s.get("name", "")) + " "
+                    + str(s.get("description", ""))).lower()
+            return sum(1 for w in palavras if w in alvo)
+
+        relevantes = sorted((s for s in skills if _sc(s) > 0),
+                            key=lambda s: -_sc(s))[:18]
+        restantes = [s for s in skills if _sc(s) == 0]
+        escolhidas = relevantes + restantes[:max(0, 18 - len(relevantes))]
+        for s in escolhidas:
             # v3.13: índice enxuto — o catálogo é só PARA SABER QUE
             # EXISTE (o casamento por gatilhos usa a descrição completa
             # à parte). 60 chars bastam e o prompt fica leve.
             desc = (s["description"] or "(sem descrição)").split(".")[0][:60].rstrip()
             lines.append(f"- {s['name']}: {desc} — ler: {s['skill_md']}")
+        outras = len(skills) - len(escolhidas)
+        if outras > 0:
+            lines.append(f"(+{outras} outras skills — catálogo completo: "
+                         f"list_dir {self.dirs[0][0]})")
         return "\n".join(lines)
 
     def read_skill_md(self, path: str) -> str:
