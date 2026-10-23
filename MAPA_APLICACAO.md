@@ -63,7 +63,8 @@ tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 | Arquivo | Papel |
 |---|---|
 | `server/app.py` | Servidor Flask: **76 rotas** (chat SSE, orchestrator, Ollama, MCP, skills, logs, tools, conversas, agendador, memória, settings, auditoria, backups, métricas, notificações, receitas, doctor, hooks). Imports lazy → boot rápido. |
-| `ollama_client.py` | Cliente HTTP do Ollama (chat, streaming, modelos, pull). |
+| `ollama_client.py` | Cliente HTTP do Ollama (chat, streaming, modelos, pull) + fábrica `get_client` (v3.17.0: provedor externo com fallback). |
+| `llm_providers.py` | Provedores LLM externos GRATUITOS (OpenAI-compat): registro groq/gemini/mistral/openrouter/llm7/zai/cohere, chave em secrets 600, fallback local — memória NUNCA sai (regra do operador). |
 | `manager.py` | Gerência do Ollama: boot/restart (systemd ou `ollama serve` com log), diagnóstico de ambiente. |
 | `autoselect.py` | Auto-atribuição de modelos por papel (lê SEMPRE a lista instalada). |
 | `conversations.py` | Sessões persistidas (`conversations/*.json`, atômico): histórico recuperável, busca, export. |
@@ -249,6 +250,9 @@ responde apenas preflight CORS (204) — sem buraco.
 ## 9. Segurança — camadas empilhadas
 
 1. **Auth**: token em todas as rotas de dados (71 protegidas).
+1b. **Privacidade de LLM externo** (v3.17.0): memória/dados pessoais nunca
+     são enviados a provedores (injeção só em cliente local); chaves em
+     `secrets/` 600; fallback local; ferramentas sempre locais.
 2. **Sandbox de arquivos** (`resolve_path`): leitura na home; escrita SOMENTE
    em workspace/ e skills/; pastas sensíveis negadas mesmo com sandbox off.
 3. **Segredos**: `secrets/` modo 600, fora do repo, fora do modelo, fora de

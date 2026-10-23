@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 APP_NAME = "hermes-agent"
-VERSION = "3.16.1"
+VERSION = "3.17.0"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
@@ -27,6 +27,10 @@ DEFAULTS = {
     "skills_autoscan": True,
     # v3.15.1: projeto sem caminho no pedido → o agente PERGUNTA a pasta
     "ask_project_path": True,
+    # v3.17.0: provedor LLM externo GRATUITO (groq|gemini|mistral|
+    # openrouter|llm7|zai|cohere) com fallback local; memória NUNCA sai
+    "llm_provider": "local",
+    "llm_model": "",
     "skills_watch_dirs": None,        # None = [~/Downloads]
     # Acesso à web (ferramentas web_search / web_fetch do agente e da GUI)
     "web_access": True,

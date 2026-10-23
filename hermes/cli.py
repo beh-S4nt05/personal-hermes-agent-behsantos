@@ -481,6 +481,70 @@ def cmd_config(args) -> None:
         subprocess.run([os.environ.get("EDITOR", "nano"), str(cfg.path)])
 
 
+def cmd_provider(args) -> None:
+    """v3.17.0: provedores LLM externos GRATUITOS (memória nunca sai)."""
+    import getpass as _gp
+    from .llm_providers import REGISTRY, api_key, salvar_key, testar
+    acao = str(getattr(args, "acao", "list"))
+    cfg = _cfg(args)
+    if acao == "list":
+        atual = str(getattr(cfg, "llm_provider", "local"))
+        _p("\n🔌 provedores LLM gratuitos (todos compatíveis, sem cartão):")
+        for nome, info in REGISTRY.items():
+            chave = "sem chave" if info.get("sem_chave") else (
+                "chave ok" if api_key(cfg, nome) else "SEM chave")
+            marca = " ◀ atual" if nome == atual else ""
+            _p(f"  • {nome:11s} {info['model']:42s} {chave}{marca}")
+            _p(f"              {info['nota']} · base {info['base']}")
+        _p("\n  configure: hermes provider set <nome> [--model X] · "
+           "teste: hermes provider test · volte ao local: provider off")
+        _p("  🔒 privacidade: a memória/dados pessoais NUNCA vão a provedores "
+           "externos;\n     ferramentas e arquivos continuam 100% locais.")
+        return
+    if acao == "set":
+        nome = str(getattr(args, "provedor", "")).strip().lower()
+        if nome not in REGISTRY:
+            _fail(f"provedor desconhecido: {nome!r} — use: "
+                  + ", ".join(REGISTRY))
+            raise SystemExit(1)
+        modelo = str(getattr(args, "model", "") or "").strip() \
+            or REGISTRY[nome]["model"]
+        if not REGISTRY[nome].get("sem_chave") and not api_key(cfg, nome):
+            key = str(getattr(args, "key", "") or "").strip()
+            if not key:
+                _p(f"\n🔑 cole a chave de API de {nome} "
+                   f"(fica em ~/.hermes/secrets/{nome}.key, modo 600 — "
+                   "não aparece na tela):")
+                key = _gp.getpass("   chave: ").strip()
+            if not key:
+                _fail("sem chave — nada configurado")
+                raise SystemExit(1)
+            arq = salvar_key(cfg, nome, key)
+            _p(f"\n🔑 chave gravada em {arq} (600)")
+        cfg.update({"llm_provider": nome, "llm_model": modelo})
+        _p(f"\n🔌 provedor ativo: {nome} · modelo {modelo}")
+        _p("   🔒 memória e dados pessoais ficam no Ollama local; se "
+           f"{nome} falhar, cai no local automaticamente.")
+        _p("   valide com: hermes provider test")
+        return
+    if acao == "test":
+        nome = str(getattr(cfg, "llm_provider", "local"))
+        if nome == "local":
+            _p("\n🔌 provedor atual: LOCAL (Ollama) — nada a testar fora")
+            return
+        _p(f"\n🔌 testando {nome} (chamada real de 1 completion)…")
+        r = testar(cfg, nome, str(getattr(cfg, "llm_model", "") or ""))
+        _p(("  ✔ " if r["ok"] else "  ✖ ") + r["msg"])
+        if not r["ok"]:
+            raise SystemExit(1)
+        return
+    if acao == "off":
+        cfg.update({"llm_provider": "local", "llm_model": ""})
+        _p("\n🔌 voltou ao LOCAL (Ollama) — chave continua salva em "
+           "secrets/ se quiser reativar")
+        return
+
+
 def cmd_memory_list(args) -> None:
     """v3.16.1: lista os fatos da memória do agente."""
     from .memory import MemoryStore
@@ -595,6 +659,19 @@ def build_parser() -> argparse.ArgumentParser:
                         "matriz (modelo × cenário) com recomendação")
     p.set_defaults(fn=cmd_selftest)
 
+    p = sub.add_parser("provider", help="provedores LLM externos gratuitos (memória nunca sai)")
+    psub = p.add_subparsers(dest="acao", required=True)
+    pl = psub.add_parser("list", help="lista provedores gratuitos e o atual")
+    pl.set_defaults(acao="list", fn=cmd_provider)
+    ps = psub.add_parser("set", help="ativa um provedor (pede a chave com segurança)")
+    ps.add_argument("provedor", help="groq|gemini|mistral|openrouter|llm7|zai|cohere")
+    ps.add_argument("--model", default="", help="modelo (default do provedor se vazio)")
+    ps.add_argument("--key", default="", help="chave (se não passar, pede escondida)")
+    ps.set_defaults(acao="set", fn=cmd_provider)
+    pt = psub.add_parser("test", help="ping + 1 completion real do provedor ativo")
+    pt.set_defaults(acao="test", fn=cmd_provider)
+    po = psub.add_parser("off", help="volta ao Ollama local")
+    po.set_defaults(acao="off", fn=cmd_provider)
     p = sub.add_parser("rag", help="biblioteca de livros (RAG local): indexa ou consulta")
     p.add_argument("consulta", nargs="?", default="", help="texto a buscar (vazio = reindexar)")
     p.set_defaults(fn=cmd_rag)

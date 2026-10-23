@@ -342,7 +342,21 @@ class MockOllamaClient:
 
 
 def get_client(cfg):
-    """Fábrica: devolve o cliente mock quando cfg.mock for verdadeiro."""
+    """Fábrica: devolve o cliente mock quando cfg.mock for verdadeiro.
+    v3.17.0: com llm_provider externo configurado, devolve externo com
+    FALLBACK local (inferência externa; ferramentas continuam locais)."""
     if cfg.mock:
         return MockOllamaClient()
-    return OllamaClient(cfg.ollama_url, timeout=cfg.cmd_timeout * 5 + 120)
+    local = OllamaClient(cfg.ollama_url, timeout=cfg.cmd_timeout * 5 + 120)
+    provedor = str(getattr(cfg, "llm_provider", "local") or "local")
+    if provedor != "local":
+        try:
+            from .llm_providers import REGISTRY, ExternalClient, FallbackClient
+            if provedor in REGISTRY:
+                ext = ExternalClient(cfg, provedor,
+                                     str(getattr(cfg, "llm_model", "")
+                                         or REGISTRY[provedor]["model"]))
+                return FallbackClient(ext, local)
+        except Exception:  # noqa: BLE001
+            pass
+    return local

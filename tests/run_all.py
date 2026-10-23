@@ -3548,6 +3548,142 @@ def T123_memory_list_clear():
 
 
 @case
+def T124_provedores_externos_gratuitos():
+    """v3.17.0: registro de provedores SEM custo; get_client devolve
+    externo+fallback; chave mora em secrets/ (600) e NUNCA em config."""
+    import os as _os
+    import stat as _stat
+    from hermes import llm_providers as LP
+    from hermes.ollama_client import MockOllamaClient, OllamaClient, get_client
+
+    # registro: só provedores gratuitos, com base/modelo; llm7 sem chave
+    for nome, info in LP.REGISTRY.items():
+        assert info["base"].startswith("https://"), nome
+        assert info.get("model"), nome
+    assert LP.REGISTRY["llm7"].get("sem_chave") is True
+    assert "cerebras" not in LP.REGISTRY      # exige cartão → fora
+    cfg = fresh()
+    # default: local
+    cli = get_client(cfg)
+    assert not hasattr(cli, "externo") and not getattr(cli, "is_external", False)
+    # configurado: externo com fallback (cfg NÃO-mock — mock tem precedência)
+    import tempfile as _tf2
+    from hermes.config import Config as _Cfg
+    cfg = _Cfg(data_dir=_tf2.mkdtemp(prefix="hermes-t124b-"), mock=False)
+    cfg.update({"llm_provider": "groq", "llm_model": "llama-3.1-8b-instant"})
+    cli2 = get_client(cfg)
+    assert hasattr(cli2, "externo") and cli2.externo.provedor == "groq"
+    assert isinstance(cli2.local, OllamaClient)
+    assert cli2.is_external is True
+    # mock ignora provedor externo (demo segue local-simulada)
+    cfg3 = _Cfg(data_dir=_tf2.mkdtemp(prefix="hermes-t124c-"), mock=True)
+    cfg3.update({"llm_provider": "groq"})
+    assert isinstance(get_client(cfg3), MockOllamaClient)
+    # chave em secrets (600), fora do config.yaml
+    cfg2 = fresh()
+    arq = LP.salvar_key(cfg2, "groq", "gsk_TESTE-123")
+    assert arq.parent.name == "secrets" and _stat.S_IMODE(arq.stat().st_mode) == 0o600
+    assert LP.api_key(cfg2, "groq") == "gsk_TESTE-123"
+    cfg2.update({"llm_provider": "groq"})           # cria/persiste config.yaml
+    conteudo_cfg = cfg2.path.read_text(encoding="utf-8")
+    assert "gsk_TESTE" not in conteudo_cfg          # a CHAVE nunca no config
+    assert "groq" in conteudo_cfg                   # o provedor (não-segredo) sim
+    _os.remove(arq)
+
+
+@case
+def T125_memoria_nunca_sai_da_maquina():
+    """v3.17.0 🔒 REGRA DO OPERADOR: fatos pessoais da memória são injetados
+    no prompt SÓ no cliente local; provedor externo (ou fallback) recebe a
+    task sem memória."""
+    from hermes.agent import Agent
+    from hermes.memory import MemoryStore
+
+    cfg = fresh()
+    ms = MemoryStore(cfg)
+    ms.import_facts(["meu apelido é Tigrão e meu código secreto é 4242"])
+    # cliente LOCAL (sem is_external): memória entra
+    ag = Agent(cfg)
+    class _Local:
+        simulated = False
+    ag.client = _Local()
+    p_local = ag.system_prompt("qual é o meu apelido?")
+    assert "Tigrão" in p_local
+    # cliente EXTERNO: memória NÃO entra (skills catálogo seguem — não são
+    # pessoais)
+    class _Ext:
+        simulated = False
+        is_external = True
+    ag2 = Agent(cfg)
+    ag2.client = _Ext()
+    p_ext = ag2.system_prompt("qual é o meu apelido?")
+    assert "Tigrão" not in p_ext and "4242" not in p_ext
+    assert "Habilidades" in p_ext                     # skills continuam
+    # FallbackClient também é externo (pode vir a usar o provedor)
+    from hermes.llm_providers import ExternalClient, FallbackClient
+    ext = ExternalClient(cfg, "llm7", _transport=lambda *a: iter(()))
+    fb = FallbackClient(ext, _Local())
+    assert fb.is_external is True
+
+
+@case
+def T126_cliente_externo_sse_e_fallback():
+    """v3.17.0: cliente OpenAI-compatível parseia SSE (tokens + tool_calls
+    completos com argumentos normalizados) e o fallback cai no local se o
+    externo falhar antes do 1º token."""
+    from hermes.llm_providers import ExternalClient, FallbackClient
+    from hermes.ollama_client import OllamaError
+
+    cfg = fresh()
+
+    import json as _json
+
+    def _sse(obj):
+        return "data: " + _json.dumps(obj)
+
+    def transporte(url, payload, headers):
+        assert url.endswith("/chat/completions")
+        assert "Authorization" not in headers            # llm7 anônimo: sem header
+        yield _sse({"choices": [{"delta": {"content": "olá"}}]})
+        yield _sse({"choices": [{"delta": {"content": " mundo"}}]})
+        yield _sse({"choices": [{"delta": {"tool_calls": [
+            {"index": 0, "id": "c1", "function": {
+                "name": "calc",
+                "arguments": _json.dumps({"a": 1})}}]}}]})
+        yield "data: [DONE]"
+
+    ext = ExternalClient(cfg, "llm7", _transport=transporte)
+    toks, calls = [], []
+    for ch in ext.chat_stream("m", [{"role": "user", "content": "oi"}]):
+        m = ch.get("message") or {}
+        if m.get("content"):
+            toks.append(m["content"])
+        for c in m.get("tool_calls") or []:
+            calls.append(c)
+    assert "".join(toks) == "olá mundo"
+    assert calls and calls[0]["function"]["name"] == "calc"
+    assert calls[0]["function"]["arguments"] == {"a": 1}     # str → dict
+
+    # fallback: externo falha na 1ª chamada → local responde
+    def transporte_morto(url, payload, headers):
+        raise OllamaError("groq HTTP 429: rate limit")
+        yield ""  # pragma: no cover
+
+    ext2 = ExternalClient(cfg, "groq", _transport=transporte_morto)
+
+    class _Local:
+        simulated = False
+        def chat_stream(self, model, messages, **k):
+            yield {"message": {"content": "resposta local"}}
+
+    fb = FallbackClient(ext2, _Local())
+    out = [c["message"]["content"] for c in
+           fb.chat_stream("m", [{"role": "user", "content": "oi"}])
+           if c.get("message", {}).get("content")]
+    assert out == ["resposta local"] and fb.usou_fallback is True
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

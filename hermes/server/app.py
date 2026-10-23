@@ -332,6 +332,19 @@ self.addEventListener("fetch", (e) => {
             return jsonify({"ok": True, "action": "reset", "output":
                             "🧹 objetivo da sessão limpo — a conversa continuará "
                             "sem goal (botão ＋ nova abre outra)"})
+        if cmd in ("/provider", "/provedor"):
+            nome = str(getattr(cfg, "llm_provider", "local"))
+            modelo = str(getattr(cfg, "llm_model", "") or "")
+            if nome == "local":
+                out = ("🔌 provedor LLM: LOCAL (Ollama) — tudo na sua máquina.\n"
+                       "externos gratuitos: hermes provider list (CLI)")
+            else:
+                out = (f"🔌 provedor LLM: {nome} · modelo {modelo}\n"
+                       "🔒 memória e dados pessoais ficam no local (nunca "
+                       "enviados) · fallback automático no Ollama\n"
+                       "troca: hermes provider set/test/off (CLI — chaves "
+                       "não passam pelo chat)")
+            return jsonify({"ok": True, "output": out})
         if cmd in ("/tools", "/ferramentas"):
             from ..tools import tool_summary
             return jsonify({"ok": True, "output":

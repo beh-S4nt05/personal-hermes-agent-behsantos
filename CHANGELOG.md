@@ -1,5 +1,37 @@
 # Changelog
 
+## v3.17.0 — 🔌 provedores LLM externos GRATUITOS, com privacidade dura
+
+Pedido do operador: foco em provedores SEM custo; seus dados pessoais
+NUNCA vão para provedores externos; a memória fica dentro do agente.
+Fonte dos provedores: catálogo comunitário awesome-free-llm-apis
+(sincronizado diariamente; endpoints compatíveis com a API OpenAI).
+
+**Registro (todos sem cartão):** groq (llama-3.1-8b-instant, 14.4k
+req/dia, dezenas de vezes mais rápido que o local) · gemini (2.5-flash,
+1M contexto, 1.5k req/dia) · mistral (modo gratuito) · openrouter
+(modelos :free) · llm7 (SEM chave, anônimo) · zai (GLM-4.7-Flash) ·
+cohere. Cerebras ficou fora (exige cartão).
+
+**Como funciona:**
+- `hermes provider list|set <p> [--model] |test|off` (chave pedida
+  escondida, gravada em `secrets/<p>.key` 600 — NUNCA em config.yaml,
+  logs ou auditoria); `/provider` no chat mostra o estado (chaves não
+  passam pelo chat).
+- 1 cliente OpenAI-compatível (`llm_providers.py`) cobre todos:
+  streaming SSE, tool_calls completos com argumentos normalizados.
+- **Fallback automático**: provedor falhou/429/sem internet antes do
+  1º token → Ollama local na hora (registrado no log).
+- **🔒 Privacidade (regra dura, T125): a MEMÓRIA do agente (fatos
+  pessoais) só é injetada no prompt de clientes LOCAIS — provedores
+  externos recebem a task sem memória.** Ferramentas, arquivos e
+  execução continuam 100% locais; apenas a inferência do LLM sai.
+
+**Testes:** T124 (registro só-grátis, get_client externo+fallback, chave
+em secrets 600 fora do config, mock ignora provedor), T125 (memória
+presente no local e AUSENTE no externo), T126 (SSE + tool_calls +
+fallback no 1º token). **126/126.**
+
 ## v3.16.1 — 🧠 memória gerenciável: list/clear + pacote do operador v2 por tópicos
 
 Pedido do operador: adicionar seus dados organizados POR TÓPICOS para o

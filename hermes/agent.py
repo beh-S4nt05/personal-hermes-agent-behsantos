@@ -255,14 +255,17 @@ class Agent:
                 prompt += "\n\n" + catalog
         except Exception:
             pass
-        # memória persistente: fatos sobre o usuário valem para todas as conversas
-        try:
-            from .memory import MemoryStore
-            mem = MemoryStore(self.cfg).prompt_section(query)
-            if mem:
-                prompt += mem
-        except Exception:
-            pass
+        # memória persistente: fatos sobre o usuário valem para todas as
+        # conversas — mas NUNCA para provedores externos (v3.17.0: regra de
+        # privacidade do operador; dados pessoais ficam na máquina)
+        if not getattr(self.client, "is_external", False):
+            try:
+                from .memory import MemoryStore
+                mem = MemoryStore(self.cfg).prompt_section(query)
+                if mem:
+                    prompt += mem
+            except Exception:
+                pass
         self._prompt_cache = (key, prompt)
         return prompt + _now_line()
 
