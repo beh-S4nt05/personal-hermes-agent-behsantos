@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.15.1** · gerado em 23/10/2026 · este documento é extraído do
+**Versão 3.16.0** · gerado em 23/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -81,6 +81,8 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `hermes update` | atualiza o agente a partir do GitHub |
 | `hermes memory` | memória de longo prazo do agente |
 | `hermes import` | importa fatos para a memória (JSON lista ou  |
+| `hermes list` | lista os fatos da memória do agente |
+| `hermes clear` | apaga TODOS os fatos da memória (reimporte um pacote limpo depois) |
 | `hermes skills` | catálogo de skills |
 | `hermes import` | importa skills: pasta local, .zip, URL git ou owner/repo |
 | `hermes scan` | varre pastas assistidas (ex.: ~/Downloads) e importa skills novas |
@@ -106,7 +108,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.15.1)
+## 3. Modificações — o que foi feito (v1.0.0 → v3.16.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -114,6 +116,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v3.16.0** | 🚀 MODO MISSÃO: autonomia com subtasks encadeadas |
 | **v3.15.1** | 📁 contrato do projeto: o agente sempre pede (ou recebe) o caminho |
 | **v3.15.0** | 🚀 assistente completo, independente e sem perda de contexto |
 | **v3.14.2** | 🗺 Mapa da aplicação + auditoria profunda (12 correções) |
@@ -430,6 +433,8 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `cmd_schedule(args)` | — |
 | `cmd_tasks(args)` | — |
 | `cmd_config(args)` | — |
+| `cmd_memory_list(args)` | v3.16.1: lista os fatos da memória do agente. |
+| `cmd_memory_clear(args)` | v3.16.1: apaga TODOS os fatos da memória (para reimportar um pacote organizado sem duplicatas). Pede confirmação, salvo… |
 | `cmd_models(args)` | — |
 | `cmd_models_auto(args)` | v3.11.3: escolhe o melhor modelo instalado para cada papel. |
 | `build_parser()` | — |

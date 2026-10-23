@@ -1,5 +1,24 @@
 # Changelog
 
+## v3.16.1 — 🧠 memória gerenciável: list/clear + pacote do operador v2 por tópicos
+
+Pedido do operador: adicionar seus dados organizados POR TÓPICOS para o
+agente fazer relações — sem repetir o que já existe.
+
+- **`hermes memory list`** — vê todos os fatos na memória (id + texto).
+- **`hermes memory clear`** (com confirmação; `--yes` pula) — apaga tudo,
+  para reimportar um pacote organizado com ZERO duplicatas.
+- **Pacote do operador v2** (`memoria-do-operador.json`, fora do repo):
+  44 fatos com tag de tópico — IDENTIDADE, CONTATO, PREFERÊNCIAS,
+  EDUCAÇÃO, CARREIRA, BEH, PROJETOS, TRABALHO-RECENTE, INTERESSES,
+  PARCERIA — e 3 fatos **[RELAÇÃO]** que cruzam os temas (stack↔projetos↔
+  BEH; certificados↔vagas; preferências valem para tudo). Novo: parceira
+  Luiza Claudia Matos Sevalho. Recuperação validada: perguntas
+  relacionais agora puxam os fatos de relação na frente.
+
+**Testes:** T123 (import → list → clear → reimport sem duplicatas +
+parsers no help). **123/123.**
+
 ## v3.16.0 — 🚀 MODO MISSÃO: autonomia com subtasks encadeadas
 
 Pedido do operador: passar UMA tarefa e o agente gerar as tasks em

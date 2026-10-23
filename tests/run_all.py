@@ -3518,6 +3518,36 @@ def T122_mission_reescreve_task_ao_falhar():
 
 
 @case
+def T123_memory_list_clear():
+    """v3.16.1: hermes memory list/clear — gerenciar a memória sem repetir:
+    import → list → clear --yes → import de novo (zero duplicatas)."""
+    from hermes.memory import MemoryStore
+
+    cfg = fresh()
+    ms = MemoryStore(cfg)
+    ms.import_facts(["fato A de teste", "fato B de teste"])
+    assert len(ms.list_all()) == 2
+    # clear apaga tudo
+    for f in ms.list_all():
+        ms.delete(str(f.get("id")))
+    assert ms.list_all() == []
+    # reimport depois do clear: sem duplicatas
+    ms.import_facts(["fato A de teste", "fato C nova"])
+    textos = {f.get("text") for f in ms.list_all()}
+    assert textos == {"fato A de teste", "fato C nova"}
+    # CLI com parsers registrados (fonte)
+    src = Path("hermes/cli.py").read_text(encoding="utf-8")
+    assert 'add_parser("list"' in src and 'add_parser("clear"' in src
+    assert "cmd_memory_list" in src and "cmd_memory_clear" in src
+    # help do pai menciona os subcomandos
+    import subprocess as _sp
+    r = _sp.run(["./.venv/bin/hermes", "memory", "--help"],
+                capture_output=True, text=True, timeout=30, check=False)
+    assert "import" in (r.stdout or "") and "list" in (r.stdout or "")
+    assert "clear" in (r.stdout or "")
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista

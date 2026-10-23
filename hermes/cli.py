@@ -481,6 +481,41 @@ def cmd_config(args) -> None:
         subprocess.run([os.environ.get("EDITOR", "nano"), str(cfg.path)])
 
 
+def cmd_memory_list(args) -> None:
+    """v3.16.1: lista os fatos da memória do agente."""
+    from .memory import MemoryStore
+    fatos = MemoryStore(_cfg(args)).list_all()
+    if not fatos:
+        _p("\n🧠 memória vazia — importe com: hermes memory import <arquivo>")
+        return
+    _p(f"\n🧠 memória do agente ({len(fatos)} fato(s)):")
+    for f in fatos:
+        _p(f"  📔 [{f.get('id', '?')}] {f.get('text', '')[:110]}")
+
+
+def cmd_memory_clear(args) -> None:
+    """v3.16.1: apaga TODOS os fatos da memória (para reimportar um
+    pacote organizado sem duplicatas). Pede confirmação, salvo --yes."""
+    from .memory import MemoryStore
+    ms = MemoryStore(_cfg(args))
+    fatos = ms.list_all()
+    if not fatos:
+        _p("\n🧠 memória já está vazia")
+        return
+    if not getattr(args, "yes", False):
+        _p(f"\n⚠ isto vai apagar {len(fatos)} fato(s) da memória.")
+        resp = input("digite SIM para confirmar: ").strip()
+        if resp.upper() != "SIM":
+            _p("cancelado — nada foi apagado")
+            return
+    for f in fatos:
+        try:
+            ms.delete(str(f.get("id")))
+        except Exception:  # noqa: BLE001
+            pass
+    _p(f"\n🧠 memória limpa: {len(fatos)} fato(s) apagado(s)")
+
+
 def cmd_models(args) -> None:
     from .manager import OllamaManager
 
@@ -529,6 +564,11 @@ def build_parser() -> argparse.ArgumentParser:
                               "um fato por linha) — duplicados pulados")
     pm.add_argument("arquivo", help="caminho do arquivo de fatos")
     pm.set_defaults(fn=cmd_memory_import)
+    pl = msub.add_parser("list", help="lista os fatos da memória do agente")
+    pl.set_defaults(fn=cmd_memory_list)
+    pc = msub.add_parser("clear", help="apaga TODOS os fatos da memória (reimporte um pacote limpo depois)")
+    pc.add_argument("-y", "--yes", action="store_true", help="não pede confirmação")
+    pc.set_defaults(fn=cmd_memory_clear)
 
     p = sub.add_parser("skills", help="catálogo de skills")
     ssub = p.add_subparsers(dest="skills_cmd", required=True)
