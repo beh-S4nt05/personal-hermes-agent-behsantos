@@ -110,6 +110,9 @@ GUI/CLI → POST /api/chat {message, history[-20], session_id, agent}
          - reprovação injusta → garantidor devolve resposta boa
          - máx. 2 tentativas (economia de tokens)
       e. 📦 entrega (aprovação se criação) → resposta final no chat
+   4d. 🚀 modo missão (v3.16.0): "missão: <objetivo>" → 2-5 subtasks
+       sequenciais, cada uma validada; reprovação → task reescrita e
+       re-executada; validação final do objetivo inicial + relatório
    4e. 📁 projeto sem caminho (v3.15.1): task de código/projeto sem
        pasta no pedido → o agente PERGUNTA o caminho; a resposta retoma
        a task com escopo forçado (pasta buscada/criada)
@@ -296,7 +299,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **119 casos** (v3.15.0), famílias:
+`tests/run_all.py` — **122 casos** (v3.16.0), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·

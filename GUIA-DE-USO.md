@@ -6,6 +6,24 @@
 
 ---
 
+## 🚀 Modo missão — autonomia total (v3.16.0)
+
+Passe UMA tarefa com o prefixo **`missão:`** e o Hermes faz o resto:
+
+```
+missão: construa meu app de gastos em /media/Arquivos/projetos/gastos,
+  com testes e git
+```
+
+Ele divide em 2-5 subtasks sequenciais, executa cada uma como task
+completa (com revisor e aprovações), **valida cada etapa** e, se algo
+reprovar, **reescreve a própria task** com o problema apontado e tenta de
+novo — até o objetivo inicial sair validado, com relatório final
+(subtask por subtask, tentativas e veredito). Sem pasta no pedido? Ele
+pergunta o caminho uma vez e retoma a missão inteira com ele.
+
+---
+
 ## A fórmula do prompt que funciona
 
 ```

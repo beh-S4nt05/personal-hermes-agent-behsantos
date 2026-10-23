@@ -729,6 +729,8 @@ def approve(tid: str, action: str, edit: dict | None = None) -> bool:
 _PEND_PROJ_LOCK = _threading.Lock()
 _PEND_PROJETO: dict[str, dict] = {}
 _PEND_PROJ_TTL = 600.0          # 10 min para responder o caminho
+_MISSAO_RE = re.compile(
+    r"(?i)^\s*(missão|missao|modo\s+miss[ãa]o)\s*[:\-—]\s*")
 _CANCELA_RE = re.compile(
     r"(?i)^\s*(cancela\w*|esquece|deixa|parar?|não\b|nao\b|nop\w*)\b")
 
@@ -776,7 +778,9 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
                  on_event=None, cancel=None, max_tentativas: int = 2,
                  goal: str = "", session_id: str = "",
                  resume_plan: dict | None = None,
-                 resume_tid: str | None = None) -> str:
+                 resume_tid: str | None = None,
+                 extra_criterios: list[str] | None = None,
+                 resultado_meta: dict | None = None) -> str:
     """Conversa → 🎯 plano → [🔒 aprovação p/ criação] → ⚡ execução →
     🔍 revisão → [🔒 entrega editável p/ criação] → done.
 
@@ -788,6 +792,15 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
 
     def _cancelado() -> bool:
         return cancel is not None and cancel.is_set()
+
+    # ── v3.16.0: MODO MISSÃO — 1 tarefa → subtasks encadeadas → validação
+    # → retry com task reescrita → relatório. Gatilho: "missão: <objetivo>".
+    if _MISSAO_RE.match(message) and not resume_plan:
+        with _PEND_PROJ_LOCK:            # consome pendência de caminho
+            _PEND_PROJETO.pop(session_id or "default", None)
+        from .mission import run_mission
+        return run_mission(agent, cfg, message, history, on_event=on_event,
+                           cancel=cancel, goal=goal, session_id=session_id)
 
     TRACE.clear()
     goal_txt = (f"\n[🎯 OBJETIVO DA SESSÃO definido pelo operador: {goal}]"
@@ -813,6 +826,13 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
                 message = (pend["message"]
                            + f"\n\n[Pasta do projeto definida pelo operador: "
                              f"{caminho[0]}]")
+                if _MISSAO_RE.match(message):
+                    # v3.16.0: missão retomada com o caminho — volta ao
+                    # modo missão (não vira task única)
+                    from .mission import run_mission
+                    return run_mission(agent, cfg, message, history,
+                                       on_event=on_event, cancel=cancel,
+                                       goal=goal, session_id=session_id)
             elif _CANCELA_RE.match(message):
                 with _PEND_PROJ_LOCK:
                     _PEND_PROJETO.pop(session_id, None)
@@ -858,6 +878,8 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     criterios += _extra_criterios(message)      # v3.13.3: rastro obrigatório
     sks_antecipadas = skills_for(cfg, message + " " + objetivo)
     criterios += _skill_criterios(sks_antecipadas)  # v3.15.0: skill delega
+    if extra_criterios:   # v3.16.0: critérios da SUBTASK da missão
+        criterios += [str(c)[:160] for c in extra_criterios[:4]]
     tipo = plano.get("tipo") if plano.get("tipo") in ("leitura", "criacao") else "leitura"
 
     # ── v3.15.1: projeto de criação SEM caminho → pergunta e espera ──
@@ -1141,6 +1163,10 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     dur = round(time.time() - t0, 1)
     status = ("aprovada" if veredito == "ok" and not _cancelado() else
               "reprovada" if not _cancelado() else "cancelada")
+    if resultado_meta is not None:      # v3.16.0: missão lê o veredito
+        resultado_meta.update({"veredito": veredito, "problema": problema,
+                               "tentativas": execucoes, "status": status,
+                               "dur_s": dur})
     entry = {"objetivo": objetivo, "tipo": tipo, "status": status,
              "tentativas": execucoes, "dur_s": dur,
              "veredito": veredito, "problema": problema[:200],

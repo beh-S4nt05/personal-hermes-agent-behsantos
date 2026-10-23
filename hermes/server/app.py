@@ -370,6 +370,8 @@ self.addEventListener("fetch", (e) => {
             return jsonify({"ok": True, "output": (
                 "comandos do chat (CLI e GUI):\n"
                 "  /goal <texto>   — define o objetivo da sessão (o orquestrador usa)\n"
+                "  missão: <texto>  — modo missão: subtasks em sequência, com\n"
+                "                    validação e retry automático até concluir\n"
                 "  /goal           — mostra o objetivo atual\n"
                 "  /reset          — limpa o objetivo da sessão\n"
                 "  /tools          — ferramentas disponíveis ao agente\n"

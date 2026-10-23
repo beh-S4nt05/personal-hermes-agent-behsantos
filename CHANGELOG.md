@@ -1,5 +1,41 @@
 # Changelog
 
+## v3.16.0 — 🚀 MODO MISSÃO: autonomia com subtasks encadeadas
+
+Pedido do operador: passar UMA tarefa e o agente gerar as tasks em
+sequência, validar se deu certo ou errado e, se errado, tentar de novo
+com o prompt/task melhorado — até terminar a task inicial de forma
+satisfatória.
+
+**Gatilho**: mensagem começa com `missão: <objetivo>` (ou "modo missão:").
+O resto do comportamento segue idêntico.
+
+**O ciclo da missão** (`hermes/mission.py`):
+1. **Planeja 2-5 subtasks sequenciais** (LLM; fallback determinístico =
+   a própria task), cada uma com objetivo concreto e critérios
+   verificáveis;
+2. **Executa cada subtask como task completa** — pipeline 🎯⚡🔍 com
+   revisor, aprovações, escopo de projeto, skills e fôlego de projeto;
+   os **critérios da subtask entram no revisor**;
+3. **Valida cada subtask**: reprovada → **reescreve a TASK** (prompt
+   melhorado a partir do problema apontado pelo revisor) e executa de
+   novo (1 reescrita por subtask; o pipeline interno já faz 2 tentativas);
+4. **Contexto acumulado**: cada subtask recebe o resumo do que já foi
+   feito (nada recomeça do zero);
+5. **Validação FINAL**: o revisor julga o objetivo INICIAL contra as
+   entregas acumuladas → relatório com ✔/⚠ por subtask, tentativas e
+   veredito final.
+
+**Integrações**: pasta do projeto propagada a TODAS as subtasks (missão
+de código sem pasta pergunta o caminho UMA vez e retoma a missão inteira
+com ele); cancelamento respeitado em qualquer ponto; eventos `note`/
+`brain` visíveis na GUI; `/ajuda` documenta o gatilho.
+
+**Testes:** T121 (gatilho, pergunta de caminho, 2 subtasks sequenciais
+com critérios no revisor, contexto acumulado, pasta criada, validação
+final), T122 (subtask reprovada → task REESCRITA → 3ª execução conclui,
+relatório com tentativas). **122/122.**
+
 ## v3.15.1 — 📁 contrato do projeto: o agente sempre pede (ou recebe) o caminho
 
 Diretriz do operador: não é "uma pasta" — TODA vez que ele iniciar um

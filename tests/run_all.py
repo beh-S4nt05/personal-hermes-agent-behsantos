@@ -3394,6 +3394,130 @@ def T120_perguntar_caminho_do_projeto():
 
 
 @case
+def T121_mission_subtasks_sequenciais():
+    """v3.16.0 🚀 MODO MISSÃO: 1 tarefa → subtasks em sequência, cada uma
+    validada (critérios da subtask no revisor), contexto acumulado, pasta
+    do projeto propagada e relatório final com validação do objetivo."""
+    import os as _os
+    import shutil as _sh
+    from hermes import mission as M
+    from hermes import orchestrator as orc
+
+    cfg = fresh(creation_approval=False)
+
+    class _Ag:
+        model_override = None
+        def run(self, msgs, on_event=None, cancel=None):
+            prompts.append(msgs[-1]["content"])
+            on_event({"type": "done",
+                      "message": "entrega com evidência real colada"})
+            return "entrega com evidência real colada"
+
+    # 1. gatilho: "missão:" desvia; mensagem comum não desvia
+    captura = {}
+    orig_rm = M.run_mission
+    M.run_mission = (lambda *a, **k:
+                     captura.setdefault("ok", True) and "missão fake")
+    try:
+        orc.run_pipeline(_Ag(), cfg, "missão: construa o app de tarefas", [],
+                         on_event=lambda e: None)
+    finally:
+        M.run_mission = orig_rm
+    assert captura.get("ok")
+
+    # 2. missão de código SEM pasta → pergunta o caminho (1 vez, não por subtask)
+    r = M.run_mission(_Ag(), cfg,
+                      "missão: construa uma calculadora python com POO",
+                      [], session_id="s-m1")
+    assert "caminho" in r.lower()
+    assert "s-m1" in orc._PEND_PROJETO          # pendência p/ retomar
+    orc._PEND_PROJETO.pop("s-m1", None)
+
+    # 3. E2E: 2 subtasks, pasta no pedido, revisor captura critérios
+    prompts, criterios_vistos = [], []
+    subtasks = [{"objetivo": "criar a estrutura do projeto calculadora",
+                 "criterios": ["estrutura criada"]},
+                {"objetivo": "criar os testes da calculadora e rodar",
+                 "criterios": ["testes verdes"]}]
+    orig_plan = M._planejar_subtasks
+    orig_rev = orc.review
+    M._planejar_subtasks = lambda cfg, obj: subtasks
+    orc.review = (lambda cfg, objetivo, criterios, resultado:
+                  (criterios_vistos.append(list(criterios))
+                   or {"veredito": "ok"}))
+    proj = Path.home() / f".hermes-t121-{_os.getpid()}"
+    _sh.rmtree(proj, ignore_errors=True)
+    try:
+        evs = []
+        rel = M.run_mission(_Ag(), cfg,
+                            f"missão: construa a calculadora python em {proj}",
+                            [], on_event=evs.append, session_id="s-m2")
+        criada = proj.exists()               # captura ANTES do finally limpar
+    finally:
+        M._planejar_subtasks = orig_plan
+        orc.review = orig_rev
+        _sh.rmtree(proj, ignore_errors=True)
+    assert "Missão concluída" in rel and "2/2" in rel, rel[:200]
+    assert len(prompts) == 2
+    assert "Pasta do projeto da missão" in prompts[0]
+    assert "Missão 2/2" in prompts[1]
+    assert "contexto do que já foi feito" in prompts[1]   # acumulado
+    assert any("estrutura criada" in " | ".join(cs)
+               for cs in criterios_vistos[:2])
+    assert any("testes verdes" in " | ".join(cs) for cs in criterios_vistos)
+    assert len(criterios_vistos) == 3        # 2 subtasks + validação final
+    assert criada                            # pasta criada pela missão
+    assert any("🚀" in str(e.get("message", "")) for e in evs)
+
+
+@case
+def T122_mission_reescreve_task_ao_falhar():
+    """v3.16.0 🔁: subtask reprovada → a TASK é reescrita (prompt melhorado
+    com o problema do revisor) e re-executada — até concluir a missão."""
+    from hermes import mission as M
+    from hermes import orchestrator as orc
+
+    cfg = fresh(creation_approval=False, ask_project_path=False)
+    prompts = []
+
+    class _Ag:
+        model_override = None
+        def run(self, msgs, on_event=None, cancel=None):
+            prompts.append(msgs[-1]["content"])
+            on_event({"type": "done", "message": "tentativa de entrega"})
+            return "tentativa de entrega"
+
+    orig_plan = M._planejar_subtasks
+    orig_mel = M._task_melhorada
+    orig_rev = orc.review
+    M._planejar_subtasks = lambda cfg, obj: [
+        {"objetivo": "criar o módulo X do app", "criterios": ["módulo funciona"]}]
+    M._task_melhorada = (lambda cfg, st, pr, res:
+                         "task MELHORADA: criar o módulo X e executar com node")
+
+    def _rev(cfg, objetivo, criterios, resultado):
+        if "MELHORADA" in objetivo or objetivo.startswith("MISSÃO INICIAL"):
+            return {"veredito": "ok"}
+        return {"veredito": "reprovado", "problema": "não executou o código"}
+
+    orc.review = _rev
+    evs = []
+    try:
+        rel = M.run_mission(_Ag(), cfg, "missão: crie o módulo X do app", [],
+                            on_event=evs.append, session_id="s-m3")
+    finally:
+        M._planejar_subtasks = orig_plan
+        M._task_melhorada = orig_mel
+        orc.review = orig_rev
+    # pipeline interno: 2 tentativas falhando → missão reescreveu → 3ª exec
+    assert len(prompts) == 3, len(prompts)
+    assert "MELHORADA" in prompts[2]
+    assert any("reescrevendo a task" in str(e.get("message", "")) for e in evs)
+    assert "2 tentativa(s)" in rel
+    assert "Missão concluída" in rel and "1/1" in rel, rel[:200]
+
+
+@case
 def T75_aba_ollama_modelos_e_papeis():
     """v3.9: a aba Ollama lista TODOS os modelos instalados com o papel de
     cada um (💬/🎯/🔍/⚡) e, com o servidor DESLIGADO, mostra a última lista
