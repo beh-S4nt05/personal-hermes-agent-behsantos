@@ -78,6 +78,7 @@ tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 | `arena.py` | 🏟️ Arena de provedores (v4.3.0): a MESMA task em todos os contendores do pool grátis, em modo resposta (sem ferramentas/escrita), cronometrada; revisor LOCAL ranqueia com critérios (fallback heurística objetiva); task sempre DLP-mascarada (D2). CLI `betterme arena "<task>" [--n 3]`. |
 | `grafo.py` | 🗺️ Grafo de código (v4.4.0, E3): AST puro (stdlib, nada executa) → SQLite `grafo.db` no data-dir; símbolos função/classe/método com arquivo:linha + doc; arestas `chama`/`importa`/`herda` TODAS com proveniência arquivo:linha; `build\|query\|path` (BFS direcionado); tool `grafo_query` no cérebro — "onde está a lógica de X?" a custo zero de tokens. |
 | `revisar.py` | 🔍 Revisão de diff (v4.5.0, E4): gate único pré-push — varredura objetiva (CRITICO reprova) + revisor LLM LOCAL (D2: diff tem código, nada sai) com veredito JSON e evidência arquivo:linha VALIDADA contra o diff; CLI exit 0/1 + tool `revisar_diff` no cérebro. |
+| `multimodal.py` | 🎙️ Multimodal local (v4.6.0, E5): ffmpeg → whisper.cpp LOCAL (timestamps) → transcrição vira livro `.txt` na biblioteca RAG (fonte citada); modelos em <data>/models; degradação honesta sem binários. CLI `betterme audio\|video transcrever`. |
 | `manager.py` | Gerência do Ollama: boot/restart (systemd ou `ollama serve` com log), diagnóstico de ambiente. |
 | `autoselect.py` | Auto-atribuição de modelos por papel (lê SEMPRE a lista instalada). |
 | `conversations.py` | Sessões persistidas (`conversations/*.json`, atômico): histórico recuperável, busca, export. |
@@ -316,7 +317,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **163 casos** (v4.5.0), famílias:
+`tests/run_all.py` — **166 casos** (v4.6.0), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·

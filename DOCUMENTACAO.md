@@ -1,6 +1,6 @@
 # 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
-**Versão 4.5.0** · gerado em 25/10/2026 · este documento é extraído do
+**Versão 4.6.0** · gerado em 25/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -107,6 +107,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `betterme query` | busca símbolos por nome (função/classe/método) |
 | `betterme path` | traça o caminho de chamadas A → B |
 | `betterme revisar` | 🔍 revisa o git diff HEAD (gate único pré-push; v4.5.0) |
+| `betterme transcrever` | extrai áudio (ffmpeg) → whisper.cpp  |
 | `betterme aprendidos` | rascunhos de skills/lições esperando sua aprovação |
 | `betterme conversas` | conversas passadas do agente |
 | `betterme rag` | biblioteca de livros (RAG local): indexa ou consulta |
@@ -128,7 +129,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `betterme skills audit` (auditar o catálogo), `betterme config set/get`, `betterme server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v4.5.0)
+## 3. Modificações — o que foi feito (v1.0.0 → v4.6.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -136,6 +137,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v4.6.0** | 🎙️ MULTIMODAL LOCAL (PR #9, E5) |
 | **v4.5.0** | 🔍 REVISÃO DE DIFF (PR #8, E4) |
 | **v4.4.0** | 🗺️ GRAFO DE CÓDIGO (PR #7, E3) |
 | **v4.3.0** | 🏟️ ARENA DE PROVEDORES (PR #6) |
@@ -481,6 +483,7 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `cmd_arena(args)` | v4.3.0 (PR#6): arena — mesma task nos provedores grátis, ranking medido. |
 | `cmd_grafo(args)` | v4.4.0 (PR#7): grafo de código (onde está a lógica de X?). |
 | `cmd_revisar(args)` | v4.5.0 (PR#8): revisão de diff — gate único pré-push. |
+| `cmd_multimodal(args)` | v4.6.0 (PR#9): transcrição local de áudio/vídeo (→ RAG). |
 | `cmd_aprendidos(args)` | v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador). |
 | `cmd_skills_aprender(args)` | v4.0.0 (M6.5): transforma documento/texto/URL em rascunho de skill. |
 | `cmd_conversas_buscar(args)` | v4.0.0 (M6.5): busca textual nas conversas passadas. |

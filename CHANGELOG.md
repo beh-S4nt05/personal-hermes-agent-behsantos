@@ -1,5 +1,25 @@
 # Changelog
 
+## v4.6.0 — 🎙️ MULTIMODAL LOCAL (PR #9, E5)
+
+`betterme audio|video transcrever <arquivo>` — áudio/vídeo vira
+conhecimento pesquisável, 100% local:
+
+- **Pipeline:** ffmpeg extrai o áudio (wav 16 kHz mono) → **whisper.cpp
+  local** transcreve com timestamps → a transcrição ENTRA na biblioteca
+  RAG (`.txt` na biblioteca + reindexação) — fonte citada, busca
+  textual, zero nuvem.
+- **Local-first:** nenhum byte de mídia sai da máquina; modelos
+  `ggml-*.bin` ficam em `<data>/models/` (default ggml-base.bin).
+- **Degradação honesta:** sem ffmpeg (`sudo apt install ffmpeg`) ou sem
+  whisper.cpp (binário + modelo) → mensagem clara de como instalar,
+  nunca quebra (T166).
+- Flags `--ffmpeg/--whisper/--modelo` para apontar binários próprios.
+
+**Testes:** T164–T166 (pipeline com binários fake · transcrição
+indexada e citada no RAG · ausência de binário não quebra) —
+**166/166**.
+
 ## v4.5.0 — 🔍 REVISÃO DE DIFF (PR #8, E4)
 
 `betterme revisar` (ou "revise o diff" no chat, via ferramenta

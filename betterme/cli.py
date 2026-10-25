@@ -602,6 +602,12 @@ def cmd_revisar(args) -> None:
     revisar.cmd(args, _cfg(args))
 
 
+def cmd_multimodal(args) -> None:
+    """v4.6.0 (PR#9): transcrição local de áudio/vídeo (→ RAG)."""
+    from . import multimodal
+    multimodal.cmd(args, _cfg(args))
+
+
 def cmd_aprendidos(args) -> None:
     """v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador)."""
     from . import learning
@@ -828,6 +834,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--raiz", default=None,
                    help="raiz do repo (default: diretório atual)")
     p.set_defaults(fn=cmd_revisar)
+
+    for canal in ("audio", "video"):
+        p = sub.add_parser(
+            canal, help=f"🎙️ transcrição LOCAL de {canal} → RAG (v4.6.0)")
+        msub = p.add_subparsers(dest="acao", required=True)
+        mt = msub.add_parser("transcrever",
+                             help="extrai áudio (ffmpeg) → whisper.cpp "
+                                  "local → transcrição indexada no RAG")
+        mt.add_argument("arquivo", help="caminho do arquivo de áudio/vídeo")
+        mt.add_argument("--ffmpeg", default=None,
+                        help="caminho do ffmpeg (default: PATH)")
+        mt.add_argument("--whisper", default=None,
+                        help="caminho do binário whisper.cpp (default: PATH)")
+        mt.add_argument("--modelo", default="",
+                        help="modelo ggml-*.bin em <data>/models "
+                             "(default: ggml-base.bin)")
+        p.set_defaults(fn=cmd_multimodal)
     p = sub.add_parser("aprendidos",
                        help="rascunhos de skills/lições esperando sua aprovação")
     pa = p.add_argument("acao", nargs="?", default="list",

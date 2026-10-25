@@ -6263,6 +6263,96 @@ def T163_cli_e_tool_revisar_diff():
     assert rr2.returncode == 1 and "REPROVADO" in rr2.stdout, rr2.stdout[:300]
 
 
+# ══════════════════════ v4.6.0 (PR#9) — MULTIMODAL LOCAL (E5) ══════════════════════
+
+def _fixture_mm():
+    """Binários FAKE (ffmpeg/whisper-cli) + mídia fake p/ T164-T166."""
+    d = Path(tempfile.mkdtemp(prefix="mm-fix-"))
+    ff = d / "ffmpeg"
+    ff.write_text("#!/bin/sh\n"
+                  "for a in \"$@\"; do case \"$a\" in /*) touch \"$a\";; esac; done\n"
+                  "exit 0\n", encoding="utf-8")
+    wh = d / "whisper-cli"
+    wh.write_text("#!/bin/sh\n"
+                  "echo \"[00:00:00.000 --> 00:00:04.000]  olá este é um teste\"\n"
+                  "echo \"[00:00:04.000 --> 00:00:08.500]  de transcrição local do betterme\"\n",
+                  encoding="utf-8")
+    ff.chmod(0o755)
+    wh.chmod(0o755)
+    midia = d / "reuniao.mp4"
+    midia.write_bytes(b"FAKEVIDEOBYTES")
+    return d, ff, wh, midia
+
+
+@case
+def T164_multimodal_pipeline_com_binarios_fake():
+    """v4.6.0 (PR#9): ffmpeg extrai áudio → whisper.cpp local transcreve
+    com timestamps → transcrição gravada (tudo local, nada sai)."""
+    from betterme import multimodal
+
+    cfg = fresh()
+    d, ff, wh, midia = _fixture_mm()
+    r = multimodal.transcrever(cfg, midia, ffmpeg_bin=str(ff),
+                               whisper_bin=str(wh))
+    assert r["ok"], r
+    assert r["segmentos"] == 2, r
+    assert "olá este é um teste" in r["texto"]
+    assert "[00:00:00.000] olá este é um teste" in r["linhas"][0], r["linhas"]
+    transc = Path(r["arquivo"])
+    assert transc.is_file() and "-transcricao.txt" in transc.name
+    assert "[00:00:04.000]" in transc.read_text(encoding="utf-8")
+    assert (Path(cfg.data_dir) / "multimodal" / "reuniao.wav").is_file()
+    # modelo default aponta para <data>/models (nunca fora do data-dir)
+    assert str(multimodal.modelo_path(cfg)).startswith(
+        str(Path(cfg.data_dir) / "models"))
+
+
+@case
+def T165_transcricao_indexada_e_citada_no_rag():
+    """v4.6.0 (PR#9): a transcrição ENTRA na biblioteca RAG — busca
+    textual acha o trecho VERBATIM com a fonte citada."""
+    from betterme import knowledge, multimodal
+
+    cfg = fresh()
+    d, ff, wh, midia = _fixture_mm()
+    r = multimodal.transcrever(cfg, midia, ffmpeg_bin=str(ff),
+                               whisper_bin=str(wh))
+    assert r["ok"] and r["rag"]["livros"] >= 1, r
+    ach = knowledge.buscar(cfg, "transcrição local")
+    assert ach, "RAG não achou a transcrição"
+    assert "reuniao-transcricao.txt" in ach[0]["fonte"], ach[0]["fonte"]
+    assert "olá este é um teste" in ach[0]["texto"], ach[0]["texto"][:100]
+    st = knowledge.status(cfg)
+    assert st["livros"] >= 1 and st["blocos"] >= 1, st
+
+
+@case
+def T166_sem_binario_nao_quebra_e_orienta():
+    """v4.6.0 (PR#9): degradação honesta — sem ffmpeg/whisper/arquivo →
+    mensagem clara de COMO instalar, nunca exceção."""
+    from betterme import multimodal
+
+    cfg = fresh()
+    d, ff, wh, midia = _fixture_mm()
+    r1 = multimodal.transcrever(cfg, midia, ffmpeg_bin="/nao/existe",
+                                whisper_bin=str(wh))
+    assert r1["ok"] is False and "ffmpeg" in r1["msg"], r1
+    r2 = multimodal.transcrever(cfg, midia, ffmpeg_bin=str(ff),
+                                whisper_bin="/nao/existe")
+    assert r2["ok"] is False and "whisper" in r2["msg"], r2
+    assert "apt install" in r1["msg"] and "whisper.cpp" in r2["msg"]
+    r3 = multimodal.transcrever(cfg, d / "nao_existe.mp4",
+                                ffmpeg_bin=str(ff), whisper_bin=str(wh))
+    assert r3["ok"] is False and "não encontrado" in r3["msg"], r3
+    # whisper que não devolve segmentos → erro honesto com pista do modelo
+    wh_mudo = d / "whisper-mudo"
+    wh_mudo.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    wh_mudo.chmod(0o755)
+    r4 = multimodal.transcrever(cfg, midia, ffmpeg_bin=str(ff),
+                                whisper_bin=str(wh_mudo))
+    assert r4["ok"] is False and "segmentos" in r4["msg"], r4
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())
