@@ -71,8 +71,9 @@ agente fazer relações — sem repetir o que já existe.
   44 fatos com tag de tópico — IDENTIDADE, CONTATO, PREFERÊNCIAS,
   EDUCAÇÃO, CARREIRA, BEH, PROJETOS, TRABALHO-RECENTE, INTERESSES,
   PARCERIA — e 3 fatos **[RELAÇÃO]** que cruzam os temas (stack↔projetos↔
-  BEH; certificados↔vagas; preferências valem para tudo). Novo: parceira
-  Luiza Claudia Matos Sevalho. Recuperação validada: perguntas
+  BEH; certificados↔vagas; preferências valem para tudo). Novo: fatos de
+  PARCERIA (conteúdo pessoal só no pacote privado, fora do repo).
+  Recuperação validada: perguntas
   relacionais agora puxam os fatos de relação na frente.
 
 **Testes:** T123 (import → list → clear → reimport sem duplicatas +
