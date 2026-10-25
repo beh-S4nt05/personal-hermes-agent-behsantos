@@ -126,7 +126,10 @@ def aprovar(cfg, id_ap: str) -> tuple[bool, str]:
         return False, f"rascunho {id_ap!r} não encontrado"
     e = json.loads(p.read_text(encoding="utf-8"))
     if e["tipo"] in ("skill", "skill_patch"):
-        destino_dir = Path(cfg.skills_dirs[0]) / e["alvo"]
+        # PRIVACIDADE/isolamento: skill aprendida vai para o skills do
+        # DATA-DIR (privado), nunca para o skills/ do repo público —
+        # skills_dirs[0] é o do projeto (bug pego pela suíte T137)
+        destino_dir = Path(cfg.data_dir) / "skills" / e["alvo"]
         destino_dir.mkdir(parents=True, exist_ok=True)
         alvo = destino_dir / "SKILL.md"
         patch = alvo.exists()

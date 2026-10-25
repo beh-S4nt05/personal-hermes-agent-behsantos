@@ -5258,7 +5258,8 @@ def T137_loop_de_aprendizado_aprovacao():
     sid = ps[0]["id"]
     ok, msg = LG.aprovar(cfg, sid)
     assert ok and "instalada" in msg, msg
-    alvo = Path(cfg.skills_dirs[0]) / ps[0]["alvo"] / "SKILL.md"
+    alvo = (Path(cfg.data_dir) / "skills" / ps[0]["alvo"] /
+            "SKILL.md")            # data-dir PRIVADO, nunca o repo
     assert alvo.is_file()
     assert not LG.pendentes(cfg)                    # staging esvaziou
     # skill aparece no catálogo do agente
