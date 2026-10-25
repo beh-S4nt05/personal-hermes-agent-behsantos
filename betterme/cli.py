@@ -571,6 +571,18 @@ def cmd_gerente(args) -> None:
     code_manager.cmd(args, _cfg(args))
 
 
+def cmd_telegram(args) -> None:
+    """v4.2.0 (PR#5): canal Telegram (token em secrets, allowlist)."""
+    from . import telegram_gw
+    telegram_gw.cmd(args, _cfg(args))
+
+
+def cmd_whatsapp(args) -> None:
+    """v4.2.0 (PR#5): canal WhatsApp via Playwright (local, removível)."""
+    from . import whatsapp_gw
+    whatsapp_gw.cmd(args, _cfg(args))
+
+
 def cmd_aprendidos(args) -> None:
     """v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador)."""
     from . import learning
@@ -757,6 +769,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--yes", action="store_true",
                    help="confirma o aviso de privacidade (necessário p/ on)")
     p.set_defaults(fn=cmd_gerente)
+    p = sub.add_parser("telegram",
+                       help="canal Telegram: controle e aprovação pelo celular")
+    p.add_argument("acao", nargs="?", default="status",
+                   help="status|start|stop|chat-id|autorizar")
+    p.add_argument("id", nargs="?", default=None,
+                   help="chat_id (para autorizar)")
+    p.set_defaults(fn=cmd_telegram)
+    p = sub.add_parser("whatsapp",
+                       help="canal WhatsApp via Playwright — grátis, local, removível")
+    p.add_argument("acao", nargs="?", default="status",
+                   help="status|setup|start|stop|qr|autorizar|remover")
+    p.add_argument("id", nargs="?", default=None,
+                   help="número (para autorizar)")
+    p.set_defaults(fn=cmd_whatsapp)
     p = sub.add_parser("aprendidos",
                        help="rascunhos de skills/lições esperando sua aprovação")
     pa = p.add_argument("acao", nargs="?", default="list",

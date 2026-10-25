@@ -70,6 +70,9 @@ tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 | `autonomy.py` | 🎚 Autonomia 3 níveis (cauteloso/padrao/autonomo) + hard gates inejociáveis + varredura pré-entrega do AUTÔNOMO. |
 | `specialists.py` | 🧪 ESPECIALISTAS (ADR-001): veredito JSON com evidência validada em disco, pool grátis c/ fallback, exames de competência, DLP, auditoria. |
 | `learning.py` | 📚 Loop de aprendizado: rascunhos de skill/lição em staging, aprovação do operador, skills aprender, busca em conversas. |
+| `gateway.py` | 📱 núcleo do gateway: comandos compartilhados, notificação de pendências (id+objetivo truncado, sem conteúdo), decisão approve→HTTP. |
+| `telegram_gw.py` | 📱 canal Telegram: long-polling, token secrets 600, allowlist de chats. |
+| `whatsapp_gw.py` | 📱 canal WhatsApp via Playwright (grátis/local/removível; experimental, extra opcional). |
 | `code_manager.py` | 👔 Gerente de código (Claude) — opt-in consciente com aviso de privacidade (D5). |
 | `llm_providers.py` | Provedores LLM externos GRATUITOS (OpenAI-compat): registro groq/gemini/mistral/openrouter/llm7/zai/cohere, chave em secrets 600, fallback local — memória NUNCA sai (regra do operador). v3.17.1: chat_stream usa SEMPRE o modelo do provedor (o Agent passa nome Ollama em cfg.model → 400 + fallback silencioso; T127). |
 | `manager.py` | Gerência do Ollama: boot/restart (systemd ou `ollama serve` com log), diagnóstico de ambiente. |
@@ -310,7 +313,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **141 casos** (v4.1.0), famílias:
+`tests/run_all.py` — **148 casos** (v4.2.0), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "betterme-agent"
-version = "4.1.0"
+version = "4.2.0"
 description = "Agente Linux via terminal com Ollama (Betterme) e GUI web para ligar/desligar"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -16,6 +16,9 @@ dependencies = [
     "rich>=13.0",
     "waitress>=3.0",
 ]
+
+[project.optional-dependencies]
+whatsapp = ["playwright>=1.40"]
 
 [project.scripts]
 betterme = "betterme.cli:main"

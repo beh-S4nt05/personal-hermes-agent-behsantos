@@ -1810,6 +1810,13 @@ def serve(cfg: Config, host: str, port: int) -> None:
     print(f"  ➜ dados : {cfg.data_dir}")
     print(f"  ➜ config: {cfg.path}")
 
+    # v4.2.0 (PR#5): canais de mensagem ligados sobem junto
+    try:
+        from ..gateway import start_automatico
+        start_automatico(cfg)
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠ gateway: {exc.__class__.__name__}: {exc}")
+
     # ---- auto-diagnóstico: falhas óbvias aparecem AQUI, no início ----
     env = python_env_check()
     print(f"  {'✔' if env['ok'] else '✖'} {env['name']}: {env['detail']}")

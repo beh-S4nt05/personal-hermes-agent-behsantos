@@ -1,5 +1,47 @@
 # Changelog
 
+## v4.2.0 — 📱 GATEWAY DE MENSAGENS: Telegram + WhatsApp (PR #5)
+
+O Betterme no seu bolso: ver status, listar pendências, **aprovar
+missões pelo celular** e conversar — com privacidade dura.
+
+**Telegram (nativo, zero deps novas):**
+- Long-polling local da Bot API; token em `secrets/telegram.key` 600
+  (nunca em config/logs); allowlist de chat_ids
+  (`betterme telegram chat-id` cadastra você com 1 mensagem).
+- Comandos: /status /tarefas /aprovar /rejeitar /autonomia /perguntar.
+- `betterme telegram status|start|stop|chat-id|autorizar`.
+
+**WhatsApp via Playwright (decisão do operador — grátis, local,
+removível):**
+- Contexto da política: desde 01/10/2026 a Business API cobra até
+  RESPOSTA de serviço (franquia 1.000/mês, depois por mensagem) — mas o
+  WhatsApp comum segue grátis. Em vez de terceiros (Z-API e afins, que
+  LÊM suas mensagens), o canal abre o **WhatsApp Web no SEU navegador em
+  background** (Playwright + Chromium local): custo zero, mensagens na
+  sua máquina, e você retira quando quiser.
+- Pareamento por QR (`<data>/whatsapp-qr.png`), perfil persistente,
+  allowlist de números; `betterme whatsapp setup|start|stop|qr|
+  autorizar|remover` (remover apaga perfil/QR/allowlist).
+- Playwright é **extra opcional** (`pip install
+  "betterme-agent[whatsapp]"`); sem ele o canal desativa com instrução
+  clara — nunca quebra. ⚠ Módulo EXPERIMENTAL: automação do WhatsApp
+  Web viola os termos da Meta (risco de ban); seletores versionados no
+  topo do módulo.
+
+**Núcleo (`gateway.py`):** comandos compartilhados; notificação de
+pendências NOVAS (poll em disco) com **id + objetivo truncado — nunca
+conteúdo de arquivos/memória/segredos**; decisão via `approve()` do
+orquestrador com fallback HTTP para o server local (gateway standalone
+funciona com o server no ar); autostart junto do `betterme server`
+(flags `telegram_on`/`whatsapp_on`, default off).
+
+**Testes:** T142–T148 (token 600, allowlists, parser, decisão approve→
+HTTP, push com privacidade+dedup, pareamento QR com Playwright fake,
+degradação sem playwright, remoção, fluxo Telegram E2E com HTTP fake,
+autostart). **148/148.**
+
+## v4.1.0 — 🏷️ BETTERME: o agente muda de nome (PR #4 do roadmap)
 ## v4.1.0 — 🏷️ BETTERME: o agente muda de nome (PR #4 do roadmap)
 
 O Hermes Agent passa a se chamar **Betterme**. Renome completo, com

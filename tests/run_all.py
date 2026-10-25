@@ -5441,12 +5441,13 @@ def T141_renome_betterme_migracao_e_identidade():
     assert "Betterme" in prompt and "Você é o Hermes" not in prompt
 
     # pacote e alias de console script
+    from betterme.config import VERSION as _VER
     r = _sp.run([".venv/bin/betterme", "--version"], capture_output=True,
                 text=True, timeout=60)
-    assert r.returncode == 0 and "4.1.0" in r.stdout
+    assert r.returncode == 0 and _VER in r.stdout
     r2 = _sp.run([".venv/bin/hermes", "--version"], capture_output=True,
                  text=True, timeout=60)
-    assert r2.returncode == 0 and "4.1.0" in r2.stdout
+    assert r2.returncode == 0 and _VER in r2.stdout
 
     # env legado continua funcionando (HERMES_MOCK)
     r3 = _sp.run(["bash", "-c",
@@ -5495,6 +5496,322 @@ def T141_renome_betterme_migracao_e_identidade():
         assert c.data_dir == dd.resolve()
     finally:
         shutil.rmtree(dd, ignore_errors=True)
+
+
+class _CanalFake:
+    """Canal mínimo p/ Gateway: registra envios; só 'EU' é autorizado."""
+    def __init__(self):
+        self.enviados = []
+    def enviar(self, texto, dest=None):
+        self.enviados.append((dest, texto))
+    def autorizado(self, remetente):
+        return remetente == "EU"
+    def iniciar(self, gw):
+        pass
+    def parar(self):
+        pass
+
+
+@case
+def T142_telegram_token_allowlist_e_comandos():
+    """v4.2.0 (PR#5): token do bot em secrets 600 (nunca no config),
+    allowlist de chats, e o parser de comandos compartilhado."""
+    import stat as _stat
+    from betterme import telegram_gw as TG
+    from betterme.gateway import processar_comando
+
+    cfg = fresh()
+    assert TG.token(cfg) == ""
+    arq = TG.salvar_token(cfg, "123:ABC-token-do-bot")
+    assert arq.parent.name == "secrets" and arq.name == "telegram.key"
+    assert _stat.S_IMODE(arq.stat().st_mode) == 0o600
+    assert "123:ABC" not in cfg.path.read_text(encoding="utf-8") \
+        if cfg.path.exists() else True
+    assert TG.token(cfg) == "123:ABC-token-do-bot"
+
+    # allowlist
+    assert TG.chats_autorizados(cfg) == set()
+    TG.autorizar_chat(cfg, "555111")
+    TG.autorizar_chat(cfg, "555222")
+    assert TG.chats_autorizados(cfg) == {"555111", "555222"}
+    canal = TG.CanalTelegram(cfg, _http=lambda *a, **k: {})
+    assert canal.autorizado("555111") and not canal.autorizado("999")
+
+    # parser: comandos e bloqueio de estranho
+    decisoes = []
+    respo = processar_comando(cfg, "/status", "EU",
+                              lambda tid, ac: decisoes.append((tid, ac))
+                              or True,
+                              lambda p: "resposta", autorizado=True)
+    assert "Betterme" in respo and "autonomia" in respo
+    assert "/aprovar" in processar_comando(cfg, "/ajuda", "EU",
+                                           lambda *a: True,
+                                           lambda p: "", True)
+    r_aut = processar_comando(cfg, "/status", "ESTRANHO",
+                              lambda *a: True, lambda p: "", False)
+    assert "não autorizado" in r_aut
+    r_perg = processar_comando(cfg, "/perguntar qual meu projeto?",
+                               "EU", lambda *a: True,
+                               lambda p: f"eco:{p}", True)
+    assert "eco:qual meu projeto?" in r_perg
+    processar_comando(cfg, "/autonomia autonomo", "EU",
+                      lambda *a: True, lambda p: "", True)
+    assert str(cfg.autonomia) == "autonomo"
+    assert processar_comando(cfg, "oi tudo bem?", "EU",
+                             lambda *a: True, lambda p: "", True) is None
+
+
+@case
+def T143_decisao_via_approve_ou_http_do_server():
+    """v4.2.0 (PR#5): /aprovar decide pela approve() do orquestrador e,
+    em processo separado, cai no HTTP do server local."""
+    from betterme import gateway as GW
+    from betterme import orchestrator as orc
+
+    cfg = fresh()
+    captura = {}
+    orig = orc.approve
+    orc.approve = lambda tid, ac: captura.update(tid=tid, ac=ac) or True
+    try:
+        assert GW.decidir_via_server(cfg, "T001", "aprovar") is True
+        assert captura == {"tid": "T001", "ac": "aprovar"}
+    finally:
+        orc.approve = orig
+    # approve não conhece (outro processo) -> HTTP do server
+    orc.approve = lambda tid, ac: False
+    chamadas = []
+    try:
+        def http(url, payload):
+            chamadas.append((url, payload))
+            return 200
+        ok = GW.decidir_via_server(cfg, "T002", "cancelar",
+                                   http_post=http)
+        assert ok and chamadas[0][0].endswith("/api/chat/approve")
+        assert chamadas[0][1] == {"id": "T002", "action": "cancelar"}
+        assert GW.decidir_via_server(
+            cfg, "T003", "aprovar", http_post=lambda *a: 500) is False
+    finally:
+        orc.approve = orig
+
+
+@case
+def T144_gateway_notifica_pendencias_com_privacidade():
+    """v4.2.0 (PR#5): pendências novas viram notificação nos canais —
+    com id + objetivo TRUNCADO, JAMAIS conteúdo de arquivo; dedup."""
+    from betterme.gateway import Gateway
+
+    cfg = fresh()
+    pend = cfg.data_dir / "pending_approvals.json"
+    pend.write_text(json.dumps({
+        "T010": {"id": "T010", "kind": "plano", "ts": "2026-10-25 09:00",
+                 "objetivo": "crie o app de vendas com 40 passos e "
+                 "arquivos grandes " + "x" * 300,
+                 "conteudo": "CONTEÚDO SECRETO DO ARQUIVO 4242"},
+        "T011": {"id": "T011", "kind": "entrega", "ts": "2026-10-25 09:05",
+                 "objetivo": "relatório final", "conteudo": "segredo"},
+    }, ensure_ascii=False), encoding="utf-8")
+
+    gw = Gateway(cfg, decidir=lambda *a: True, runner=lambda p: "")
+    canal = _CanalFake()
+    gw.adicionar(canal)
+    novas = gw.tick()
+    assert novas == 2 and len(canal.enviados) == 2
+    msg = canal.enviados[0][1]
+    assert "T010" in msg and "/aprovar T010" in msg
+    assert "CONTEÚDO SECRETO" not in msg and "4242" not in msg
+    assert len(msg) < 400                      # objetivo truncado
+    assert gw.tick() == 0 and len(canal.enviados) == 2   # dedup
+    # comando roteado pelo gateway respeita allowlist
+    r = gw.receber(canal, "EU", "/tarefas")
+    assert "T010" in r and "T011" in r
+    r2 = gw.receber(canal, "ESTRANHO", "/tarefas")
+    assert "não autorizado" in r2
+
+
+class _PagFake:
+    """Página fake: modo 'logado' | 'qr' | {'msgs': [idx]}.
+    No modo 'qr' o login só aparece DEPOIS do screenshot do QR."""
+    def __init__(self, modo):
+        self.modo = modo
+        self.ações = []
+        self.pareado = False
+    def goto(self, url, **k):
+        self.ações.append(("goto", url))
+    def wait_for_selector(self, sel, timeout=None):
+        self.ações.append(("wait", sel))
+        if sel.startswith("canvas"):                 # seletor do QR
+            if self.modo == "qr" and not self.pareado:
+                return object()
+            raise RuntimeError("sem qr aqui")
+        if self.modo == "logado" or self.pareado:    # seletor de logado
+            return object()
+        raise RuntimeError("ainda nao logado")
+    def screenshot(self, path=None):
+        self.ações.append(("shot", path))
+        self.pareado = True
+        Path(path).write_bytes(b"PNG-FALSO")
+    def query_selector_all(self, sel):
+        msgs = (self.modo.get("msgs", [])
+                if isinstance(self.modo, dict) else [])
+        return [_ElFake(i) for i in msgs]
+    def fill(self, sel, texto):
+        self.ações.append(("fill", texto))
+    @property
+    def keyboard(self):
+        return _KbFake(self.ações)
+
+
+class _ElFake:
+    def __init__(self, i):
+        self.i = i
+    def get_attribute(self, nome):
+        return f"msg-falso-{self.i}"
+    def inner_text(self):
+        return MENSAGENS_TESTE[self.i]
+
+
+class _KbFake:
+    def __init__(self, ações):
+        self.ações = ações
+    def press(self, tecla):
+        self.ações.append(("key", tecla))
+
+
+MENSAGENS_TESTE = ["/status", "bom dia"]
+
+
+@case
+def T145_whatsapp_playwright_fake_parear_ler_comandar():
+    """v4.2.0 (PR#5): canal WhatsApp via Playwright — pareamento salva o
+    QR, mensagens novas viram comandos, allowlist de números, resposta
+    enviada de volta (tudo com Playwright FAKE)."""
+    from betterme import whatsapp_gw as WA
+    from betterme.gateway import Gateway
+
+    cfg = fresh()
+    WA.autorizar_numero(cfg, "559299990000")
+    assert WA.numeros_autorizados(cfg) == {"559299990000"}
+
+    class _PWFake:
+        def __call__(self):
+            return _CtxFake()
+    class _CtxFake:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        chromium = type("C", (), {"launch_persistent_context":
+                                  staticmethod(lambda *a, **k: _BrFake())})()
+    class _BrFake:
+        def new_page(self):
+            return _PagFake("qr")
+        def close(self):
+            pass
+
+    canal = WA.CanalWhatsapp(cfg, _pw=_PWFake())
+    assert canal.disponivel() and canal.autorizado("5592 9999-0000")
+    assert not canal.autorizado("5511999999999")
+
+    # pareamento: QR é salvo em arquivo p/ o operador escanear
+    pagina = _PagFake("qr")
+    assert canal._parear(pagina) is True
+    assert ("shot", str(WA.qr_path(cfg))) in pagina.ações
+    assert WA.qr_path(cfg).exists()
+
+    # leitura de novas mensagens com dedup
+    pagina2 = _PagFake({"msgs": [0, 1]})
+    novas = canal._ler_novas(pagina2)
+    assert [t for _r, t in novas] == MENSAGENS_TESTE
+    assert canal._ler_novas(pagina2) == []            # dedup por data-id
+
+    # gateway: mensagem vira comando e a resposta sai pelo canal
+    gw = Gateway(cfg, decidir=lambda *a: True, runner=lambda p: "ok")
+    canal._gw = gw
+    r = gw.receber(canal, "559299990000", "/status")
+    assert "Betterme" in r
+    canal._page = _PagFake({"msgs": []})
+    canal.enviar("resposta de teste")                  # nao explode
+    assert canal._page.ações[0][0] == "goto"
+
+
+@case
+def T146_whatsapp_degradacao_e_remocao():
+    """v4.2.0 (PR#5): sem playwright o canal desativa com instrução
+    clara (nunca quebra) e `remover` apaga perfil/QR/allowlist."""
+    from betterme import whatsapp_gw as WA
+
+    cfg = fresh()
+    canal = WA.CanalWhatsapp(cfg)          # sem _pw: depende do ambiente
+    if not WA.playwright_ok():
+        assert canal.disponivel() is False
+        assert "playwright" in WA.INSTRUCAO_SETUP
+    # remoção limpa TUDO e desliga a flag
+    cfg.update({"whatsapp_on": True})
+    WA.perfil_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (WA.perfil_dir(cfg) / "Cookies").write_text("x", encoding="utf-8")
+    WA.qr_path(cfg).write_bytes(b"png")
+    WA.autorizar_numero(cfg, "5511")
+    msg = WA.remover(cfg)
+    assert "removido" in msg
+    assert not WA.perfil_dir(cfg).exists() and not WA.qr_path(cfg).exists()
+    assert WA.numeros_autorizados(cfg) == set()
+    assert str(cfg.whatsapp_on).lower() in ("false", "0")
+
+
+@case
+def T147_autostart_e_fonte_do_gateway():
+    """v4.2.0 (PR#5): server sobe os canais ligados; flags OFF por
+    padrão; playwright é extra opcional; CLI expõe os dois canais."""
+    from betterme.gateway import start_automatico
+
+    cfg = fresh()
+    assert start_automatico(cfg) is None      # tudo off: nada sobe
+    app_src = Path("betterme/server/app.py").read_text(encoding="utf-8")
+    assert "start_automatico(cfg)" in app_src
+    cfg_src = Path("betterme/config.py").read_text(encoding="utf-8")
+    assert '"telegram_on": False' in cfg_src
+    assert '"whatsapp_on": False' in cfg_src
+    py = Path("pyproject.toml").read_text(encoding="utf-8")
+    assert "[project.optional-dependencies]" in py and "playwright" in py
+    cli = Path("betterme/cli.py").read_text(encoding="utf-8")
+    assert 'sub.add_parser("telegram"' in cli
+    assert 'sub.add_parser("whatsapp"' in cli
+
+
+@case
+def T148_telegram_fluxo_e2e_com_http_fake():
+    """v4.2.0 (PR#5): update do Telegram vira comando; a resposta sai
+    por sendMessage; chat fora da allowlist recebe bloqueio."""
+    from betterme import telegram_gw as TG
+    from betterme.gateway import Gateway
+
+    cfg = fresh()
+    TG.salvar_token(cfg, "1:TESTE")
+    TG.autorizar_chat(cfg, "100")
+    posts = []
+
+    def http(url, payload=None):
+        if payload is not None:
+            posts.append((url, payload))
+        return {}
+
+    canal = TG.CanalTelegram(cfg, _http=http)
+    gw = Gateway(cfg, decidir=lambda tid, ac: True, runner=lambda p: "ok")
+    canal._gw = gw
+    canal._processar_updates([
+        {"update_id": 1, "message": {"chat": {"id": 100},
+                                     "text": "/aprovar T77"}},
+        {"update_id": 2, "message": {"chat": {"id": 666},
+                                     "text": "/status"}},
+    ])
+    assert canal._offset == 3
+    msgs = [p for _u, p in posts]
+    assert any("decidido: T77" in m["text"] and m["chat_id"] == "100"
+               for m in msgs)
+    assert any("não autorizado" in m["text"] for m in msgs)
+    # push de pendência chega a TODOS os chats autorizados
+    canal.enviar("🔒 T90 aprovável")
+    assert posts[-1][1]["text"].startswith("🔒")
 
 
 if __name__ == "__main__":

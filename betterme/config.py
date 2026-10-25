@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 APP_NAME = "betterme-agent"
-VERSION = "4.1.0"
+VERSION = "4.2.0"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
@@ -34,6 +34,9 @@ DEFAULTS = {
     "sandbox_mode": "auto",
     "autonomia": "padrao",
     "gerente_codigo": "off",
+    "telegram_on": False,
+    "whatsapp_on": False,
+    "server_port": 8080,
     "skills_watch_dirs": None,        # None = [~/Downloads]
     # Acesso à web (ferramentas web_search / web_fetch do agente e da GUI)
     "web_access": True,
