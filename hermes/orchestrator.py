@@ -787,7 +787,14 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     Emite eventos `note` (etapas, visíveis sempre) e `brain` (por baixo
     dos panos — a GUI mostra quando o operador liga 🔬).
     """
-    ev = on_event or (lambda _e: None)
+    _ev_base = on_event or (lambda _e: None)
+    _n_tools = [0]              # v4.0.0 (M6.5): p/ loop de aprendizado
+
+    def ev(e):                  # conta tool_start + repassa ao caller
+        if e.get("type") == "tool_start":
+            _n_tools[0] += 1
+        _ev_base(e)
+
     from . import activity
 
     def _cancelado() -> bool:
@@ -1193,6 +1200,15 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     if edit_snip:
         entry["entrega_editada"] = edit_snip
     record(cfg, entry, tid)
+    # v4.0.0 (M6.5): loop de aprendizado — rascunho em staging, aprovação
+    # SEMPRE do operador (nem AUTÔNOMO auto-aprova o próprio aprendizado)
+    try:
+        from .learning import observar
+        dica = observar(cfg, objetivo, status, final, _n_tools[0])
+        if dica:
+            final += "\n\n" + dica
+    except Exception:  # noqa: BLE001
+        pass
     activity.log(cfg, "chat",
                  f"🎯 task {tid} {status} · {execucoes} execução(ões) · {dur}s")
     ev({"type": "brain", "stage": "🔍 revisor",

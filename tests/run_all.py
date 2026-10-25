@@ -5233,6 +5233,106 @@ def T136_exames_de_competencia_e_degradacao():
     assert disp["debugger"]["exame"]["aprovado"] is False
 
 
+@case
+def T137_loop_de_aprendizado_aprovacao():
+    """v4.0.0 M6.5: missão com >=5 ferramentas aprovada -> RASCUNHO em
+    staging (nunca direto no catálogo); aprovação instala a skill (com
+    backup+auditoria); reprovada -> lição; nada entra sem o operador."""
+    from hermes import learning as LG
+
+    cfg = fresh()
+    # abaixo do limiar: nada proposto
+    assert LG.observar(cfg, "tarefa pequena", "aprovada", "ok", 4) == ""
+    assert LG.pendentes(cfg) == []
+    # acima do limiar: rascunho de skill
+    dica = LG.observar(cfg, "criar app de agenda em python",
+                       "aprovada", "passo 1 criou estrutura\npasso 2 "
+                       "testou tudo\nsaída real colada", 6)
+    assert "rascunho de skill" in dica
+    ps = LG.pendentes(cfg)
+    assert len(ps) == 1 and ps[0]["tipo"] == "skill"
+    rascunho = ps[0]["rascunho"]
+    assert rascunho.startswith("---") and "name:" in rascunho
+    assert "description:" in rascunho
+    # aprovar: skill instalada no skills_dirs[0] do data-dir
+    sid = ps[0]["id"]
+    ok, msg = LG.aprovar(cfg, sid)
+    assert ok and "instalada" in msg, msg
+    alvo = Path(cfg.skills_dirs[0]) / ps[0]["alvo"] / "SKILL.md"
+    assert alvo.is_file()
+    assert not LG.pendentes(cfg)                    # staging esvaziou
+    # skill aparece no catálogo do agente
+    from hermes.skills import SkillLoader
+    nomes = {s["name"] for s in SkillLoader(cfg).enabled()}
+    assert ps[0]["alvo"] in nomes
+    # de novo a mesma missão -> aprovar vira PATCH com backup
+    LG.observar(cfg, "criar app de agenda em python", "aprovada",
+                "versão 2 do procedimento", 6)
+    ps2 = LG.pendentes(cfg)
+    assert len(ps2) == 1
+    ok2, msg2 = LG.aprovar(cfg, ps2[0]["id"])
+    assert ok2 and "ATUALIZADA" in msg2
+    assert (alvo.parent / "SKILL.md.antigo").is_file()
+    assert "versão 2" in alvo.read_text(encoding="utf-8")
+    # rejeitar remove sem instalar
+    LG.observar(cfg, "outra missão qualquer x", "aprovada", "r", 5)
+    ps3 = LG.pendentes(cfg)
+    ok3, _ = LG.rejeitar(cfg, ps3[0]["id"])
+    assert ok3 and not LG.pendentes(cfg)
+    # missão reprovada -> LIÇÃO; aprovar grava na memória
+    LG.observar(cfg, "missão que deu errado y", "reprovada",
+                "falhou porque o sandbox bloqueou", 3)
+    ps4 = LG.pendentes(cfg)
+    assert ps4[0]["tipo"] == "licao" and "LIÇÃO" in ps4[0]["rascunho"]
+    ok4, msg4 = LG.aprovar(cfg, ps4[0]["id"])
+    assert ok4 and "memória" in msg4
+    from hermes.memory import MemoryStore
+    fatos = " ".join(f["text"] for f in MemoryStore(cfg).list_all())
+    assert "missão que deu errado" in fatos
+
+
+@case
+def T138_skills_aprender_e_busca_em_conversas():
+    """v4.0.0 M6.5: `skills aprender` (arquivo/texto) cria rascunho com
+    frontmatter e a busca em conversas acha decisões antigas."""
+    from hermes import learning as LG
+    from hermes.learning import buscar_conversas
+
+    cfg = fresh()
+    doc = Path.home() / f".hermes-t138-{os.getpid()}.md"
+    doc.write_text("# Deploy manual do servidor\n\n1. rode deploy.sh\n"
+                   "2. confira o log\n", encoding="utf-8")
+    try:
+        ok, msg = LG.aprender_de_documento(cfg, str(doc))
+        assert ok and "rascunho" in msg
+        ps = LG.pendentes(cfg)
+        assert ps and ps[0]["origem"] == "skills-aprender"
+        assert ps[0]["rascunho"].startswith("---")   # frontmatter pronto
+        # texto puro também funciona
+        ok2, _ = LG.aprender_de_documento(cfg, "procedimento de backup "
+                                           "noturno com rsync")
+        assert ok2
+        assert len(LG.pendentes(cfg)) == 2
+    finally:
+        doc.unlink(missing_ok=True)
+
+    # busca em conversas: cria sessão com decisão antiga
+    from hermes.conversations import ConversationStore
+    store = ConversationStore(cfg)
+    s = store.new_session()
+    store.append(s["id"], "user", "vamos usar TF-IDF sem embeddings")
+    store.append(s["id"], "assistant", "combinado: RAG determinístico")
+    ach = buscar_conversas(cfg, "tf-idf")
+    assert ach and ach[0]["role"] == "user"
+    assert "TF-IDF sem embeddings" in ach[0]["trecho"]
+    assert buscar_conversas(cfg, "zurplefrobnicate") == []
+    # ferramenta do agente
+    import hermes.tools as T
+    r = T.execute_tool("conversas_buscar", {"termo": "determinístico"}, cfg)
+    assert r["ok"] and "conversas passadas" in r["output"]
+    assert "RAG" in r["output"]
+
+
 if __name__ == "__main__":
     print("◈ Hermes Agent — suíte de testes (v3.0)\n")
     sys.exit(run_all())

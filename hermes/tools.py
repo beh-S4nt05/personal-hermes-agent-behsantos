@@ -57,6 +57,25 @@ TOOLS: list[dict] = [
     {
         "type": "function",
         "function": {
+            "name": "conversas_buscar",
+            "description": (
+                "Busca nas CONVERSAS PASSADAS com o operador (decisões, "
+                "contexto, o que já foi combinado). Use quando a resposta "
+                "depender de histórico antigo em vez de repetir perguntas."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "termo": {"type": "string",
+                              "description": "palavra/frase a buscar"},
+                },
+                "required": ["termo"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "especialista",
             "description": (
                 "Invoca um ESPECIALISTA (subagente escopado) para um caso "
@@ -756,6 +775,23 @@ def git_run(args: dict, cfg) -> str:
     return f"$ git {acao} {extra}".strip() + f"\n{out[:4000] if out else '(sem saída)'}"
 
 
+def conversas_buscar(args: dict, cfg) -> str:
+    """v4.0.0 (M6.5): busca nas conversas passadas (decisões antigas)."""
+    from .learning import buscar_conversas
+    termo = str(args.get("termo", "")).strip()
+    if not termo:
+        return "ERRO: informe 'termo'."
+    ach = buscar_conversas(cfg, termo)
+    if not ach:
+        return f"nenhuma conversa anterior menciona {termo!r}."
+    partes = [f"🗂 {len(ach)} trecho(s) de conversas passadas:"]
+    for a_ in ach:
+        partes.append(f"  • [{a_['data']} · {a_['role']} · {a_['titulo']}"
+                      f" ({a_['session']})]")
+        partes.append(f"    \"{a_['trecho']}\"")
+    return "\n".join(partes)[:4000]
+
+
 def especialista_tool(args: dict, cfg) -> str:
     """v4.0.0 (M6): o cérebro invoca um especialista (revisor, debugger,
     pesquisador, seguranca) para um caso pontual — veredito com evidência,
@@ -818,6 +854,7 @@ EXECUTORS = {
     "web_fetch": web_fetch,
     "backups": _backups_tool,
     "especialista": especialista_tool,
+    "conversas_buscar": conversas_buscar,
 }
 
 

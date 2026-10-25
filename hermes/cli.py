@@ -565,6 +565,36 @@ def cmd_autonomia(args) -> None:
     autonomy.cmd(args, _cfg(args))
 
 
+def cmd_aprendidos(args) -> None:
+    """v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador)."""
+    from . import learning
+    learning.cmd(args, _cfg(args))
+
+
+def cmd_skills_aprender(args) -> None:
+    """v4.0.0 (M6.5): transforma documento/texto/URL em rascunho de skill."""
+    from . import learning
+    fonte = " ".join(getattr(args, "fonte", []) or [])
+    ok, msg = learning.aprender_de_documento(_cfg(args), fonte)
+    print(("✔ " if ok else "✖ ") + msg)
+    if not ok:
+        raise SystemExit(1)
+
+
+def cmd_conversas_buscar(args) -> None:
+    """v4.0.0 (M6.5): busca textual nas conversas passadas."""
+    from .learning import buscar_conversas
+    termo = " ".join(getattr(args, "termo", []) or [])
+    ach = buscar_conversas(_cfg(args), termo)
+    if not ach:
+        print(f"🗂 nenhuma conversa menciona {termo!r}")
+        return
+    print(f"🗂 {len(ach)} trecho(s):")
+    for a_ in ach:
+        print(f"  [{a_['data']} · {a_['role']} · {a_['titulo']}]")
+        print(f"    \"{a_['trecho']}\"")
+
+
 def cmd_memory_list(args) -> None:
     """v3.16.1: lista os fatos da memória do agente."""
     from .memory import MemoryStore
@@ -659,6 +689,11 @@ def build_parser() -> argparse.ArgumentParser:
     pi = ssub.add_parser("import", help="importa skills: pasta local, .zip, URL git ou owner/repo")
     pi.add_argument("fonte", help="caminho da pasta/zip, URL ou owner/repo")
     pi.set_defaults(fn=cmd_skills_import)
+    pap = ssub.add_parser("aprender",
+                          help="transforma arquivo/URL/texto em rascunho de skill (M6.5)")
+    pap.add_argument("fonte", nargs="+",
+                     help="arquivo, URL ou texto para virar skill")
+    pap.set_defaults(fn=cmd_skills_aprender)
     ps = ssub.add_parser("scan", help="varre pastas assistidas (ex.: ~/Downloads) e importa skills novas")
     ps.set_defaults(fn=cmd_skills_scan)
     pa = ssub.add_parser("audit",
@@ -709,6 +744,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("nivel", nargs="?", default=None,
                    help="novo nível (vazio = mostra o atual)")
     p.set_defaults(fn=cmd_autonomia)
+    p = sub.add_parser("aprendidos",
+                       help="rascunhos de skills/lições esperando sua aprovação")
+    pa = p.add_argument("acao", nargs="?", default="list",
+                        help="list|aprovar|rejeitar")
+    p.add_argument("id", nargs="?", default=None, help="id do rascunho")
+    p.set_defaults(fn=cmd_aprendidos)
+    p = sub.add_parser("conversas", help="conversas passadas do agente")
+    p.add_argument("acao", nargs="?", default="buscar",
+                   help="buscar")
+    p.add_argument("termo", nargs="*", help="termo a buscar")
+    p.set_defaults(fn=cmd_conversas_buscar)
     p = sub.add_parser("rag", help="biblioteca de livros (RAG local): indexa ou consulta")
     p.add_argument("consulta", nargs="?", default="", help="texto a buscar (vazio = reindexar)")
     p.set_defaults(fn=cmd_rag)
