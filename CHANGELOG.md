@@ -1,5 +1,25 @@
 # Changelog
 
+## v6.0.2 — 🔧 INSTALAÇÃO EDITÁVEL ROBUSTA (correção de teste real #2)
+
+**Achado do operador:** ao recriar o ambiente, `pip install -e .`
+falhou com *"build backend is missing the 'build_editable' hook"* —
+setuptools **< 64** (comum em pip de distro Linux) não suporta
+instalação editável moderna (PEP 660).
+
+- **Autocura agora tem 2ª tentativa inteligente:** se o
+  `pip install -e . --no-deps` falhar, ela **atualiza pip/setuptools
+  do próprio venv** e repete — só então recorre ao launcher manual.
+- **README** ganhou o passo `pip install --upgrade pip setuptools`
+  na instalação nova (setuptools ≥ 64 = PEP 660 ✔).
+- pyproject: `[build-system] requires = ["setuptools>=68"]` (build
+  isolation garante backend moderno em qualquer máquina) +
+  descrição atualizada para o escopo multiplataforma.
+
+**Testes:** T178 (build-system moderno declarado · retry: falha →
+upgrade → 2ª tentativa cria o comando oficial, sem launcher manual ·
+README orienta) — **178/178**.
+
 ## v6.0.1 — 🧷 AUTOCURA DOS COMANDOS `betterme` (correção de teste real)
 
 **Achado do operador em validação real:** quem instalou o agente antes

@@ -74,6 +74,7 @@ ollama pull hermes3:8b
 
 # 2. Betterme Agent
 python3 -m venv .venv && . .venv/bin/activate
+pip install --upgrade pip setuptools   # setuptools >= 64 (instalação editável/PEP 660)
 pip install -e .
 
 # 3. Use

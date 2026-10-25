@@ -138,16 +138,36 @@ def garantir_entry_points(root: Path, log=print) -> bool:
     if alvo.exists():
         return True                       # já registrado nada a fazer
     # 1) regeneração oficial (não toca nas deps — offline-safe)
+    tentativa = [str(py), "-m", "pip", "install", "-e", ".", "-q",
+                 "--no-deps"]
+
+    def _tentar() -> bool:
+        try:
+            r = subprocess.run(tentativa, cwd=str(root),
+                               capture_output=True, timeout=300)
+            return bool(r.returncode == 0
+                        and (alvo.exists()
+                             or (bindir / "betterme-script.py").exists()))
+        except Exception:  # noqa: BLE001
+            return False
+
+    if _tentar():
+        log("  🧷 comando `betterme` registrado no venv (+ alias hermes)")
+        return True
+    # v6.0.2 (2º bug de campo): setuptools < 64 não tem o hook
+    # build_editable (PEP 660) — "pip install -e ." falha. Atualiza as
+    # FERRAMENTAS DE BUILD do próprio venv e tenta de novo antes de
+    # recorrer ao launcher manual.
     try:
-        r = subprocess.run([str(py), "-m", "pip", "install", "-e", ".",
-                            "-q", "--no-deps"],
-                           cwd=str(root), capture_output=True, timeout=300)
-        if r.returncode == 0 and (alvo.exists()
-                                  or (bindir / "betterme-script.py").exists()):
-            log("  🧷 comando `betterme` registrado no venv (+ alias hermes)")
-            return True
+        subprocess.run([str(py), "-m", "pip", "install", "-q", "-U",
+                        "pip", "setuptools"], cwd=str(root),
+                       capture_output=True, timeout=300)
     except Exception:  # noqa: BLE001
         pass
+    if _tentar():
+        log("  🧷 comando `betterme` registrado (após atualizar pip/"
+            "setuptools do venv — PEP 660 ✔)")
+        return True
     # 2) fallback: launcher manual (funciona offline)
     try:
         if win:

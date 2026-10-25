@@ -6824,6 +6824,62 @@ def T177_update_garante_comando_betterme():
     assert U.garantir_entry_points(raiz2, log=lambda *_a: None) is False
 
 
+# ══════════════════════ v6.0.2 — INSTALAÇÃO EDITÁVEL ROBUSTA ══════════════════════
+
+@case
+def T178_instalacao_editavel_robusta():
+    """v6.0.2 (2º bug de campo do operador): 'pip install -e .' falhou
+    com 'build backend is missing the build_editable hook' (setuptools
+    < 64 do sistema, PEP 660). Blindagem: pyproject exige setuptools
+    moderno com build isolation; a autocura, ante falha, ATUALIZA
+    pip/setuptools do venv e REPETE antes do launcher manual."""
+    # (i) build-system declarado e capaz de PEP 660
+    py = Path("pyproject.toml").read_text(encoding="utf-8")
+    assert "setuptools>=64" in py.replace(" ", "") or \
+        "setuptools>=68" in py.replace(" ", ""), "setuptools min ausente"
+    assert 'build-backend = "setuptools.build_meta"' in py
+    # (ii) retry: 1ª tentativa falha → upgrade pip/setuptools → 2ª cria
+    import betterme.update as U
+
+    raiz = Path(tempfile.mkdtemp(prefix="ep660-"))
+    bin_ = raiz / ".venv" / "bin"
+    bin_.mkdir(parents=True)
+    pyf = bin_ / "python"
+    pyf.write_text("#!/bin/sh\n", encoding="utf-8")
+    pyf.chmod(0o755)
+    chamadas = []
+
+    class _R0:                      # 1ª tentativa: falha (setuptools velho)
+        returncode = 1
+
+    class _R1:                      # pós-upgrade: sucesso
+        returncode = 0
+
+    def fake_run(cmd, **kw):
+        chamadas.append(cmd)
+        if "-U" in cmd:             # upgrade pip setuptools → ok
+            return _R1()
+        if "-e" in cmd and len(chamadas) > 2:   # 2ª tentativa -e: cria
+            (bin_ / "betterme").write_text("#!x\n", encoding="utf-8")
+            return _R1()
+        return _R0()                # 1ª tentativa -e: falha
+
+    orig = U.subprocess.run
+    U.subprocess.run = fake_run
+    try:
+        assert U.garantir_entry_points(raiz, log=lambda *_a: None) is True
+        ups = [c for c in chamadas if "-U" in c]
+        assert ups and "setuptools" in ups[0] and "pip" in ups[0], ups
+        es = [c for c in chamadas if "-e" in c]
+        assert len(es) == 2, "deveria tentar -e exatamente 2x"
+        assert (bin_ / "betterme").is_file()    # oficial, sem launcher manual
+    finally:
+        U.subprocess.run = orig
+    # (iii) README orienta o upgrade numa instalação nova
+    rd = Path("README.md").read_text(encoding="utf-8")
+    assert "upgrade pip setuptools" in rd
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())
