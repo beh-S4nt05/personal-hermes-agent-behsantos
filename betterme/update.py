@@ -15,6 +15,7 @@ import json
 import shutil
 import tempfile
 import urllib.request
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -107,6 +108,68 @@ def apply_update(src_root: Path, dest_root: Path,
     return atualizados
 
 
+def _venv_python(root: Path) -> Path | None:
+    """Python do venv DO PROJETO (bin/ no Unix, Scripts/ no Windows)."""
+    from .plataforma import so
+    p = (root / ".venv" / "Scripts" / "python.exe" if so() == "windows"
+         else root / ".venv" / "bin" / "python")
+    return p if p.exists() else None
+
+
+def garantir_entry_points(root: Path, log=print) -> bool:
+    """v6.0.1: autocura dos COMANDOS `betterme` (+ alias `hermes`).
+
+    Entry points são gerados NA INSTALAÇÃO (pip); o update troca os
+    arquivos PRESERVANDO o .venv — então quem instalou antes da v4.1.0
+    ficou só com `hermes` no venv (achado real do operador em teste).
+    Regenera com `pip install -e . --no-deps` (offline-safe) e, se não
+    der, escreve o launcher na mão. Roda também quando JÁ está na
+    versão mais recente (é autocura, não só pós-update).
+    """
+    from .plataforma import so
+    py = _venv_python(root)
+    if py is None:
+        log("  ℹ sem .venv no projeto — se a instalação for global/pipx,")
+        log("    rode: pip install -e .   (ou reinstale com pipx)")
+        return False
+    win = so() == "windows"
+    bindir = root / ".venv" / ("Scripts" if win else "bin")
+    alvo = bindir / ("betterme.exe" if win else "betterme")
+    if alvo.exists():
+        return True                       # já registrado nada a fazer
+    # 1) regeneração oficial (não toca nas deps — offline-safe)
+    try:
+        r = subprocess.run([str(py), "-m", "pip", "install", "-e", ".",
+                            "-q", "--no-deps"],
+                           cwd=str(root), capture_output=True, timeout=300)
+        if r.returncode == 0 and (alvo.exists()
+                                  or (bindir / "betterme-script.py").exists()):
+            log("  🧷 comando `betterme` registrado no venv (+ alias hermes)")
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    # 2) fallback: launcher manual (funciona offline)
+    try:
+        if win:
+            (bindir / "betterme.bat").write_text(
+                '@"%~dp0python.exe" -m betterme %*\r\n', encoding="utf-8")
+        else:
+            launcher = bindir / "betterme"
+            launcher.write_text(
+                "#!" + str(py) + "\n"
+                "import sys\n"
+                "from betterme.cli import main\n"
+                "sys.exit(main())\n", encoding="utf-8")
+            launcher.chmod(0o755)
+        log("  🧷 comando `betterme` recriado (launcher manual) — rode "
+            "`./.venv/bin/pip install -e .` quando puder p/ oficializar")
+        return True
+    except OSError as exc:
+        log(f"  ✖ não consegui criar o comando `betterme`: {exc} — rode: "
+            "./.venv/bin/pip install -e .")
+        return False
+
+
 def run(check_only: bool = False, assume_yes: bool = False,
         print_fn=print) -> int:
     """Executa o update; devolve código de saída (0 = ok/atualizado)."""
@@ -119,6 +182,7 @@ def run(check_only: bool = False, assume_yes: bool = False,
     print_fn(f"  última versão no GitHub: {tag}")
     if _parse_version(tag) <= _parse_version(VERSION):
         print_fn("✔ você já está na versão mais recente.")
+        garantir_entry_points(_project_root(), log=print_fn)
         return 0
     if check_only:
         print_fn(f"ℹ há atualização: v{VERSION} → {tag} — rode: betterme update")
@@ -136,6 +200,7 @@ def run(check_only: bool = False, assume_yes: bool = False,
         src = download(tag, Path(tmp))
         print_fn(f"  baixado e extraído: {tag}")
         apply_update(src, root, log=print_fn)
+    garantir_entry_points(root, log=print_fn)
     print_fn("\n  ✔ atualização aplicada. Se o `betterme server` estiver rodando,")
     print_fn("    reinicie-o (GUI: ⏹ Desligar → ▶ Ligar) para valer.")
     print_fn("    Dependências novas (se houver): ./.venv/bin/pip install -e . -q")

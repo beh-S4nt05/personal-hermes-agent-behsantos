@@ -1,5 +1,27 @@
 # Changelog
 
+## v6.0.1 — 🧷 AUTOCURA DOS COMANDOS `betterme` (correção de teste real)
+
+**Achado do operador em validação real:** quem instalou o agente antes
+da v4.1.0 ficou só com o comando `hermes` no venv — o `betterme update`
+troca os ARQUIVOS preservando o `.venv`, e entry points (`betterme` /
+`hermes`) nascem na INSTALAÇÃO, não no update.
+
+- `update.garantir_entry_points()`: regenera com
+  `pip install -e . --no-deps` (offline-safe) e, se não der, escreve o
+  launcher manualmente (`bin/betterme` com shebang do venv ·
+  `Scripts/betterme.bat` no Windows).
+- Roda **também quando já está na versão mais recente** — autocura de
+  fato: qualquer `betterme update` (ou `hermes update`) conserta.
+- Idempotente (comando já presente = nada a fazer); sem venv → orienta
+  (instalação global/pipx).
+- **Para a máquina afetada AGORA:** `./.venv/bin/pip install -e . -q`
+  (ou rode `hermes update` de novo após esta versão).
+
+**Testes:** T177 (pip com args certos + fallback manual POSIX e
+Windows + idempotência + sem-venv orienta + pyproject declara ambos) —
+**177/177**.
+
 ## v6.0.0 — 🖥️ MULTIPLATAFORMA: Windows | macOS | Linux (PR #12)
 
 Pedido do operador: o Betterme rodando em qualquer desktop, **em modo

@@ -6753,6 +6753,77 @@ def T176_manager_e_fluxos_via_plataforma():
     assert r.returncode == 0 and "boot" in r.stdout, r.stdout[:200]
 
 
+# ══════════════════════ v6.0.1 — AUTOCURA DE ENTRY POINTS ══════════════════════
+
+@case
+def T177_update_garante_comando_betterme():
+    """v6.0.1 (achado REAL do operador em teste): quem instalou antes da
+    v4.1.0 ficou só com `hermes` no venv — o update troca arquivos
+    preservando o .venv, e entry point nasce na INSTALAÇÃO. Autocura:
+    pip -e . --no-deps → fallback launcher manual → idempotente; sem
+    venv orienta; funciona inclusive no caminho 'já na mais recente'."""
+    import betterme.update as U
+
+    # pyproject declara os dois comandos
+    py = Path("pyproject.toml").read_text(encoding="utf-8")
+    assert 'betterme = "betterme.cli:main"' in py
+    assert 'hermes = "betterme.cli:main"' in py
+    # run() chama a autocura nos DOIS caminhos (fonte)
+    src = Path(U.__file__).read_text(encoding="utf-8")
+    assert src.count("garantir_entry_points(") >= 3, src.count
+
+    # venv falso POSIX: pip mockado (rc 0 mas não cria) → fallback manual
+    raiz = Path(tempfile.mkdtemp(prefix="ep-fix-"))
+    bin_ = raiz / ".venv" / "bin"
+    bin_.mkdir(parents=True)
+    pyf = bin_ / "python"
+    pyf.write_text("#!/bin/sh\n", encoding="utf-8")
+    pyf.chmod(0o755)
+    chamadas = []
+
+    class _R:
+        returncode = 0
+
+    orig_run = U.subprocess.run
+    U.subprocess.run = lambda cmd, **kw: (chamadas.append(cmd) or _R())
+    try:
+        assert U.garantir_entry_points(raiz, log=lambda *_a: None) is True
+        assert chamadas and chamadas[0][1:4] == ["-m", "pip", "install"], \
+            chamadas
+        assert "--no-deps" in chamadas[0]
+        launcher = bin_ / "betterme"
+        assert launcher.is_file()
+        txt = launcher.read_text(encoding="utf-8")
+        assert "from betterme.cli import main" in txt and "sys.exit" in txt
+        assert txt.startswith("#!") and "python" in txt.splitlines()[0]
+        # idempotente: 2ª chamada NÃO roda pip de novo
+        n = len(chamadas)
+        assert U.garantir_entry_points(raiz, log=lambda *_a: None) is True
+        assert len(chamadas) == n
+    finally:
+        U.subprocess.run = orig_run
+
+    # branch WINDOWS: fallback cria betterme.bat no Scripts/
+    import betterme.plataforma as P
+    raiz_w = Path(tempfile.mkdtemp(prefix="ep-win-"))
+    scr = raiz_w / ".venv" / "Scripts"
+    scr.mkdir(parents=True)
+    (scr / "python.exe").write_text("x", encoding="utf-8")
+    P._SO_OVERRIDE = "windows"
+    try:
+        assert U.garantir_entry_points(raiz_w, log=lambda *_a: None) is True
+        bat = scr / "betterme.bat"
+        assert bat.is_file()
+        conteudo = bat.read_text(encoding="utf-8")
+        assert "-m betterme" in conteudo and "python.exe" in conteudo
+    finally:
+        P._SO_OVERRIDE = None
+
+    # sem venv → orienta sem quebrar
+    raiz2 = Path(tempfile.mkdtemp(prefix="ep-novenv-"))
+    assert U.garantir_entry_points(raiz2, log=lambda *_a: None) is False
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())

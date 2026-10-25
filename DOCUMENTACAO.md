@@ -1,6 +1,6 @@
 # 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
-**Versão 6.0.0** · gerado em 25/10/2026 · este documento é extraído do
+**Versão 6.0.1** · gerado em 25/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -132,7 +132,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `betterme skills audit` (auditar o catálogo), `betterme config set/get`, `betterme server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v6.0.0)
+## 3. Modificações — o que foi feito (v1.0.0 → v6.0.1)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -140,6 +140,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v6.0.1** | 🧷 AUTOCURA DOS COMANDOS `betterme` (correção de teste real) |
 | **v6.0.0** | 🖥️ MULTIPLATAFORMA: Windows | macOS | Linux (PR #12) |
 | **v5.1.0** | ⚙️ FLUXOS N8N LOCAIS (PR #11) |
 | **v5.0.0** | 🌅 MODO VIDA (PR #10) |
@@ -592,6 +593,8 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `_assert_zip_seguro(zf, dest_dir)` | v3.14.2: defesa zip-slip — nenhum membro do zip pode escapar do diretório de destino (caminho absoluto ou com '..' é re… |
 | `download(tag, dest_dir)` | Baixa e extrai o zip da tag; devolve a raiz extraída. |
 | `apply_update(src_root, dest_root, log)` | Copia a nova versão sobre a instalação — preserva data/, .venv e .git. Devolve a lista de itens atualizados. |
+| `_venv_python(root)` | Python do venv DO PROJETO (bin/ no Unix, Scripts/ no Windows). |
+| `garantir_entry_points(root, log)` | v6.0.1: autocura dos COMANDOS `betterme` (+ alias `hermes`). Entry points são gerados NA INSTALAÇÃO (pip); o update tro… |
 | `run(check_only, assume_yes, print_fn)` | Executa o update; devolve código de saída (0 = ok/atualizado). |
 
 ### betterme/config.py — ⚙️ Config: defaults, leitura/escrita do config.yaml, skills_dirs, chaves tipadas

@@ -92,7 +92,7 @@ tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 | `activity.py` | Log de atividade humana-legível (`logs/agent.log`). |
 | `backups.py` | Backup/restauração de arquivos editados (`backups/`). |
 | `daemon.py` / `supervisor.py` | Execução em segundo plano + supervisão. |
-| `update.py` | Auto-update via tags do GitHub (com defesa zip-slip). |
+| `update.py` | Auto-update via tags do GitHub (com defesa zip-slip). v6.0.1: `garantir_entry_points` autocura os comandos betterme/hermes após update (inclusive no-op). |
 | `doctor.py` | Diagnóstico do ambiente (CLI, GPU, versões). |
 | `selftest.py` | Bateria de cenários com LLM real (`betterme selftest [--all-models]`). |
 | `metrics.py` / `notify.py` / `stt.py` / `recipes.py` / `tui.py` / `cli.py` / `emailcfg.py` / `agendacfg.py` | Métricas jsonl · notificações · voz→texto · receitas prontas · TUI · linha de comando · config de e-mail/agenda. |
@@ -321,7 +321,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **176 casos** (v6.0.0), famílias:
+`tests/run_all.py` — **177 casos** (v6.0.1), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·
