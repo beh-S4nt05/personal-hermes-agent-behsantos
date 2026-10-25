@@ -975,6 +975,16 @@ self.addEventListener("fetch", (e) => {
         store.set_current(session_id)
         emoji = "🔌" if chat_agent == "claude" else "◈"
         activity.log(cfg, "chat", f"💬 {emoji} pergunta: {message[:90]}")
+        # v6.3.0: transparência — qual cérebro vai responder (roteador)
+        try:
+            from ..llm_providers import melhor_provedor
+            _prov = str(getattr(cfg, "llm_provider", "local") or "local")
+            if (_prov == "local" and getattr(cfg, "auto_provider", True)
+                    and chat_agent == "betterme"):
+                _prov = melhor_provedor(cfg) or "local"
+            activity.log(cfg, "chat", f"🧠 cérebro desta resposta: {_prov}")
+        except Exception:  # noqa: BLE001
+            pass
 
         client = get_client(cfg)
         if chat_agent == "betterme" and not client.is_running():

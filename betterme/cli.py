@@ -502,6 +502,10 @@ def cmd_provider(args) -> None:
             marca = " ◀ atual" if nome == atual else ""
             _p(f"  • {nome:11s} {info['model']:42s} {chave}{marca}")
             _p(f"              {info['nota']} · base {info['base']}")
+        auto = ("✔ ligado — chaves guardadas são usadas automaticamente"
+                if getattr(cfg, "auto_provider", True)
+                else "✖ desligado (provider off)")
+        _p(f"\n  🧠 roteador automático: {auto}")
         _p("\n  configure: betterme provider set <nome> [--model X] · "
            "teste: betterme provider test · volte ao local: provider off")
         _p("  🔒 privacidade: a memória/dados pessoais NUNCA vão a provedores "
@@ -527,7 +531,8 @@ def cmd_provider(args) -> None:
                 raise SystemExit(1)
             arq = salvar_key(cfg, nome, key)
             _p(f"\n🔑 chave gravada em {arq} (600)")
-        cfg.update({"llm_provider": nome, "llm_model": modelo})
+        cfg.update({"llm_provider": nome, "llm_model": modelo,
+                    "auto_provider": True})
         _p(f"\n🔌 provedor ativo: {nome} · modelo {modelo}")
         _p("   🔒 memória e dados pessoais ficam no Ollama local; se "
            f"{nome} falhar, cai no local automaticamente.")
@@ -545,9 +550,12 @@ def cmd_provider(args) -> None:
             raise SystemExit(1)
         return
     if acao == "off":
-        cfg.update({"llm_provider": "local", "llm_model": ""})
-        _p("\n🔌 voltou ao LOCAL (Ollama) — chave continua salva em "
-           "secrets/ se quiser reativar")
+        # v6.3.0: off de verdade — desliga também o roteador automático
+        cfg.update({"llm_provider": "local", "llm_model": "",
+                    "auto_provider": False})
+        _p("\n🔌 voltou ao LOCAL 100% (Ollama; roteador automático "
+           "desligado) — chave continua salva em secrets/; religue com "
+           "`betterme provider set <nome>`")
         return
 
 
@@ -882,6 +890,8 @@ def build_parser() -> argparse.ArgumentParser:
                             "GUI (v5.1.0; grátis p/ uso pessoal)")
     p.add_argument("acao", nargs="?", default="status",
                    help="status|setup|start|stop|remover")
+    p.add_argument("id", nargs="?", default=None,
+                   help="chave da API (para 'apikey')")
     p.add_argument("--node", default=None,
                    help="caminho do node (default: PATH)")
     p.add_argument("--npm", default=None,

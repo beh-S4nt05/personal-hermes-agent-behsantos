@@ -6998,12 +6998,16 @@ def T180_performance_fast_lane_e_visibilidade():
     assert c["cerebro"]["ok"] and "local" in c["cerebro"]["detail"].lower()
     salvar_key(cfg, "groq", "gsk_curta")          # curta: não casa a varredura
     c2 = {x["id"]: x for x in doctor.run_checks(cfg)}
-    assert c2["cerebro"]["ok"] is False
-    assert "NÃO ativada" in c2["cerebro"]["detail"]
-    assert "provider set groq" in c2["cerebro"]["fix"]
-    cfg.update({"llm_provider": "groq"})
+    assert c2["cerebro"]["ok"] is True              # v6.3.0: roteador EM USO
+    assert "ROTEADOR automático: groq" in c2["cerebro"]["detail"]
+    assert "EM USO" in c2["cerebro"]["detail"]
+    cfg.update({"auto_provider": False})            # provider off
     c3 = {x["id"]: x for x in doctor.run_checks(cfg)}
-    assert c3["cerebro"]["ok"] and "groq" in c3["cerebro"]["detail"]
+    assert c3["cerebro"]["ok"] is False
+    assert "provider set groq" in c3["cerebro"]["fix"]
+    cfg.update({"llm_provider": "groq", "auto_provider": True})
+    c4 = {x["id"]: x for x in doctor.run_checks(cfg)}
+    assert c4["cerebro"]["ok"] and "FIXADO: groq" in c4["cerebro"]["detail"]
 
 
 @case
@@ -7028,6 +7032,124 @@ def T181_install_full_carrega_tudo():
     r = subprocess.run([py, "install.py", "--help"], capture_output=True,
                        text=True, timeout=60, cwd=str(ROOT))
     assert r.returncode == 0 and "--full" in r.stdout, r.stdout[:200]
+
+
+# ══════════════════════ v6.3.0 — ROTEADOR DE CÉREBRO + N8N ══════════════════════
+
+@case
+def T182_roteador_automatico_de_cerebro():
+    """v6.3.0: 'o intuito dos modelos online é dar flexibilidade e
+    velocidade' — chave guardada = cérebro USA o provedor rápido
+    (fallback local na falha). Prioridade groq>mistral>…; llm7 anônimo
+    nunca é automático; provider off desliga DE VERDADE; fixação
+    explícita vence; memória segue 100% local (is_external)."""
+    from betterme import llm_providers as LP
+    from betterme.ollama_client import OllamaClient, get_client
+
+    cfg = fresh()
+    cfg.mock = False
+    assert LP.melhor_provedor(cfg) is None
+    assert isinstance(get_client(cfg), OllamaClient)     # sem chave → local
+    LP.salvar_key(cfg, "mistral", "key_mistral")
+    assert LP.melhor_provedor(cfg) == "mistral"
+    cli = get_client(cfg)
+    assert type(cli).__name__ == "FallbackClient"
+    assert cli.externo.provedor == "mistral"
+    LP.salvar_key(cfg, "groq", "gsk_curta")
+    assert LP.melhor_provedor(cfg) == "groq"             # prioridade
+    assert "llm7" not in LP._AUTO_PRIORIDADE              # anônimo = manual
+    # provider off → 100% local mesmo com chaves guardadas
+    cfg.update({"auto_provider": False})
+    assert isinstance(get_client(cfg), OllamaClient)
+    # fixação explícita vence o roteador
+    LP.salvar_key(cfg, "gemini", "key_gemini")
+    cfg.update({"llm_provider": "gemini", "auto_provider": False})
+    cli2 = get_client(cfg)
+    assert type(cli2).__name__ == "FallbackClient"
+    assert cli2.externo.provedor == "gemini"
+    # memória nunca sai: guarda por is_external no agent.py
+    src = Path("betterme/agent.py").read_text(encoding="utf-8")
+    assert "is_external" in src
+    # CLI: off desliga o roteador; set religa
+    cli_src = Path("betterme/cli.py").read_text(encoding="utf-8")
+    assert '"auto_provider": False' in cli_src
+    assert '"auto_provider": True' in cli_src
+    # default do config: roteador ligado
+    assert '"auto_provider": True' in Path(
+        "betterme/config.py").read_text(encoding="utf-8")
+
+
+@case
+def T183_n8n_integracao_melhorada():
+    """v6.3.0: integração n8n — API key em secrets 600 · listar via API
+    pública (degradação honesta sem key/n8n) · chamar mapeia 404
+    (workflow inativo) · status expõe hook_url (n8n dispara o Betterme)
+    · GUI documenta os 2 sentidos · cmd apikey/listar/abrir."""
+    import contextlib
+    import io
+
+    from betterme import fluxos as F
+
+    cfg = fresh()
+    # API key: secrets 600, lida de volta
+    f = F.salvar_apikey(cfg, "n8n_key_TESTE")
+    assert f.name == "n8n.key"
+    assert f.stat().st_mode & 0o777 == 0o600
+    assert F.ler_apikey(cfg) == "n8n_key_TESTE"
+    # listar: degradação honesta (n8n parado)
+    r = F.listar(cfg)
+    assert r["ok"] is False and "fluxos start" in r["msg"]
+    orig = F.rodando
+    F.rodando = lambda c: True
+    try:
+        # sem key → orientação
+        F._key_path(cfg).unlink()
+        r2 = F.listar(cfg, _get=lambda u, k: {})
+        assert r2["ok"] is False and "apikey" in r2["msg"]
+        # com key → parse dos workflows
+        F.salvar_apikey(cfg, "n8n_key_TESTE")
+        r3 = F.listar(cfg, _get=lambda u, k: {"data": [
+            {"id": "w1", "name": "Backup", "active": True, "nodes": [1]},
+            {"id": "w2", "name": "Email", "active": False, "nodes": []}]})
+        assert r3["ok"] and r3["workflows"] == [
+            {"id": "w1", "nome": "Backup", "ativo": True, "nos": 1},
+            {"id": "w2", "nome": "Email", "ativo": False, "nos": 0}]
+        # resposta inesperada → erro claro
+        r4 = F.listar(cfg, _get=lambda u, k: {"erro": "bad"})
+        assert r4["ok"] is False and "API key" in r4["msg"]
+    finally:
+        F.rodando = orig
+    # chamar: 404 vira diagnóstico de workflow inativo
+    ch = F.chamar(cfg, "wf-x", {}, _post=lambda u, p: {
+        "ok": False, "status": 404, "msg": ""})
+    assert ch["ok"] is False and "não está" in ch["msg"] and "ATIVO" in ch["msg"]
+    # status: hook_url (n8n → Betterme) + api_key
+    st = F.status(cfg)
+    assert st["api_key"] is True and "api/hooks" in st["hook_url"]
+    # GUI documenta os 2 sentidos
+    c = _app(cfg)
+    pg = c.get("/fluxos")
+    assert pg.status_code == 200
+    assert b"fluxos_chamar" in pg.data and b"api/hooks" in pg.data
+    assert b"apikey" in pg.data
+    # cmd: apikey + abrir (webbrowser pode não existir headless → ℹ)
+    class _A:
+        acao, id, node, npm = "apikey", "n8n_KEY_teste2", None, None
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        F.cmd(_A(), cfg)
+    assert "salva" in buf.getvalue() and F.ler_apikey(cfg) == "n8n_KEY_teste2"
+
+    class _A2:
+        acao, id, node, npm = "abrir", None, None, None
+
+    with contextlib.redirect_stdout(buf):
+        F.cmd(_A2(), cfg)
+    assert "editor" in buf.getvalue()
+    # CLI: posicional id no subparser fluxos
+    cli_src = Path("betterme/cli.py").read_text(encoding="utf-8")
+    assert 'p.add_argument("id", nargs="?", default=None' in cli_src
 
 
 if __name__ == "__main__":

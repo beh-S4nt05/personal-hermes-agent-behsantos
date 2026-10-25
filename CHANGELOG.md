@@ -1,5 +1,33 @@
 # Changelog
 
+## v6.3.0 — 🧠 ROTEADOR AUTOMÁTICO DE CÉREBRO + N8N BIDIRECIONAL
+
+*"Mas e como seria chamado os modelos online? (…) O intuito deles é dar
+flexibilidade e velocidade."* — correção de rumo: **chave guardada =
+cérebro USA**. Chaves online não dormem mais em `secrets/`.
+
+- **Roteador automático** (`ollama_client.get_client`): provedor
+  `local` + `auto_provider` (default ON) + melhor chave disponível →
+  `FallbackClient` (externo rápido com **fallback local na falha**).
+  Prioridade `groq > mistral > gemini > openrouter > cohere > zai`;
+  **llm7 anônimo nunca é automático** (manual). Aviso 1×/processo no
+  activity.log (`🧠 roteador automático`).
+- **`provider off` = 100% local de verdade** (auto_provider:False);
+  `provider set X` religa/fixa; `provider list` mostra o roteador.
+- **Transparência no fluxo de pedidos**: cada pedido no chat registra
+  `🧠 cérebro desta resposta: <provedor>`; doctor Cérebro v6.3.0
+  (ROTEADOR em uso ✔ / FIXADO ✔ / off ✖ com fix).
+- **Privacidade inalterada**: memória/dados pessoais seguem 100%
+  locais (guarda `is_external` no agent.py); só o pedido mascarado
+  vai ao provedor externo (D2 mantida).
+- **n8n bidirecional**: `betterme fluxos apikey <chave>` (secrets 600)
+  · `fluxos listar` (API pública local) · `fluxos abrir` ·
+  `fluxos_chamar` mapeia 404 → "workflow não está ATIVO" · status
+  expõe `hook_url` (n8n dispara o Betterme via
+  `POST /api/hooks/<id>`) · GUI documenta os 2 sentidos.
+- T180 atualizado (semântica do roteador) · T182 (roteador) ·
+  T183 (n8n) — **183/183**.
+
 ## v6.2.0 — ⚡ PERFORMANCE + BOOTSTRAP COMPLETO (3º achado de campo)
 
 **Dor real do operador:** ">50s para uma tarefa simples — era <20s.

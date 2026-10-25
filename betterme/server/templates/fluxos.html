@@ -35,6 +35,21 @@
   <a href="/" target="_self">← voltar ao Betterme</a>
 </header>
 <div class="st" id="st">carregando estado…</div>
+<details class="st" id="integracao" style="color:var(--dim)">
+  <summary style="cursor:pointer">🔧 Integração nos 2 sentidos (Betterme ↔ n8n)</summary>
+  <div id="int-corpo" style="padding:8px 0 4px;line-height:1.7">
+    <div>• <b>Do chat do Betterme</b>: peça "dispare o fluxo X" — a
+      ferramenta <code>fluxos_chamar</code> faz POST no webhook local
+      (espere a resposta com o nó "Respond to Webhook").</div>
+    <div>• <b>Do n8n</b>: nó HTTP em POST para
+      <code id="hook-url">http://127.0.0.1:8080/api/hooks/&lt;id&gt;</code>
+      — crie uma tarefa agendada tipo <i>webhook</i> no Betterme
+      (aba Tarefas) e o n8n dispara o agente quando o fluxo quiser.</div>
+    <div>• <b>Listar workflows</b>: <code>betterme fluxos apikey &lt;chave&gt;</code>
+      (crie a chave no editor: Settings → n8n API) e
+      <code>betterme fluxos listar</code>.</div>
+  </div>
+</details>
 <div>
 <iframe id="editor" src=""></iframe>
 </div>
@@ -56,6 +71,8 @@ async function carregar(){
     " · processo: <b class='"+(st.rodando?"ok":"bad")+"'>"+
       (st.rodando?"rodando":"parado")+"</b>" +
     " · telemetria: <b class='ok'>desligada (local)</b>";
+  const hk = document.getElementById("hook-url");
+  if (hk && st.hook_url) hk.textContent = st.hook_url;
   const fr = document.getElementById("editor");
   if(st.rodando){
     fr.src = "http://" + location.hostname + ":5678/";

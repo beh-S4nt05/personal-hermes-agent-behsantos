@@ -33,28 +33,32 @@ def run_checks(cfg) -> list[dict]:
         "fix": "",
     })
 
-    # 0.5) Cérebro (LLM): local ou provedor rápido? (v6.2.0)
+    # 0.5) Cérebro (LLM): roteador v6.3.0 — chave guardada = USADA
     prov = str(getattr(cfg, "llm_provider", "local") or "local")
+    auto = bool(getattr(cfg, "auto_provider", True))
+    rapido = ""
+    try:
+        from .llm_providers import melhor_provedor
+        rapido = melhor_provedor(cfg) or ""
+    except Exception:  # noqa: BLE001
+        pass
     if prov != "local":
-        ok, detail = True, f"provedor externo: {prov} (fallback local automático)"
+        ok, detail = True, f"provedor externo FIXADO: {prov} (fallback local)"
         fix = ""
+    elif rapido and auto:
+        ok, detail = True, (f"ROTEADOR automático: {rapido} (chave "
+                            "detectada → EM USO; fallback local na falha; "
+                            "memória segue 100% local)")
+        fix = ""
+    elif rapido and not auto:
+        ok, detail = False, (f"100% local a seu pedido (provider off) — "
+                             f"há uma chave {rapido} guardada e o roteador "
+                             "está desligado")
+        fix = f"betterme provider set {rapido}   # religa: 3-10× mais rápido"
     else:
-        rapido = ""
-        try:
-            from .llm_providers import api_key
-            rapido = next((n for n in ("groq", "mistral", "gemini",
-                                       "openrouter", "cohere", "zai")
-                           if api_key(cfg, n)), "")
-        except Exception:  # noqa: BLE001
-            pass
-        if rapido:
-            ok, detail = False, (
-                f"Ollama LOCAL (lento em CPU) — há uma chave {rapido} "
-                "guardada e NÃO ativada")
-            fix = f"betterme provider set {rapido}   # 3-10× mais rápido"
-        else:
-            ok, detail = True, "Ollama local (nenhum provedor externo ativo)"
-            fix = "betterme provider set groq   # opcional: chave grátis = mais rápido"
+        ok, detail = True, "Ollama local (nenhuma chave externa guardada)"
+        fix = ("betterme provider set groq   # opcional: chave grátis = "
+               "roteador automático + velocidade")
     checks.append({
         "id": "cerebro", "name": "Cérebro (LLM)", "ok": ok,
         "detail": detail, "fix": fix,

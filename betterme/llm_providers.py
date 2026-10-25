@@ -104,6 +104,24 @@ def salvar_key(cfg, provedor: str, key: str) -> Path:
     return arq
 
 
+# v6.3.0: roteador automático de cérebro — chave guardada = USADA.
+# Prioridade = rapidez/estabilidade; llm7 (anônimo, cota mínima) fica
+# só para uso manual explícito.
+_AUTO_PRIORIDADE = ["groq", "mistral", "gemini", "openrouter",
+                    "cohere", "zai"]
+
+
+def melhor_provedor(cfg) -> str | None:
+    """Melhor provedor COM CHAVE em secrets/ (None = nenhum)."""
+    for nome in _AUTO_PRIORIDADE:
+        try:
+            if api_key(cfg, nome):
+                return nome
+        except Exception:  # noqa: BLE001
+            continue
+    return None
+
+
 def _norm_args(a):
     """arguments pode vir como string JSON (OpenAI) — normaliza p/ dict."""
     if isinstance(a, str):

@@ -216,24 +216,90 @@ def remover(cfg) -> dict:
                                "perfil e workflows)"}
 
 
-def chamar(cfg, caminho: str, payload: dict, _post=None) -> dict:
-    """Dispara um workflow por webhook local (tool do cérebro)."""
+def chamar(cfg, caminho: str, payload: dict, _post=None,
+            timeout: int = 60) -> dict:
+    """v6.3.0: dispara um workflow por webhook local (tool do cérebro).
+    Espera a resposta do workflow (nó "Respond to Webhook" no n8n)."""
     caminho = str(caminho or "").strip().strip("/")
     if not caminho:
         return {"ok": False, "msg": "informe o caminho do webhook "
                                     "(id ou path do workflow)"}
     url = f"http://127.0.0.1:{PORTA}/webhook/{caminho}"
+
+    def _mapa(res: dict) -> dict:
+        if res.get("status") == 404:
+            res["ok"] = False
+            res["msg"] = ("webhook respondeu 404 — o workflow não está "
+                          "ATIVO ou o caminho mudou (ative no editor n8n "
+                          "e confira o Production URL)")
+        return res
+
     if _post is not None:
-        return _post(url, payload or {})
+        return _mapa(_post(url, payload or {}))
     import requests
     try:
-        r = requests.post(url, json=payload or {}, timeout=60)
+        r = requests.post(url, json=payload or {}, timeout=timeout)
     except Exception as exc:  # noqa: BLE001
         return {"ok": False,
                 "msg": f"n8n não respondeu em {url} — rode "
                        f"`betterme fluxos start` ({exc.__class__.__name__})"}
-    return {"ok": r.status_code < 400, "status": r.status_code,
-            "msg": (r.text or "")[:500]}
+    return _mapa({"ok": r.status_code < 400, "status": r.status_code,
+                  "msg": (r.text or "")[:500]})
+
+
+# ------------------------------------------------- API pública do n8n
+def _key_path(cfg) -> Path:
+    return Path(cfg.data_dir) / "secrets" / "n8n.key"
+
+
+def salvar_apikey(cfg, key: str) -> Path:
+    """API key do n8n (Settings → n8n API) em secrets/ com chmod 600."""
+    f = _key_path(cfg)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(str(key).strip(), encoding="utf-8")
+    try:
+        f.chmod(0o600)
+    except OSError:
+        pass
+    return f
+
+
+def ler_apikey(cfg) -> str:
+    try:
+        return _key_path(cfg).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def listar(cfg, _get=None) -> dict:
+    """v6.3.0: lista os workflows do n8n via API pública local."""
+    if not rodando(cfg):
+        return {"ok": False, "msg": "n8n não está rodando — "
+                                    "`betterme fluxos start`"}
+    key = ler_apikey(cfg)
+    if not key:
+        return {"ok": False, "msg": "sem API key — crie no editor do n8n "
+                                    "(Settings → n8n API) e rode: "
+                                    "`betterme fluxos apikey <chave>`"}
+    url = f"http://127.0.0.1:{PORTA}/api/v1/workflows?limit=50"
+    if _get is not None:
+        dados = _get(url, key)
+    else:
+        import requests
+        try:
+            r = requests.get(url, headers={"X-N8N-API-KEY": key},
+                             timeout=15)
+            dados = r.json() if r.status_code == 200 else {"erro": r.text}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "msg": f"API do n8n falhou: "
+                                        f"{exc.__class__.__name__}"}
+    if "erro" in dados or not isinstance(dados.get("data"), list):
+        return {"ok": False, "msg": "resposta inesperada da API do n8n — "
+                                    "confira a API key"}
+    wfs = [{"id": w.get("id"), "nome": w.get("name"),
+            "ativo": bool(w.get("active")),
+            "nos": len(w.get("nodes") or [])} for w in dados["data"]]
+    return {"ok": True, "workflows": wfs}
 
 
 def status(cfg, node_bin: str = "node") -> dict:
@@ -244,6 +310,10 @@ def status(cfg, node_bin: str = "node") -> dict:
             "n8n_instalado": instalado,
             "rodando": rodando(cfg) if instalado else False,
             "porta": PORTA,
+            "api_key": bool(ler_apikey(cfg)),
+            # v6.3.0: gatilho n8n → Betterme (tarefa agendada tipo webhook)
+            "hook_url": (f"http://127.0.0.1:{getattr(cfg, 'port', 8080)}"
+                         "/api/hooks/<id-da-tarefa-agendada>"),
             "diretorio": str(_dir(cfg)),
             "user_dir": str(_user_dir(cfg))}
 
@@ -284,6 +354,34 @@ def cmd(args, cfg) -> None:
     if acao == "remover":
         print("✔ " + remover(cfg)["msg"])
         return
+    if acao == "apikey":
+        key = str(getattr(args, "id", "") or "").strip()
+        if not key:
+            print("✖ informe a chave: betterme fluxos apikey <chave>")
+            raise SystemExit(1)
+        f = salvar_apikey(cfg, key)
+        print(f"✔ API key do n8n salva em {f} (600) — "
+              "`betterme fluxos listar` agora funciona")
+        return
+    if acao == "listar":
+        r = listar(cfg)
+        if not r.get("ok"):
+            print("✖ " + r["msg"])
+            raise SystemExit(1)
+        print(f"⛓ {len(r['workflows'])} workflow(s) no n8n local:")
+        for w in r["workflows"]:
+            estado = "🟢 ativo" if w["ativo"] else "⚪ inativo"
+            print(f"  · {w['nome']} ({w['nos']} nós) {estado} · id "
+                  f"{w['id']}")
+        return
+    if acao == "abrir":
+        import webbrowser
+        try:
+            webbrowser.open(f"http://127.0.0.1:{PORTA}")
+            print(f"✔ abrindo o editor em http://127.0.0.1:{PORTA}")
+        except Exception:  # noqa: BLE001
+            print(f"ℹ abra manualmente: http://127.0.0.1:{PORTA}")
+        return
     print(f"✖ ação desconhecida: {acao!r} "
-          "(status|setup|start|stop|remover)")
+          "(status|setup|start|stop|apikey|listar|abrir|remover)")
     raise SystemExit(1)

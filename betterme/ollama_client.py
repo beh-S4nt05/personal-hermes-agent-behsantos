@@ -341,6 +341,9 @@ class MockOllamaClient:
         return {"role": "assistant", "content": random.choice(_GENERIC)}
 
 
+_AVISO_AUTO_FEITO = False      # avisa 1x por processo
+
+
 def get_client(cfg):
     """Fábrica: devolve o cliente mock quando cfg.mock for verdadeiro.
     v3.17.0: com llm_provider externo configurado, devolve externo com
@@ -349,6 +352,30 @@ def get_client(cfg):
         return MockOllamaClient()
     local = OllamaClient(cfg.ollama_url, timeout=cfg.cmd_timeout * 5 + 120)
     provedor = str(getattr(cfg, "llm_provider", "local") or "local")
+    # v6.3.0: ROTEADOR AUTOMÁTICO — nenhuma config externa + chave
+    # guardada = o cérebro USA o provedor rápido (fallback local na
+    # falha). 'betterme provider off' desliga (auto_provider=False).
+    if (provedor == "local"
+            and getattr(cfg, "auto_provider", True)):
+        try:
+            from .llm_providers import melhor_provedor
+            auto = melhor_provedor(cfg)
+            if auto:
+                provedor = auto
+                global _AVISO_AUTO_FEITO
+                if not _AVISO_AUTO_FEITO:
+                    _AVISO_AUTO_FEITO = True
+                    try:
+                        from . import activity
+                        activity.log(
+                            cfg, "cerebro",
+                            f"🧠 roteador automático: usando {auto} "
+                            "(chave detectada; fallback local na falha; "
+                            "'betterme provider off' volta ao 100% local)")
+                    except Exception:  # noqa: BLE001
+                        pass
+        except Exception:  # noqa: BLE001
+            pass
     if provedor != "local":
         try:
             from .llm_providers import REGISTRY, ExternalClient, FallbackClient
