@@ -395,14 +395,23 @@ def run_command(args: dict, cfg) -> str:
     timeout = int(args.get("timeout") or cfg.cmd_timeout)
     timeout = min(max(timeout, 1), 600)
     try:
-        proc = subprocess.run(
-            ["bash", "-c", command],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-            cwd=str(scope_dir() or cfg.workdir),  # v3.15.0: projeto da task
-        )
+        # v4.0.0 (M4): kernel primeiro (bwrap+seccomp), denylist fica como
+        # segunda camada — defesa em profundidade; sem bwrap, segue app
+        from .sandbox_kernel import envolver_comando, fechar_fds
+        _wd = str(scope_dir() or cfg.workdir)
+        argv, _fds = envolver_comando(cfg, ["bash", "-c", command], _wd)
+        try:
+            proc = subprocess.run(
+                argv,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+                cwd=_wd,  # v3.15.0: projeto da task
+                pass_fds=tuple(_fds),
+            )
+        finally:
+            fechar_fds(_fds)
     except subprocess.TimeoutExpired:
         return f"$ {command}\n[TIMEOUT] execução excedeu {timeout}s e foi cancelada."
     except Exception as exc:

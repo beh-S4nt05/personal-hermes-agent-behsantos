@@ -4867,6 +4867,104 @@ def T130_skills_de_metodologia_ptbr():
     assert run_audit(cfg, print_fn=lambda *_: None) == 0
 
 
+@case
+def T131_sandbox_de_kernel_bwrap_seccomp():
+    """v4.0.0 M4: filtro seccomp BPF (blocklist x86_64), embrulho bwrap
+    com modos read-only/workspace-write e rede, fallback honesto para a
+    denylist de app quando o kernel não está disponível."""
+    import struct as _st
+    import subprocess as _sp
+    from hermes import sandbox_kernel as SK
+
+    # ---- BPF: formato e blocklist
+    bpf = SK.bpf_blocklist()
+    n = len(SK._BLOCKLIST_X86_64)
+    assert len(bpf) == (3 + 2 * n + 2) * 8          # 8 B/instrução
+    code0, _, _, k0 = _st.unpack("=HBBI", bpf[:8])
+    assert code0 == 0x20 and k0 == 4                # ld [4] (arch)
+    # última instrução = ALLOW
+    code_f, _, _, k_f = _st.unpack("=HBBI", bpf[-8:])
+    assert code_f == 0x06 and k_f == 0x7FFF0000
+    # contém jeq para cada syscall bloqueado
+    blob = bpf
+    alvo = _st.pack("=I", 101)                      # ptrace
+    assert blob.count(alvo) >= 1
+
+    # ---- envolver: modos (kernel simulado via monkeypatch do probe)
+    cfg = fresh()
+    cfg.update({"sandbox_mode": "kernel"})
+    SK._probe_cache, SK._probe_feito = "seccomp", True
+    try:
+        argv, fds = SK.envolver_comando(cfg, ["bash", "-c", "ls"], "/tmp/p")
+        assert fds == () or isinstance(fds, tuple)
+        SK.fechar_fds(fds)
+    finally:
+        SK._probe_cache, SK._probe_feito = None, False
+    SK._probe_cache, SK._probe_feito = "seccomp", True
+    try:
+        argv, fds = SK.envolver_comando(cfg, ["bash", "-c", "ls"], "/tmp/pj")
+        assert argv[0] == "bwrap"
+        j = argv.index("--bind")
+        assert argv[j + 1] == "/tmp/pj"             # workspace-write
+        assert "--" in argv and argv[argv.index("--") + 1] == "bash"
+        ro, fds_ro = SK.envolver_comando(
+            cfg, ["bash", "-c", "cat x"], "/tmp/pj", modo="read-only")
+        assert "--bind" not in ro                   # read-only sem bind rw
+        semnet, _ = SK.envolver_comando(
+            cfg, ["bash", "-c", "curl x"], "/tmp/pj", net=False)
+        assert "--unshare-net" in semnet            # rede cortada no kernel
+        SK.fechar_fds(fds); SK.fechar_fds(fds_ro)
+    finally:
+        SK._probe_cache, SK._probe_feito = None, False
+
+    # ---- fallback: probe falha -> denylist de app, comando original
+    SK._probe_cache, SK._probe_feito = None, True
+    try:
+        argv2, fds2 = SK.envolver_comando(cfg, ["bash", "-c", "ls"], "/tmp/p")
+        assert argv2 == ["bash", "-c", "ls"] and fds2 == ()
+        assert SK.nivel(fresh()) is None            # modo auto + sem kernel
+    finally:
+        SK._probe_feito = False
+    # sandbox_mode=app desliga mesmo com kernel disponível
+    cfg_app = fresh()
+    cfg_app.update({"sandbox_mode": "app"})
+    SK._probe_cache, SK._probe_feito = "seccomp", True
+    try:
+        argv3, fds3 = SK.envolver_comando(cfg_app, ["bash", "-c", "ls"],
+                                          "/tmp/p")
+        assert argv3 == ["bash", "-c", "ls"] and fds3 == ()
+    finally:
+        SK._probe_cache, SK._probe_feito = None, False
+
+    # ---- real: se bwrap existir E userns liberado, roda de verdade
+    SK._probe_feito = False
+    nv = SK.probe()
+    if nv is not None:
+        cfg_r = fresh()
+        cfg_r.update({"sandbox_mode": "kernel"})
+        argv_r, fds_r = SK.envolver_comando(cfg_r, ["echo", "kernel-ok"],
+                                            str(cfg_r.data_dir))
+        try:
+            r = _sp.run(argv_r, capture_output=True, text=True,
+                        timeout=30, pass_fds=tuple(fds_r))
+            assert "kernel-ok" in (r.stdout or "")
+        finally:
+            SK.fechar_fds(fds_r)
+        # escrita FORA do workspace é recusada pelo kernel (read-only bind)
+        argv_ro, fds_ro2 = SK.envolver_comando(
+            cfg_r, ["touch", str(Path.home() / ".t131-fora-ro")],
+            str(cfg_r.data_dir), modo="read-only")
+        try:
+            r2 = _sp.run(argv_ro, capture_output=True, text=True,
+                         timeout=30, pass_fds=tuple(fds_ro2))
+            assert r2.returncode != 0               # kernel bloqueou
+        finally:
+            SK.fechar_fds(fds_ro2)
+    else:
+        print("     (bwrap indisponível aqui — testes reais de kernel "
+              "pulados; fallback validado acima)")
+
+
 if __name__ == "__main__":
     print("◈ Hermes Agent — suíte de testes (v3.0)\n")
     sys.exit(run_all())

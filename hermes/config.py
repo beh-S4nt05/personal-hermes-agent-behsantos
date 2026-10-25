@@ -31,6 +31,7 @@ DEFAULTS = {
     # openrouter|llm7|zai|cohere) com fallback local; memória NUNCA sai
     "llm_provider": "local",
     "llm_model": "",
+    "sandbox_mode": "auto",
     "skills_watch_dirs": None,        # None = [~/Downloads]
     # Acesso à web (ferramentas web_search / web_fetch do agente e da GUI)
     "web_access": True,
