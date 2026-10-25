@@ -1,4 +1,4 @@
-# 🗺 Mapa da Aplicação — Hermes Agent
+# 🗺 Mapa da Aplicação — Betterme Agent
 
 > Como o sistema funciona por dentro: módulos, fluxos, dados, segurança e o
 > **contexto de cada ponto**. Documento vivo — atualizado a cada release.
@@ -14,7 +14,7 @@
                               │  token de acesso
                               ▼
                    ┌─────────────────────────┐
-                   │  hermes server (Flask)  │  ← hermes/server/app.py
+                   │  betterme server (Flask)  │  ← betterme/server/app.py
                    │  71 rotas /api protegidas│
                    └───────────┬─────────────┘
                                │ escolha por mensagem
@@ -28,7 +28,7 @@
       🔍 revisar (critérios)
                └───────────────┬───────────────┘
                                ▼
-                      hermes/tools.py  (FERRAMENTAS)
+                      betterme/tools.py  (FERRAMENTAS)
         run_command · read/write_file · list_dir · sys_info ·
         web_search · web_fetch · diagnostico_sistema · backups ·
         git_run (versionar no projeto) · knowledge_search (RAG)
@@ -38,7 +38,7 @@
 ```
 
 **Os 2 agentes não conversam entre si** — são alternativos por mensagem
-(seletor na GUI). O Hermes tem memória persistente e pipeline; o Claude Code
+(seletor na GUI). O Betterme tem memória persistente e pipeline; o Claude Code
 tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 
 ---
@@ -49,13 +49,13 @@ tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 
 | Arquivo | Papel | Depende de |
 |---|---|---|
-| `config.py` | Config central (`~/.hermes/config.yaml` + defaults + flags). Cria a árvore de diretórios no boot. | — |
-| `agent.py` | O **chat 💬** do Hermes: monta prompt (persona + memória + contexto), chama `chat_stream` do Ollama, gera tokens SSE. | config, ollama_client, memory, tools, skills, manager, mcp_client |
+| `config.py` | Config central (`~/.betterme/config.yaml` + defaults + flags). Cria a árvore de diretórios no boot. | — |
+| `agent.py` | O **chat 💬** do Betterme: monta prompt (persona + memória + contexto), chama `chat_stream` do Ollama, gera tokens SSE. | config, ollama_client, memory, tools, skills, manager, mcp_client |
 | `orchestrator.py` | O **cérebro 🎯**: decide rota (conversar × executar), gera tasks, injeta skills + goal + memória, critérios extras de execução, aprovações. | ollama_client, skills |
 | `tools.py` | **Ferramentas** com sandbox (`resolve_path`): leitura na home, escrita só no workspace/skills; `diagnostico_sistema` (bateria única); backups automáticos de edição. | memory, backups |
 | `claude_agent.py` | **Agente Claude Code**: modo leve (`--bare`), persona sênior, `_enrich_prompt` (skill + goal), guard de execução (executa comandos que o modelo só escreveu), timeout e cleanup. | orchestrator (skills_for), tools |
 | `memory.py` | **Memória de longo prazo** (`memory.json`, atômico + lock): fatos do operador, busca por relevância, prompt_section. | — |
-| `skills.py` | Catálogo de **skills** (repo + `~/.hermes/skills/`), instalação de repositórios GitHub, toggle. | — |
+| `skills.py` | Catálogo de **skills** (repo + `~/.betterme/skills/`), instalação de repositórios GitHub, toggle. | — |
 | `skills_audit.py` | Auditoria do catálogo: frontmatter, duplicatas, injeção, tamanho. | — |
 
 ### Infraestrutura
@@ -65,7 +65,7 @@ tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 | `server/app.py` | Servidor Flask: **76 rotas** (chat SSE, orchestrator, Ollama, MCP, skills, logs, tools, conversas, agendador, memória, settings, auditoria, backups, métricas, notificações, receitas, doctor, hooks). Imports lazy → boot rápido. |
 | `ollama_client.py` | Cliente HTTP do Ollama (chat, streaming, modelos, pull) + fábrica `get_client` (v3.17.0: provedor externo com fallback). |
 | `varredura.py` | 🛡 Segurança/privacidade: scanner de segredos (exit 1 = bloqueia push) e DLP `mascarar()` — código/segredos nunca vão a provedores gratuitos (D2). |
-| `project_context.py` | 📋 HERMES.md/AGENTS.md root-to-leaf (global+projeto, cap 32 KiB) + `hermes init`; externo recebe versão DLP. |
+| `project_context.py` | 📋 HERMES.md/AGENTS.md root-to-leaf (global+projeto, cap 32 KiB) + `betterme init`; externo recebe versão DLP. |
 | `sandbox_kernel.py` | 🧱 Sandbox de kernel: bubblewrap + seccomp BPF (blocklist), modos read-only/workspace-write, fallback honesto p/ denylist. |
 | `autonomy.py` | 🎚 Autonomia 3 níveis (cauteloso/padrao/autonomo) + hard gates inejociáveis + varredura pré-entrega do AUTÔNOMO. |
 | `specialists.py` | 🧪 ESPECIALISTAS (ADR-001): veredito JSON com evidência validada em disco, pool grátis c/ fallback, exames de competência, DLP, auditoria. |
@@ -83,7 +83,7 @@ tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 | `daemon.py` / `supervisor.py` | Execução em segundo plano + supervisão. |
 | `update.py` | Auto-update via tags do GitHub (com defesa zip-slip). |
 | `doctor.py` | Diagnóstico do ambiente (CLI, GPU, versões). |
-| `selftest.py` | Bateria de cenários com LLM real (`hermes selftest [--all-models]`). |
+| `selftest.py` | Bateria de cenários com LLM real (`betterme selftest [--all-models]`). |
 | `metrics.py` / `notify.py` / `stt.py` / `recipes.py` / `tui.py` / `cli.py` / `emailcfg.py` / `agendacfg.py` | Métricas jsonl · notificações · voz→texto · receitas prontas · TUI · linha de comando · config de e-mail/agenda. |
 | `mcp-servers/*.py` | Servidores MCP (IMAP/SMTP e agenda) — stdlib pura. |
 
@@ -103,7 +103,7 @@ GUI/CLI → POST /api/chat {message, history[-20], session_id, agent}
    2. sessão: valida id ou cria nova; grava a mensagem do usuário ANTES
       da geração (nunca se perde) · set_current
    3. agente = "claude"? → run_claude()            (ver §4)
-   4. agente = "hermes":
+   4. agente = "betterme":
       a. 💬 conversa comum? → agent.py responde direto (stream SSE)
       b. 🎯 orquestrador decide: rota conversar × executar
          - objetivo + passos + skills que casam (score ≥ 2, máx. 2)
@@ -144,12 +144,12 @@ run_claude(cfg, message, history, goal)  ← goal chega desde a v3.14.1
    2. claude_path() · _cli_version() (cacheada)
    3. _claude_cmd: modo leve --bare --max-turns 4
       --append-system-prompt CLAUDE_LIGHT_PROMPT
-      --allowedTools Bash,Read,Edit · cwd = workspace do Hermes
+      --allowedTools Bash,Read,Edit · cwd = workspace do Betterme
    4. prompt = histórico serializado + _enrich_prompt:
       [SKILL <nome> — conteúdo até 1800 chars] + [🎯 OBJETIVO DA SESSÃO]
    5. Popen → lê JSONL do stdout → emite os MESMOS eventos do chat
    6. guard de execução v3.0.2: modelo escreveu comandos sem rodar?
-      → Hermes executa e cola a saída real (auditada)
+      → Betterme executa e cola a saída real (auditada)
    7. guard anti-recusa: negou/perguntou em vez de responder?
       → 2ª chamada com correção (_guard=True)
    8. finally: terminate + wait(5s) + kill — sem processo zumbi (v3.14.2)
@@ -159,7 +159,7 @@ Persona (v3.14.1): **ENGENHEIRO DE SOFTWARE SÊNIOR** — "o especialista da
 casa"; RECUSAR TAREFA é FALHA GRAVE; assunto novo → aprende na hora
 (Read/Bash); código → arquivo completo + execução com saída colada.
 
-A CLI do Claude Code é **plugin opcional** (v3.15.0): sem ela o Hermes
+A CLI do Claude Code é **plugin opcional** (v3.15.0): sem ela o Betterme
 cobre tudo — a GUI nem mostra a opção e tarefas agendadas caem no loop
 nativo com nota. O Ollama fica só com o papel de servir o modelo.
 
@@ -167,11 +167,11 @@ nativo com nota. O Ollama fica só com o papel de servir o modelo.
 
 ## 5. Skills — catálogo, casamento e injeção
 
-- **39 skills** em `skills/` (repo) + `~/.hermes/skills/` (do operador).
+- **39 skills** em `skills/` (repo) + `~/.betterme/skills/` (do operador).
 - **Nativas de qualquer fonte** (v3.15.0): baixou do GitHub (zip/pasta/
-  URL/owner-repo) → `hermes skills import` ou **autoscan** (boot + 10 min
+  URL/owner-repo) → `betterme skills import` ou **autoscan** (boot + 10 min
   no agendador; default varre `~/Downloads`, zips incluídos) → skill em
-  `~/.hermes/skills/`, ativa por padrão, cache invalidado na hora.
+  `~/.betterme/skills/`, ativa por padrão, cache invalidado na hora.
 - **Delegação** (v3.15.0): skill casada = MANUAL DA TAREFA no executor; a
   seção `## Verificação` da skill vira critério do 🔍 revisor.
 - **Casamento** (`skills_for`): palavras do pedido (≥4 letras, sem
@@ -184,7 +184,7 @@ nativo com nota. O Ollama fica só com o papel de servir o modelo.
   recebe até 1 (conteúdo até 1800 chars — modo leve enxuto).
 - **Criação**: o agente pode propor skills novas → 🔒 aprovação/edição
   obrigatória antes de gravar.
-- **Auditoria**: `hermes skills audit` — frontmatter, duplicatas,
+- **Auditoria**: `betterme skills audit` — frontmatter, duplicatas,
   injeção, tamanho, description curta.
 
 ---
@@ -193,10 +193,10 @@ nativo com nota. O Ollama fica só com o papel de servir o modelo.
 
 | Camada | Onde | Como melhora |
 |---|---|---|
-| Fatos do operador | `memory.json` (atômico+lock) | "lembre que…" · GUI · `hermes memory import` |
-| Memória do operador (privada) | **fora do repo**, arquivada em `~/.hermes/` | protocolo de importação |
+| Fatos do operador | `memory.json` (atômico+lock) | "lembre que…" · GUI · `betterme memory import` |
+| Memória do operador (privada) | **fora do repo**, arquivada em `~/.betterme/` | protocolo de importação |
 | Experiência de execução | tasks + auditoria | edições do operador viram few-shot |
-| Medição | `hermes selftest [--all-models]` | matriz modelo×cenário + recomendação |
+| Medição | `betterme selftest [--all-models]` | matriz modelo×cenário + recomendação |
 | Skills | catálogo | novas habilidades = novo comportamento |
 
 O pipeline injeta memória relevante por task; o chat injeta `prompt_section`.
@@ -205,10 +205,10 @@ injetadas (memória própria dele: limite conhecido, ver §14).
 
 ---
 
-## 7. Dados em disco — `~/.hermes/`
+## 7. Dados em disco — `~/.betterme/`
 
 ```
-~/.hermes/
+~/.betterme/
 ├── config.yaml                  ← configuração do operador
 ├── workspace/                   ← cwd das ferramentas; ÚNICO lugar
 │                                   onde o agente escreve livremente
@@ -301,7 +301,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 12. Update e backups
 
-- `hermes update`: consulta a última tag no GitHub → baixa zip → valida
+- `betterme update`: consulta a última tag no GitHub → baixa zip → valida
   zip-slip → extrai → aplica preservando `data/`, `.venv` e `.git`.
 - `backups.py`: toda edição de arquivo pelo agente gera cópia datada;
   restaurável pela GUI; `prune` mantém o histórico enxuto.
@@ -310,7 +310,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **140 casos** (v4.0.0), famílias:
+`tests/run_all.py` — **141 casos** (v4.1.0), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·
@@ -332,7 +332,7 @@ verdade em transcript) · selftest/matriz. Padrão de release: 100% verde
 | Guard de execução no Claude | modelo local pequeno às vezes escreve sem rodar |
 | Guard anti-recusa | "não sou especialista" é falha de entrega (campo) |
 | Skill injetada por CONTEÚDO no Claude | o modelo pequeno não sabe usar só o nome |
-| Limites conhecidos | sem handoff Hermes↔Claude na mesma task · Claude sem memória entre sessões · scheduler sem semáforo de concorrência · skills por palavra-chave (não semântica) |
+| Limites conhecidos | sem handoff Betterme↔Claude na mesma task · Claude sem memória entre sessões · scheduler sem semáforo de concorrência · skills por palavra-chave (não semântica) |
 
 ---
 

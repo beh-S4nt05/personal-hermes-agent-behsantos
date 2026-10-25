@@ -1,0 +1,14 @@
+[Unit]
+Description=Betterme Agent - GUI web de controle (ligar/desligar)
+After=network.target ollama.service
+# Se o gerenciador instalar com caminhos diferentes, ajuste abaixo.
+
+[Service]
+Type=simple
+# WorkingDirectory=/opt/betterme-agent
+# ExecStart=/opt/betterme-agent/.venv/bin/betterme server --host 0.0.0.0 --port 8080 --token SUA-SENHA
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

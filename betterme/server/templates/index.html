@@ -1,0 +1,2669 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Betterme Agent — Painel de Controle</title>
+<meta name="description" content="Agente Linux local com GUI de controle — Ollama + Betterme, 100% offline">
+<meta name="theme-color" content="#0b0e14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Betterme">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<style>
+  :root{
+    --bg:#0b0e14; --bg2:#0e121b; --panel:#121826; --panel2:#161d2e;
+    --border:#1f2a3d; --border2:#2a3650;
+    --txt:#d7e0ee; --dim:#8fa0b8; --faint:#5b6b82;
+    --acc:#7c5cff; --acc2:#9d86ff;
+    --ok:#2bd576; --warn:#ffb454; --err:#ff5470;
+    --mono:ui-monospace,'JetBrains Mono','Fira Code','Cascadia Code',Consolas,'Courier New',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--mono);font-size:14px;line-height:1.55;
+       background-image:radial-gradient(1200px 500px at 80% -10%,rgba(124,92,255,.13),transparent),
+                        radial-gradient(900px 400px at -10% 110%,rgba(43,213,118,.07),transparent)}
+  a{color:var(--acc2)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#232d42;border-radius:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  /* ---------- estrutura ---------- */
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 20px 60px}
+  header{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px 0 18px;border-bottom:1px solid var(--border)}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:.5px}
+  .logo .gem{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:15px;
+             background:linear-gradient(135deg,var(--acc),#4633b8);box-shadow:0 0 18px rgba(124,92,255,.45)}
+  .logo small{color:var(--faint);font-weight:400;font-size:11px;display:block;letter-spacing:0}
+  .pills{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:99px;border:1px solid var(--border);
+        background:var(--panel);font-size:12px;cursor:default}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--faint);flex:none}
+  .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pulse 2s infinite}
+  .dot.off{background:var(--err)}
+  .dot.warn{background:var(--warn)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+  .banner{margin:14px 0 0;padding:10px 14px;border-radius:10px;border:1px dashed #6a56d6;
+          background:rgba(124,92,255,.08);color:#c9bcff;font-size:12.5px}
+  .banner b{color:#a18bff}
+
+  nav{display:flex;gap:6px;margin:18px 0 20px;flex-wrap:wrap}
+  nav button{font-family:inherit;background:transparent;border:1px solid var(--border);color:var(--dim);
+             padding:8px 18px;border-radius:9px;cursor:pointer;font-size:13px;transition:.15s}
+  nav button:hover{color:var(--txt);border-color:var(--acc)}
+  nav button.active{background:linear-gradient(135deg,rgba(124,92,255,.25),rgba(124,92,255,.1));
+                    color:#e6ddff;border-color:var(--acc)}
+  .page{display:none}
+  .page.active{display:block;animation:fade .18s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+  .card{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--border);
+        border-radius:14px;padding:18px}
+  .card h3{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);
+           display:flex;align-items:center;gap:8px;margin-bottom:14px}
+  .card h3 .ic{font-size:15px}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:13px}
+  .kv span:first-child{color:var(--dim)}
+  .kv span:last-child{text-align:right;word-break:break-all}
+  .badge{display:inline-flex;align-items:center;gap:7px;padding:4px 12px;border-radius:8px;font-weight:700;font-size:12px}
+  .badge.on{background:rgba(43,213,118,.13);color:var(--ok);border:1px solid rgba(43,213,118,.35)}
+  .badge.off{background:rgba(255,84,112,.12);color:var(--err);border:1px solid rgba(255,84,112,.35)}
+  .badge.warn{background:rgba(255,180,84,.12);color:var(--warn);border:1px solid rgba(255,180,84,.35)}
+
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  button.b{font-family:inherit;border-radius:9px;border:1px solid var(--border);background:var(--panel2);
+           color:var(--txt);padding:9px 16px;font-size:13px;cursor:pointer;transition:.15s;display:inline-flex;gap:7px;align-items:center}
+  button.b:hover:not(:disabled){border-color:var(--acc);transform:translateY(-1px)}
+  button.b:disabled{opacity:.45;cursor:not-allowed}
+  button.b.primary{background:linear-gradient(135deg,var(--acc),#5b3fd4);border-color:transparent;font-weight:700}
+  button.b.danger{background:rgba(255,84,112,.12);border-color:rgba(255,84,112,.4);color:#ff8298}
+  button.b.ghost{background:transparent}
+  button.b.small{padding:5px 11px;font-size:12px}
+  .toast{position:fixed;right:18px;bottom:18px;max-width:420px;background:var(--panel2);border:1px solid var(--acc);
+         border-radius:11px;padding:12px 16px;font-size:13px;box-shadow:0 10px 40px rgba(0,0,0,.5);
+         opacity:0;transform:translateY(8px);transition:.25s;z-index:50}
+  .toast.show{opacity:1;transform:none}
+  .toast.err{border-color:var(--err)}
+
+  /* ---------- log ---------- */
+  .logbox{background:#080b11;border:1px solid var(--border);border-radius:12px;padding:12px;
+          font-size:12.5px;height:420px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#9fb0c8}
+  .logbox .t{color:var(--faint)}
+  .logbox .hl{color:#c9bcff}
+
+  /* ---------- chat ---------- */
+  .chatwrap{display:flex;flex-direction:column;height:calc(100vh - 230px);
+             height:calc(100dvh - 230px);min-height:480px}
+  #chatlog{flex:1;overflow-y:auto;padding:6px 4px 16px;display:flex;flex-direction:column;gap:14px}
+  .msg{max-width:88%;padding:12px 15px;border-radius:13px;font-size:13.5px;word-wrap:break-word}
+  .msg.user{align-self:flex-end;background:linear-gradient(135deg,#5236e0,#6b4df0);border-bottom-right-radius:4px;color:#fff}
+  .msg.bot{align-self:flex-start;background:var(--panel);border:1px solid var(--border);border-bottom-left-radius:4px}
+  .msg.bot.waiting{color:var(--faint);font-style:italic}
+  .msg pre{background:#080b11;border:1px solid var(--border);border-radius:8px;padding:10px;
+           overflow:auto;margin:8px 0;font-size:12px;color:#b9e3c3}
+  .msg code{background:#080b11;border:1px solid var(--border);padding:1px 5px;border-radius:5px;font-size:12px;color:#e3b9ff}
+  .msg pre code{border:none;padding:0;color:inherit}
+  .tool{align-self:flex-start;max-width:88%;border:1px solid #2c3a55;border-left:3px solid var(--acc);
+        background:#0d1220;border-radius:10px;font-size:12.5px;overflow:hidden}
+  .tool summary{cursor:pointer;padding:8px 12px;color:#c9bcff;list-style:none;display:flex;gap:8px;align-items:center}
+  .tool summary::before{content:'▸';color:var(--faint);transition:.15s}
+  .tool[open] summary::before{transform:rotate(90deg)}
+  .tool .args{color:var(--faint);font-size:11.5px;margin-left:auto;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tool .status{font-size:10.5px;padding:2px 7px;border-radius:5px;flex:none}
+  .tool .status.run{background:rgba(255,180,84,.15);color:var(--warn)}
+  .tool .status.ok{background:rgba(43,213,118,.15);color:var(--ok)}
+  .tool .status.err{background:rgba(255,84,112,.15);color:var(--err)}
+  .tool .out{padding:0 12px 10px;white-space:pre-wrap;word-break:break-word;color:#9fb0c8;font-size:12px;
+             border-top:1px dashed #223048;padding-top:8px;margin:0 12px 10px;max-height:260px;overflow:auto}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0}
+  .chip{border:1px dashed var(--border);background:transparent;color:var(--dim);border-radius:99px;
+        padding:6px 13px;font-size:12px;cursor:pointer;font-family:inherit;transition:.15s}
+  .chip:hover{color:#c9bcff;border-color:var(--acc)}
+  .chatrow{display:flex;gap:10px;margin-top:12px}
+  #chatin{flex:1;background:#0a0e17;border:1px solid var(--border);border-radius:11px;color:var(--txt);
+          padding:12px 15px;font-family:inherit;font-size:13.5px;resize:none;min-height:48px;max-height:160px}
+  #chatin:focus{outline:none;border-color:var(--acc)}
+  .cursor{display:inline-block;width:8px;height:15px;background:var(--acc2);vertical-align:-2px;
+          animation:pulse 1s infinite;border-radius:2px;margin-left:2px}
+  .msg.working{display:flex;align-items:center;gap:10px;color:var(--acc2);font-style:italic}
+  .dots{display:inline-flex;gap:4px;flex:none}
+  .dots i{width:7px;height:7px;border-radius:50%;background:var(--acc);animation:blink 1.2s infinite}
+  .dots i:nth-child(2){animation-delay:.2s}
+  .dots i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,80%,100%{opacity:.2;transform:scale(.8)}40%{opacity:1;transform:scale(1.15)}}
+
+  /* ---------- tarefas ---------- */
+  .task{border:1px solid var(--border);border-radius:11px;background:var(--panel);padding:12px 15px;margin-bottom:10px}
+  .task .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .task .id{color:var(--faint);font-size:11.5px}
+  .task .input{flex:1;min-width:200px}
+  .task details{margin-top:8px}
+  .task summary{cursor:pointer;color:var(--dim);font-size:12px}
+  .task pre{margin-top:8px;background:#080b11;border:1px solid var(--border);border-radius:8px;
+            padding:10px;font-size:12px;white-space:pre-wrap;max-height:300px;overflow:auto;color:#b9e3c3}
+  .st{font-size:10.5px;padding:2px 8px;border-radius:5px;font-weight:700}
+  .st.pend{background:rgba(255,180,84,.15);color:var(--warn)}
+  .st.ok{background:rgba(43,213,118,.15);color:var(--ok)}
+  .st.err{background:rgba(255,84,112,.15);color:var(--err)}
+
+  /* ---------- ajustes ---------- */
+  form.set{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field.full{grid-column:1/-1}
+  label{font-size:12px;color:var(--dim)}
+  input[type=text],input[type=number],input[type=password],textarea,select{
+      background:#0a0e17;border:1px solid var(--border);border-radius:9px;color:var(--txt);
+      padding:9px 12px;font-family:inherit;font-size:13px}
+  input:focus,textarea:focus{outline:none;border-color:var(--acc)}
+  textarea{min-height:90px;resize:vertical}
+  .check{display:flex;align-items:center;gap:10px;padding:9px 0}
+  .check input{width:17px;height:17px;accent-color:var(--acc)}
+  .hint{font-size:11.5px;color:var(--faint)}
+  footer{margin-top:34px;color:var(--faint);font-size:11.5px;text-align:center;border-top:1px solid var(--border);padding-top:14px}
+  .tokenbar{display:none;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .tokenbar.show{display:flex}
+
+  /* ---------- memória ---------- */
+  .fact{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)}
+  .fact .txt{flex:1;font-size:13px;white-space:pre-wrap;word-break:break-word}
+  .fact .meta{font-size:11px;color:var(--faint);margin-top:4px}
+
+  /* ---------- execução ao vivo (modal) ---------- */
+  .modalbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:50;align-items:center;justify-content:center;padding:20px}
+  .modalbg.show{display:flex}
+  .modal{background:#0b0f18;border:1px solid var(--border);border-radius:14px;max-width:860px;width:100%;max-height:86vh;display:flex;flex-direction:column}
+  .modal h3{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .livebox{background:#05070c;padding:14px 18px;font-family:ui-monospace,Menlo,Consolas,monospace;
+           font-size:12px;line-height:1.55;overflow:auto;white-space:pre-wrap;flex:1;min-height:220px;
+           border-radius:0 0 14px 14px;word-break:break-word}
+  .livebox .ln{color:var(--faint)}
+  .livebox .ok{color:var(--ok)} .livebox .err{color:var(--err)} .livebox .warn{color:var(--warn)}
+  .livedot{width:9px;height:9px;border-radius:50%;background:var(--ok);display:inline-block;animation:lv-pulse 1s infinite}
+  @keyframes lv-pulse{50%{opacity:.3}}
+
+  /* ---------- ferramentas / catálogo de modelos ---------- */
+  .toolgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+  .toolcard{background:#0a0e17;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12.5px}
+  .librow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+  .librow:last-child{border-bottom:none}
+  .agentbadge{font-size:10.5px;color:var(--acc);border:1px solid var(--acc);border-radius:20px;padding:2px 9px;display:inline-block;margin-bottom:6px;width:fit-content}
+
+  /* ═══════════════ v3.0 — tema claro ═══════════════ */
+  html[data-theme="light"]{
+    --bg:#f4f6fb; --bg2:#eef1f8; --panel:#ffffff; --panel2:#f4f6fb;
+    --border:#d7dde9; --border2:#c3cadd;
+    --txt:#1c2433; --dim:#5a6a82; --faint:#8d9bb1;
+  }
+  html[data-theme="light"] body{
+    background-image:radial-gradient(1200px 500px at 80% -10%,rgba(124,92,255,.10),transparent),
+                     radial-gradient(900px 400px at -10% 110%,rgba(43,213,118,.06),transparent)}
+  html[data-theme="light"] .card{background:#fff}
+  html[data-theme="light"] nav button.active{color:#3d2fa8}
+
+  /* ═══════════════ v3.0 — markdown rico ═══════════════ */
+  .msg .md h1,.msg .md h2,.msg .md h3,.msg .md h4{margin:14px 0 6px;line-height:1.3}
+  .msg .md h1{font-size:17px}.msg .md h2{font-size:15.5px}.msg .md h3{font-size:14px}.msg .md h4{font-size:13px}
+  .msg .md ul,.msg .md ol{margin:6px 0 6px 20px}
+  .msg .md li{margin:3px 0}
+  .msg .md blockquote{border-left:3px solid var(--acc);margin:8px 0;padding:2px 12px;color:var(--dim)}
+  .msg .md hr{border:none;border-top:1px solid var(--border);margin:12px 0}
+  .msg .md a{text-decoration:underline}
+  .codeblock{position:relative;margin:10px 0}
+  .codeblock .cb-bar{display:flex;justify-content:space-between;align-items:center;
+    background:var(--panel2);border:1px solid var(--border);border-bottom:none;
+    border-radius:10px 10px 0 0;padding:3px 10px;font-size:11px;color:var(--dim)}
+  .codeblock pre{margin:0;border-radius:0 0 10px 10px}
+  .cb-copy{cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--dim);
+    border-radius:6px;padding:1px 8px;font-size:11px;font-family:inherit}
+  .cb-copy:hover{color:var(--txt);border-color:var(--acc)}
+
+  /* ═══════════════ v3.0 — sino, auditoria, receitas, doctor ═══════════════ */
+  .bell{position:relative;cursor:pointer;user-select:none}
+  .bell .badge{position:absolute;top:-6px;right:-6px;background:var(--err);color:#fff;
+    border-radius:99px;font-size:10px;min-width:16px;height:16px;display:none;
+    align-items:center;justify-content:center;padding:0 4px;font-weight:700}
+  .bell .badge.show{display:inline-flex}
+  .notifbox{position:absolute;top:52px;right:20px;width:min(430px,92vw);max-height:420px;overflow:auto;
+    background:var(--panel);border:1px solid var(--border2);border-radius:14px;padding:12px;
+    box-shadow:0 12px 40px rgba(0,0,0,.45);z-index:60;display:none}
+  .notifbox.show{display:block}
+  .notif{padding:8px 10px;border-bottom:1px solid var(--border);font-size:12.5px}
+  .notif:last-child{border-bottom:none}
+  .notif b{display:block}
+  .notif .when{color:var(--faint);font-size:11px}
+  .notif.unread{background:rgba(124,92,255,.07)}
+  .auditrow{display:grid;grid-template-columns:86px 64px 110px 1fr;gap:8px;padding:7px 10px;
+    border-bottom:1px solid var(--border);font-size:12px;align-items:start}
+  .auditrow:hover{background:var(--panel2)}
+  .auditrow .ts{color:var(--faint)}
+  .auditrow .tool{color:var(--acc2);font-weight:600;word-break:break-all}
+  .auditrow .out{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .recipe{border:1px solid var(--border);border-radius:12px;padding:12px 14px;
+    background:linear-gradient(180deg,var(--panel),var(--bg2))}
+  .recipe .ttl{font-weight:700;margin-bottom:4px}
+  .recipe .desc{color:var(--dim);font-size:12px;margin-bottom:10px;min-height:32px}
+  .spark{display:block;width:100%;height:46px}
+  .modalwrap{position:fixed;inset:0;background:rgba(4,6,12,.72);display:none;
+    align-items:center;justify-content:center;z-index:100;padding:20px}
+  .modalwrap.show{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--border2);border-radius:16px;
+    max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:22px}
+  .docrow{display:flex;gap:10px;align-items:start;padding:9px 0;border-bottom:1px solid var(--border)}
+  .docrow:last-child{border-bottom:none}
+  .docrow .mark{font-size:16px}
+  .docrow .fix{color:var(--warn);font-size:11.5px;margin-top:2px}
+  .adv-label{font-size:11px;color:var(--dim);margin:8px 0 3px;display:block}
+  .tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:10.5px;
+    border:1px solid var(--border2);color:var(--dim);margin-right:4px}
+  .tag.trig{border-color:var(--acc);color:var(--acc2)}
+  .tag.idle{border-color:var(--warn);color:var(--warn)}
+  .hist-mini{margin-top:6px;border-left:2px solid var(--border);padding-left:10px}
+  .hist-mini .h{font-size:11.5px;color:var(--dim);margin:2px 0}
+  .sysnote{align-self:center;text-align:center;color:var(--dim);font-size:11.5px;
+    border:1px dashed var(--border2);border-radius:99px;padding:4px 14px;
+    margin:4px 0;max-width:94%;word-break:break-word}
+  /* ═══════════════ v3.7 — formulários das ferramentas (fim do quebrado) ═══ */
+  .frow{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-top:8px}
+  .frow input,.frow select{flex:1 1 220px;min-width:0;width:auto}
+  .frow .b{flex:0 0 auto}
+  .flabel{display:block;font-size:11.5px;color:var(--dim);margin:12px 0 0}
+  .fpreview{background:#05070c;border:1px solid var(--border);border-radius:10px;
+    padding:12px;font-size:12px;max-height:300px;overflow:auto;white-space:pre-wrap;
+    margin-top:12px;display:none}
+  .fpreview.show{display:block}
+
+  /* ═══ v3.4 — comandos, aprovação, por baixo dos panos ═══ */
+  .syscmd{align-self:stretch;border:1px solid var(--border2);border-radius:12px;
+    background:linear-gradient(180deg,var(--panel),var(--bg2));padding:12px 14px;
+    font-size:12.5px;white-space:pre-wrap;word-break:break-word;margin:6px 0}
+  .syscmd .cmd{color:var(--acc2);font-weight:700}
+  .slashmenu{display:none;position:absolute;bottom:100%;left:0;right:0;z-index:40;
+    background:var(--panel);border:1px solid var(--border2);border-radius:12px;
+    max-height:240px;overflow:auto;box-shadow:0 -8px 30px rgba(0,0,0,.45);margin-bottom:8px}
+  .slashmenu.show{display:block}
+  .slashmenu .it{padding:9px 14px;cursor:pointer;display:flex;gap:10px;align-items:baseline}
+  .slashmenu .it:hover,.slashmenu .it.sel{background:rgba(124,92,255,.12)}
+  .slashmenu .it b{color:var(--acc2);min-width:86px}
+  .slashmenu .it span{color:var(--dim);font-size:11.5px}
+  .approval{align-self:stretch;border:1px solid var(--warn);border-left:4px solid var(--warn);
+    background:rgba(255,180,84,.06);border-radius:12px;padding:14px;margin:8px 0}
+  .approval .ttl{font-weight:700;margin-bottom:8px}
+  .approval .corpo{font-size:13px;white-space:pre-wrap;margin-bottom:10px}
+  .approval textarea,.approval input[type=text]{width:100%;margin:4px 0;
+    background:#0a0e17;border:1px solid var(--border);border-radius:9px;
+    color:var(--txt);padding:9px 12px;font-family:inherit;font-size:13px}
+  .approval .acts{display:flex;gap:8px;flex-wrap:wrap}
+  .approval .status{font-size:12px;color:var(--dim);margin-top:8px}
+  .brain{align-self:stretch;border:1px dashed var(--acc);border-radius:10px;
+    font-size:11.5px;margin:6px 0;background:rgba(124,92,255,.05)}
+  .brain summary{cursor:pointer;padding:7px 12px;color:var(--acc2);list-style:none}
+  .brain summary::before{content:'🔬 '}
+  .brain pre{margin:0 12px 10px;white-space:pre-wrap;word-break:break-word;color:var(--dim);
+    max-height:300px;overflow:auto;font-size:11px}
+
+  /* ═══════════════ v3.2 — responsivo: celular e tablet ═══════════════ */
+  @media (max-width:1024px){
+    .wrap{max-width:100%}
+  }
+  @media (max-width:768px){
+    body{font-size:13px}
+    .wrap{padding:10px 12px calc(92px + env(safe-area-inset-bottom,0px))}
+    header{gap:8px;padding:10px 0 12px}
+    .logo{font-size:15px;gap:8px}
+    .logo .gem{width:22px;height:22px;font-size:13px;border-radius:7px}
+    .logo small{font-size:10px}
+    .pills{margin-left:auto;gap:6px}
+    .pill{padding:4px 9px;font-size:11px}
+    /* nav vira barra inferior fixa e rolável (alcançável com o polegar) */
+    nav{position:fixed;left:0;right:0;bottom:0;z-index:55;margin:0;gap:2px;
+        display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+        background:rgba(11,14,20,.96);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+        border-top:1px solid var(--border);
+        padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+    nav::-webkit-scrollbar{display:none}
+    nav button{flex:0 0 auto;padding:9px 13px;font-size:12px;border-radius:10px;
+               border-color:transparent;background:transparent;white-space:nowrap}
+    nav button.active{border-color:var(--acc)}
+    html[data-theme="light"] nav{background:rgba(244,246,251,.97)}
+    .grid{grid-template-columns:1fr;gap:12px}
+    .card{padding:14px;border-radius:12px}
+    .kv{font-size:12.5px}
+    .msg{max-width:94%;font-size:13px}
+    .chatrow{flex-wrap:wrap}
+    #chatin{font-size:16px}                    /* impede o zoom automático do iOS */
+    input[type=text],input[type=number],input[type=password],textarea,select{
+      font-size:16px;min-height:44px}
+    button.b{min-height:44px}
+    button.b.small{min-height:38px}
+    .logbox{height:min(420px,55dvh)}
+    .auditrow{grid-template-columns:auto auto 1fr;grid-template-rows:auto auto;font-size:11.5px}
+    .auditrow .out{grid-column:1/-1;white-space:normal}
+    .notifbox{left:10px;right:10px;top:auto;width:auto;
+              bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+    .toast{left:12px;right:12px;max-width:none;
+           bottom:calc(88px + env(safe-area-inset-bottom,0px))}
+    .modal{max-height:92dvh}
+    .modalbg,.modalwrap{padding:10px}
+    .banner{font-size:11.5px;padding:9px 11px}
+    .toolgrid{grid-template-columns:1fr 1fr}
+    .chatwrap{height:calc(100dvh - 235px);min-height:320px}
+    .livebox{font-size:11px;padding:10px 12px}
+    form.set{grid-template-columns:1fr}
+    .chips{gap:6px}
+    .chip{font-size:11.5px;padding:8px 12px}
+    footer{margin-top:22px;font-size:10.5px}
+  }
+  @media (max-width:420px){
+    .toolgrid{grid-template-columns:1fr}
+    .logo small{display:none}
+    .pills{width:100%;margin-left:0}
+  }
+  /* toque: sem hover-fantasma e alvos maiores */
+  @media (hover:none){
+    button.b:hover:not(:disabled){transform:none}
+    .tool summary{padding:12px}
+    .chip{padding:10px 14px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo"><span class="gem">◈</span>
+      <span>HERMES AGENT<small id="ver">agente linux · ollama</small></span>
+    </div>
+    <div class="pills">
+      <span class="pill"><span class="dot" id="dot-agent"></span>agente <b id="pill-agent">…</b></span>
+      <span class="pill"><span class="dot" id="dot-ollama"></span>ollama <b id="pill-ollama">…</b></span>
+      <span class="pill" id="pill-model">…</span>
+      <span class="pill bell" id="bell" onclick="toggleBell()" title="notificações do agente">🔔<span class="badge" id="bell-badge">0</span></span>
+      <span class="pill" onclick="toggleTheme()" title="alternar tema claro/escuro" style="cursor:pointer" id="theme-btn">🌙</span>
+    </div>
+  </header>
+  <div class="notifbox" id="notifbox"></div>
+
+  <div class="banner" id="mockbanner" style="display:none">
+    ⚡ <b>Modo demonstração</b> — o Ollama está simulado (nenhum modelo real carregado).
+    As respostas são geradas localmente, mas o loop de ferramentas (comandos, arquivos, diagnóstico) é real.
+    No seu servidor, rode <b>./install.sh</b> para ativar o Ollama + modelo Betterme de verdade.
+  </div>
+
+  <div class="banner" id="securebanner" style="display:none;border-color:#8a4444;background:rgba(255,84,112,.07);color:#ffb3c0">
+    🔓 <b>Sem senha e exposto fora de localhost</b> — qualquer um na rede controla esta máquina.
+    Defina um token em Ajustes → “token de acesso” (ou inicie com <b>--token</b>).
+  </div>
+
+  <div class="tokenbar" id="tokenbar">
+    🔒 Esta GUI está protegida por token:
+    <input type="password" id="tokenin" placeholder="cole o token de acesso" style="flex:1;min-width:200px">
+    <button class="b small primary" onclick="saveToken()">desbloquear</button>
+  </div>
+
+  <nav>
+    <button data-page="painel" class="active">▤ Painel</button>
+    <button data-page="chat">◈ Chat</button>
+    <button data-page="tarefas">☑ Tarefas</button>
+    <button data-page="ollama">🧠 Ollama</button>
+    <button data-page="ferramentas">🛠 Ferramentas</button>
+    <button data-page="skills">✦ Skills</button>
+    <button data-page="agentes">🧪 Agentes</button>
+    <button data-page="memoria">📔 Memória</button>
+    <button data-page="auditoria">🧾 Auditoria</button>
+    <button data-page="ajustes">⚙ Ajustes</button>
+  </nav>
+
+  <!-- ══════════════════════ PAINEL ══════════════════════ -->
+  <section class="page active" id="page-painel">
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">🤖</span> Agente (daemon)</h3>
+        <div class="kv"><span>estado</span><span id="ag-state">…</span></div>
+        <div class="kv"><span>pid</span><span id="ag-pid">—</span></div>
+        <div class="kv"><span>atividade</span><span id="ag-act">—</span></div>
+        <div class="kv"><span>ligado há</span><span id="ag-up">—</span></div>
+        <div class="kv"><span>tarefa atual</span><span id="ag-task">—</span></div>
+        <div class="btnrow">
+          <button class="b primary"   id="btn-ag-start"  onclick="agentAction('start')">▶ Ligar</button>
+          <button class="b danger"    id="btn-ag-stop"   onclick="agentAction('stop')">■ Desligar</button>
+          <button class="b ghost"     id="btn-ag-restart" onclick="agentAction('restart')">⟳ Reiniciar</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">🧠</span> Servidor Ollama</h3>
+        <div class="kv"><span>estado</span><span id="ol-state">…</span></div>
+        <div class="kv"><span>versão</span><span id="ol-ver">—</span></div>
+        <div class="kv"><span>gerenciado por</span><span id="ol-by">—</span></div>
+        <div class="kv"><span>modelos</span><span id="ol-models">—</span></div>
+        <div class="btnrow">
+          <button class="b primary" id="btn-ol-start" onclick="ollamaAction('start')">▶ Ligar</button>
+          <button class="b danger"  id="btn-ol-stop"  onclick="ollamaAction('stop')">■ Desligar</button>
+        </div>
+        <div class="hint" id="ol-hint" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">📈</span> Desempenho das respostas</h3>
+        <div class="kv"><span>respostas medidas</span><span id="perf-n">—</span></div>
+        <div class="kv"><span>tok/s médio</span><span id="perf-toks">—</span></div>
+        <div class="kv"><span>tempo médio</span><span id="perf-dur">—</span></div>
+        <svg class="spark" id="perf-spark" viewBox="0 0 300 46" preserveAspectRatio="none"></svg>
+        <div class="hint">tok/s das últimas 20 respostas — abaixo de 5 indica modelo pesado para esta máquina</div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">🎯</span> Saúde do pipeline <span class="hint" style="margin-left:auto">orquestrador → revisor</span></h3>
+        <div class="kv"><span>tasks</span><span id="orch-total">—</span></div>
+        <div class="kv"><span>aprovação na 1ª tentativa</span><span id="orch-1a">—</span></div>
+        <div class="kv"><span>tentativas (média)</span><span id="orch-tent">—</span></div>
+        <div class="kv"><span>duração média</span><span id="orch-dur">—</span></div>
+        <div class="kv"><span>suas edições (plano/entrega)</span><span id="orch-edits">—</span></div>
+        <div class="hist-mini" id="orch-days" style="margin-top:8px"></div>
+        <div id="orch-skills" style="margin-top:8px"></div>
+        <div class="hint" style="margin-top:8px">aprovação na 1ª subindo = o orquestrador está aprendendo com suas edições</div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">🔌</span> Servidores MCP <span class="hint" style="margin-left:auto">conectores externos</span></h3>
+        <div id="mcp-list" class="hint">—</div>
+        <div class="btnrow">
+          <button class="b small primary" id="btn-mcp-start" onclick="mcpStart()">▶ ativar</button>
+          <button class="b small ghost" onclick="mcpStart(true)">⟳ reiniciar</button>
+        </div>
+        <details style="margin-top:10px">
+          <summary class="hint" style="cursor:pointer">＋ adicionar servidor (sem editar YAML)</summary>
+          <div class="chatrow" style="margin-top:8px;flex-wrap:wrap">
+            <input type="text" id="mcp-name" placeholder="nome (ex.: filesystem)" style="max-width:130px">
+            <input type="text" id="mcp-url" placeholder="url http://… (streamable)" style="flex:1;min-width:170px">
+            <input type="text" id="mcp-command" placeholder="ou comando stdio (ex.: npx)" style="flex:1;min-width:120px">
+            <input type="text" id="mcp-args" placeholder="argumentos (espaço = novo)" style="flex:1;min-width:150px">
+            <button class="b small primary" onclick="mcpAdd()">＋ adicionar</button>
+          </div>
+          <div class="hint" style="margin-top:6px">Preencha url <b>ou</b> comando — gravado direto no config.yaml.</div>
+        </details>
+        <div class="hint" style="margin-top:10px">Configure em <b>mcp_servers</b> no config.yaml —
+          ex.: Figma (<b>npx figma-developer-mcp</b>), GitHub, PostgreSQL…</div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">🖥</span> Instância</h3>
+        <div class="kv"><span>modelo</span><span id="sys-model">—</span></div>
+        <div class="kv"><span>workspace</span><span id="sys-dir">—</span></div>
+        <div class="kv"><span>sandbox</span><span id="sys-sandbox">—</span></div>
+        <div class="kv"><span>máx. passos</span><span id="sys-steps">—</span></div>
+        <div class="kv"><span>timeout cmd</span><span id="sys-timeout">—</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">📡</span> Log ao vivo
+        <span style="margin-left:auto;display:flex;gap:8px">
+          <button class="b small ghost" id="btn-logpause" onclick="togglePause()">⏸ pausar</button>
+          <button class="b small ghost" onclick="clearLog()">🗑 limpar</button>
+        </span>
+      </h3>
+      <div class="logbox" id="logbox">conectando ao stream…</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ CHAT ══════════════════════ -->
+  <section class="page" id="page-chat">
+    <div class="chatrow" style="margin:0 0 10px;align-items:center">
+      <span class="hint" id="chat-session" style="flex:1">◈ nova conversa</span>
+      <button class="b small ghost" id="btn-brain" title="ver a IA por baixo dos panos (orquestrador, skills, revisor)" onclick="toggleBrain()">🔬 panos</button>
+      <button class="b small ghost" title="fluxo bruto de eventos desta conversa (JSON)" onclick="openRawLog()">🧾 fluxo</button>
+      <select id="agent-sel" title="qual agente responde"
+              style="background:#0a0e17;border:1px solid var(--border);border-radius:9px;color:var(--txt);padding:7px 10px;font-size:12.5px">
+        <option value="betterme">◈ Betterme (Ollama)</option>
+        <option value="claude">🔌 Claude Code</option>
+      </select>
+      <button class="b small primary" onclick="newConversation()">＋ nova</button>
+      <button class="b small ghost" onclick="toggleHistory()">🕘 conversas (<span id="hist-count">0</span>)</button>
+      <button class="b small ghost" title="baixar esta conversa em Markdown" onclick="exportConv()">⬇ .md</button>
+      <button class="b small danger" onclick="resetChat()">🗑 zerar</button>
+    </div>
+    <div class="card" id="hist-panel" style="display:none;margin-bottom:12px;max-height:320px;overflow:auto">
+      <div class="chatrow" style="margin-bottom:10px">
+        <input type="text" id="hist-search" placeholder="🔍 buscar em todas as conversas…" style="flex:1" oninput="searchConversations()">
+        <button class="b small ghost" onclick="$('hist-search').value='';searchConversations()">✕ limpar</button>
+      </div>
+      <div id="hist-results" style="display:none"></div>
+      <div id="hist-list" class="hint">carregando…</div>
+    </div>
+    <div class="chatwrap">
+      <div id="chatlog"></div>
+      <div class="chips">
+        <button class="chip" onclick="suggest(this)">Crie um design de app de tarefas no Figma</button>
+        <button class="chip" onclick="suggest(this)">Mostre informações do sistema</button>
+        <button class="chip" onclick="suggest(this)">Liste os arquivos do workspace</button>
+        <button class="chip" onclick="suggest(this)">Crie um arquivo relatorio.txt com um resumo da máquina</button>
+      </div>
+      <div class="chatrow" style="position:relative">
+        <div class="slashmenu" id="slashmenu"></div>
+        <textarea id="chatin" rows="1" placeholder="fale com o Betterme…  (Enter envia · Shift+Enter quebra linha · / comandos)"></textarea>
+        <button class="b ghost" id="btn-mic" title="ditar pelo microfone (Whisper local)" onclick="toggleMic()">🎤</button>
+        <button class="b danger" id="btn-stop" style="display:none" onclick="stopChat()">⏹ parar</button>
+        <button class="b primary" id="btn-send" onclick="sendChat()">enviar ➤</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ TAREFAS ══════════════════════ -->
+  <section class="page" id="page-tarefas">
+    <div class="card">
+      <h3><span class="ic">☑</span> Fila de tarefas do agente</h3>
+      <div class="chatrow" style="margin-top:0">
+        <input type="text" id="taskin" placeholder="ex.: verifique uso de disco e sugira limpeza"
+               style="flex:1" onkeydown="if(event.key==='Enter')addTask()">
+        <button class="b primary" onclick="addTask()">+ enfileirar</button>
+        <button class="b ghost" onclick="clearTasks()">🗑 limpar histórico</button>
+      </div>
+      <div class="hint" style="margin-top:8px">As tarefas ficam na fila e o agente executa em sequência assim que estiver ligado.</div>
+      <div id="tasklist" style="margin-top:16px"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">⏰</span> Tarefas agendadas <span class="hint" style="margin-left:auto">executam sozinhas no horário</span></h3>
+      <div class="chatrow" style="margin-top:0">
+        <input type="text" id="sched-input" placeholder="o que o agente deve fazer — ex.: resuma meus e-mails e as atividades do classroom"
+               style="flex:2" onkeydown="if(event.key==='Enter')$('sched-when').focus()">
+        <input type="text" id="sched-when" placeholder="quando — ex.: diário 07:30" style="max-width:220px" onkeydown="if(event.key==='Enter')schedAdd()">
+        <select id="sched-agent" style="max-width:150px">
+          <option value="betterme">◈ Betterme</option>
+          <option value="claude">🔌 Claude Code</option>
+        </select>
+        <button class="b primary" onclick="schedAdd()">⏰ agendar</button>
+      </div>
+      <details style="margin-top:10px">
+        <summary class="hint" style="cursor:pointer">⚙ opções avançadas (gatilhos, retry, ociosidade)</summary>
+        <div class="chatrow" style="margin-top:8px;flex-wrap:wrap">
+          <select id="sched-trigger" style="max-width:170px" onchange="schedTrigUI()">
+            <option value="">⏰ por horário (padrão)</option>
+            <option value="webhook">🌐 gatilho por webhook</option>
+            <option value="watch">📂 quando chegar arquivo</option>
+          </select>
+          <input type="text" id="sched-watch-path" placeholder="pasta a vigiar (ex.: ~/Downloads)" style="display:none;flex:1;min-width:200px">
+          <input type="text" id="sched-watch-glob" placeholder="padrão (ex.: *.pdf)" style="display:none;max-width:150px">
+          <label class="hint" style="display:flex;align-items:center;gap:5px">
+            <input type="number" id="sched-retries" min="0" max="3" value="0" style="width:52px"> retry se falhar (0-3)
+          </label>
+          <label class="hint" style="display:flex;align-items:center;gap:5px">
+            <input type="checkbox" id="sched-idle"> só quando a máquina estiver ociosa
+          </label>
+        </div>
+        <div class="hint" id="sched-trig-note" style="margin-top:6px"></div>
+      </details>
+      <div class="hint" style="margin-top:8px">
+        formatos: <b>diário 07:30</b> · <b>seg,qua 14:00</b> · <b>amanhã 09:00</b> ·
+        <b>uma vez 2026-10-05 08:00</b> · <b>a cada 30m</b> — rodam sem exigir confirmação
+        (mantenha o server aberto; a denylist de segurança continua ativa)
+      </div>
+      <div id="sched-list" style="margin-top:16px">carregando…</div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">🍳</span> Receitas prontas <span class="hint" style="margin-left:auto">1 clique para ativar</span></h3>
+      <div class="grid" id="recipes-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">carregando…</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ OLLAMA ══════════════════════ -->
+  <section class="page" id="page-ollama">
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">🧠</span> Servidor Ollama <span class="hint" style="margin-left:auto" id="olp-badge"></span></h3>
+        <div class="kv"><span>estado</span><span id="olp-state">…</span></div>
+        <div class="kv"><span>versão</span><span id="olp-ver">—</span></div>
+        <div class="kv"><span>pid</span><span id="olp-pid">—</span></div>
+        <div class="kv"><span>ligado há</span><span id="olp-up">—</span></div>
+        <div class="kv"><span>memória (RSS)</span><span id="olp-mem">—</span></div>
+        <div class="kv"><span>gerenciado por</span><span id="olp-by">—</span></div>
+        <div class="kv"><span>inicia com o sistema</span><span id="olp-boot">—</span></div>
+        <div class="btnrow">
+          <button class="b primary" id="olp-start" onclick="ollamaAction2('start')">▶ Ligar</button>
+          <button class="b danger" id="olp-stop" onclick="ollamaAction2('stop')">■ Desligar</button>
+          <button class="b ghost" onclick="ollamaAction2('restart')">⟳ Reiniciar</button>
+          <button class="b small ghost" id="olp-bootbtn" onclick="toggleBoot()">⚙ iniciar com o sistema</button>
+          <button class="b small primary" onclick="autoAssign()">✨ auto-atribuir papéis</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">🔗</span> Conexão</h3>
+        <div class="field"><label>endereço da API do Ollama</label>
+          <input type="text" id="olp-url" placeholder="http://127.0.0.1:11434"></div>
+        <div class="check" style="margin-top:8px">
+          <input type="checkbox" id="olp-auto">
+          <label for="olp-auto" style="color:var(--txt)">ligar o Ollama automaticamente quando o agente precisar</label>
+        </div>
+        <div class="btnrow">
+          <button class="b" onclick="saveOllamaConn()">💾 salvar</button>
+          <button class="b primary" id="olp-testbtn" onclick="testConnection()">🔍 testar conexão</button>
+        </div>
+        <div id="olp-test" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">📦</span> Modelos <span class="hint" style="margin-left:auto" id="olp-loaded"></span></h3>
+        <div class="chatrow" style="margin-top:0">
+          <input type="text" id="olp-libq" placeholder="🔍 buscar modelos — ex.: qwen, visão, código…" style="flex:1"
+                 onkeydown="if(event.key==='Enter')searchLibrary()">
+          <button class="b" onclick="searchLibrary()">🔍 buscar</button>
+        </div>
+        <div id="olp-lib" style="margin-top:8px"></div>
+        <div class="chatrow" style="margin-top:10px">
+          <input type="text" id="olp-pullin" placeholder="baixar por nome (ex.: hermes3:3b)" style="flex:1"
+                 onkeydown="if(event.key==='Enter')pullModel()">
+          <button class="b primary" id="olp-pullbtn" onclick="pullModel()">⬇ baixar</button>
+          <button class="b danger" id="olp-pullcancel" style="display:none" onclick="cancelPull()">⏹ cancelar</button>
+        </div>
+        <div id="olp-progress" style="display:none;margin-top:10px">
+          <div style="background:#0a0e17;border-radius:6px;overflow:hidden;border:1px solid var(--border)">
+            <div id="olp-bar" style="height:10px;width:0%;background:linear-gradient(90deg,var(--acc),#4633b8);transition:width .3s"></div>
+          </div>
+          <div class="hint" id="olp-status"></div>
+        </div>
+        <div id="olp-models" style="margin-top:12px">carregando…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ SKILLS ══════════════════════ -->
+  <section class="page" id="page-skills">
+    <div class="card">
+      <h3><span class="ic">⬇</span> Instalar skill do GitHub</h3>
+      <div class="chatrow" style="margin-top:0">
+        <input type="text" id="skill-repo" placeholder="owner/repo  ou  https://github.com/owner/repo" style="flex:1" onkeydown="if(event.key==='Enter')installSkill()">
+        <input type="text" id="skill-sub" placeholder="subpasta (opcional)" style="max-width:230px">
+        <button class="b primary" onclick="installSkill()">⬇ instalar</button>
+      </div>
+      <div class="hint" style="margin-top:8px">Qualquer repo com pastas contendo <b>SKILL.md</b>.
+        Ex.: <b>anthropics/skills</b> (subpasta <b>skills/pdf</b>, <b>skills/docx</b>…)</div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">✦</span> Skills instaladas <span id="skill-count" class="hint" style="margin-left:auto"></span></h3>
+      <div id="skill-list">carregando…</div>
+    </div>
+    <div class="card" style="margin-top:16px;display:none" id="skill-view-card">
+      <h3><span class="ic">📄</span> <span id="skill-view-name"></span>
+        <button class="b small ghost" style="margin-left:auto" onclick="closeSkillView()">✕ fechar</button></h3>
+      <pre id="skill-view" style="background:#080b11;border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12px;max-height:420px;overflow:auto;white-space:pre-wrap"></pre>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ FERRAMENTAS ══════════════════════ -->
+  <section class="page" id="page-ferramentas">
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">⌨</span> Terminal rápido <span class="hint" style="margin-left:auto">mesma segurança do agente</span></h3>
+        <label class="flabel" for="tool-cmd">comando</label>
+        <div class="frow">
+          <input type="text" id="tool-cmd" placeholder="ex.: df -h · free -h · ls -la" onkeydown="if(event.key==='Enter')toolRun()">
+          <button class="b primary" onclick="toolRun()">▶ executar</button>
+        </div>
+        <div class="factions" style="margin-top:8px">
+          <button class="b ghost" onclick="toolSysInfo()">🖥 info do sistema</button>
+        </div>
+        <pre id="tool-out" class="fpreview"></pre>
+      </div>
+      <div class="card">
+        <h3><span class="ic">🗂</span> Arquivos do workspace</h3>
+        <label class="flabel" for="tool-path">caminho</label>
+        <div class="frow">
+          <input type="text" id="tool-path" placeholder="ex.: . ou notas.txt" onkeydown="if(event.key==='Enter')toolList()">
+          <button class="b" onclick="toolList()">📂 listar</button>
+          <button class="b ghost" onclick="toolRead()">📄 ler</button>
+        </div>
+        <div id="tool-files" style="margin-top:10px"></div>
+        <label class="flabel" for="tool-filecontent">conteúdo (edite e grave)</label>
+        <textarea id="tool-filecontent" rows="8" placeholder="clique em 📄 ler para abrir o arquivo aqui, edite e use 💾 gravar"></textarea>
+        <div class="factions">
+          <button class="b primary" onclick="toolWrite()">💾 gravar arquivo</button>
+          <span class="hint" id="tool-filemsg"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span class="ic">🌐</span> Web <span class="hint" style="margin-left:auto">busca + leitura de páginas</span></h3>
+        <label class="flabel" for="web-q">pesquisar</label>
+        <div class="frow">
+          <input type="text" id="web-q" placeholder="ex.: previsão do tempo em Manaus" onkeydown="if(event.key==='Enter')webSearch()">
+          <button class="b primary" onclick="webSearch()">🔍 buscar</button>
+        </div>
+        <label class="flabel" for="web-url">abrir página</label>
+        <div class="frow">
+          <input type="text" id="web-url" placeholder="https://…" onkeydown="if(event.key==='Enter')webFetch()">
+          <button class="b" onclick="webFetch()">📄 abrir</button>
+        </div>
+        <div class="hint" style="margin-top:10px">O agente usa as mesmas ferramentas (web_search / web_fetch) no chat — e cita as fontes.</div>
+        <pre id="web-out" class="fpreview" style="max-height:340px"></pre>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">✦</span> Funções do agente <span class="hint" style="margin-left:auto" id="tool-count"></span></h3>
+      <div class="hint" style="margin-bottom:10px">Estas são as funções padrão dos agentes — o Betterme e o Claude Code usam equivalentes. Chame direto por aqui ou peça no chat.</div>
+      <div id="tool-catalog" class="toolgrid">carregando…</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ MEMÓRIA ══════════════════════ -->
+  <section class="page" id="page-memoria">
+    <div class="card">
+      <h3><span class="ic">📔</span> Memória do agente <span id="mem-count" class="hint" style="margin-left:auto"></span></h3>
+      <div class="chatrow" style="margin-top:0">
+        <input type="text" id="mem-new" placeholder="algo para o agente lembrar — ex.: meu curso é Engenharia; prefiro resumos curtos" style="flex:1" onkeydown="if(event.key==='Enter')memAdd()">
+        <button class="b primary" onclick="memAdd()">🧠 lembrar</button>
+      </div>
+      <div class="hint" style="margin-top:8px">O agente também guarda fatos sozinho com a ferramenta <b>lembrar</b> quando
+        você conta algo no chat — e esquece com <b>esquecer</b>. A memória vale para o chat <b>e</b> para as tarefas agendadas.</div>
+      <div id="mem-list" style="margin-top:14px">carregando…</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ AUDITORIA (v3.0) ══════════════════════ -->
+  <section class="page" id="page-agentes">
+    <div class="card">
+      <h3><span class="ic">🧪</span> Especialistas <span class="hint" style="margin-left:auto" id="esp-badge"></span></h3>
+      <p class="hint">Subagentes escopados do cérebro main: veredito com evidência,
+      single-writer (só propõem), pool gratuito com fallback local e exame de competência.</p>
+      <div id="esp-list"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">🎚</span> Autonomia</h3>
+      <p class="hint">CAUTELOSO confirma tudo · PADRÃO leitura livre / escrita aprovada ·
+      AUTÔNOMO encadeia sem parar — hard gates sempre ativos em qualquer nível.</p>
+      <div id="aut-radios"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">📚</span> Aprendizados pendentes <span class="hint" style="margin-left:auto" id="ap-count"></span></h3>
+      <p class="hint">Rascunhos de skills/lições que o agente propôs trabalhando —
+      NADA entra no catálogo ou na memória sem sua aprovação.</p>
+      <div id="ap-list"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">👔</span> Gerente de código (Claude)</h3>
+      <p class="hint" id="ger-status"></p>
+      <button class="b small" onclick="gerenteToggle(true)">ativar (código vai à nuvem Anthropic)</button>
+      <button class="b small ghost" onclick="gerenteToggle(false)">desligar</button>
+    </div>
+  </section>
+  <section class="page" id="page-auditoria">
+    <div class="card">
+      <h3><span class="ic">🧾</span> Auditoria — trilha de ações do agente</h3>
+      <div class="chatrow" style="margin-top:0">
+        <select id="audit-agent" style="max-width:130px" onchange="loadAudit()">
+          <option value="">todos os agentes</option>
+          <option value="betterme">◈ Betterme</option>
+          <option value="claude">🔌 Claude</option>
+          <option value="operador">👤 operador</option>
+        </select>
+        <input type="text" id="audit-tool" placeholder="filtrar por ferramenta (ex.: run_command)" style="flex:1" oninput="auditDeb()">
+        <select id="audit-limit" style="max-width:120px" onchange="loadAudit()">
+          <option value="80">últimas 80</option>
+          <option value="200">últimas 200</option>
+          <option value="500">últimas 500</option>
+        </select>
+      </div>
+      <div id="audit-summary" class="hint" style="margin-top:10px"></div>
+      <div id="audit-list" style="margin-top:8px">carregando…</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════ AJUSTES ══════════════════════ -->
+  <section class="page" id="page-ajustes">
+    <div class="card">
+      <h3><span class="ic">⚙</span> Configuração <span class="hint" id="cfgpath" style="margin-left:auto"></span></h3>
+      <form class="set" onsubmit="return false">
+        <div class="field">
+          <label>modelo (tag do Ollama)</label>
+          <input type="text" id="s-model" list="modellist" placeholder="hermes3:8b">
+          <datalist id="modellist"></datalist>
+          <span class="hint">hermes3:3b (leve) · hermes3:8b (equilibrado) · hermes3:70b (servidor)</span>
+        </div>
+        <div class="field"><label>máx. passos do agente</label><input type="number" id="s-max_steps" min="1" max="64"></div>
+        <div class="field"><label>contexto (num_ctx)</label><input type="number" id="s-num_ctx" min="2048" step="1024"></div>
+        <div class="field"><label>timeout de comando (s)</label><input type="number" id="s-cmd_timeout" min="5" max="600"></div>
+        <div class="field"><label>⚡ manter modelo carregado (keep_alive)</label>
+          <input type="text" id="s-keep_alive" placeholder="30m">
+          <span class="hint">evita recarregar o modelo a cada pausa · 30m, 1h ou -1 (sempre)</span></div>
+        <div class="field"><label>⚡ máx. tokens por resposta (0 = sem limite)</label>
+          <input type="number" id="s-num_predict" min="0" step="64">
+          <span class="hint">512–768 deixam as respostas mais rápidas</span></div>
+        <div class="field"><button class="b small ghost" onclick="fastMode()">⚡ aplicar modo rápido</button>
+          <span class="hint">768 tokens · contexto 4096 · modelo sempre carregado</span></div>
+        <div class="field"><label>temperatura</label><input type="number" id="s-temperature" min="0" max="2" step="0.1"></div>
+        <div class="field"><label>token de acesso (senha da GUI/API)</label>
+          <input type="password" id="s-auth_token" placeholder="(vazio = sem senha)">
+          <span class="hint">obrigatório se a GUI escutar em 0.0.0.0</span></div>
+        <div class="field full"><label>instruções extras do sistema</label>
+          <textarea id="s-system_prompt_extra" placeholder="ex.: Esta máquina é um servidor de arquivos; prefira soluções não destrutivas…"></textarea></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-sandbox"><label for="s-sandbox" style="color:var(--txt)">sandbox de arquivos (restringe ao workspace)</label></div></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-confirm_dangerous"><label for="s-confirm_dangerous" style="color:var(--txt)">confirmar comandos arriscados no terminal</label></div></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-orchestrator_on"><label for="s-orchestrator_on" style="color:var(--txt)">🎯 Orquestrador (criar task e planejar ações)</label></div>
+          <span class="hint">conversa vira plano → task → execução → revisão</span></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-reviewer_on"><label for="s-reviewer_on" style="color:var(--txt)">🔍 Revisor (conferir o resultado antes de entregar)</label></div>
+          <span class="hint">reprovado = refaz (máx. 2 tentativas)</span></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-creation_approval"><label for="s-creation_approval" style="color:var(--txt)">🔒 Aprovação em tarefas de criação</label></div>
+          <span class="hint">criar/modificar/enviar exige seu ✅ (ou ✏️ editar) antes de executar e antes da entrega</span></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-claude_use_ollama"><label for="s-claude_use_ollama" style="color:var(--txt)">🔌 Claude Code via Ollama (mesmo servidor do Betterme)</label></div></div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-web_access"><label for="s-web_access" style="color:var(--txt)">🌐 acesso à web (busca e leitura de páginas)</label></div></div>
+        <div class="field"><label>🎤 modelo de voz (Whisper)</label>
+          <select id="s-stt_model">
+            <option value="tiny">tiny — mais rápido (~75 MB)</option>
+            <option value="base">base — recomendado (~140 MB)</option>
+            <option value="small">small — mais preciso (~460 MB)</option>
+            <option value="medium">medium — pesado</option>
+            <option value="large-v3">large-v3 — muito pesado</option>
+          </select>
+          <span class="hint">requer: pip install faster-whisper · baixa o modelo no 1º uso</span></div>
+        <div class="field"><label>🎤 idioma do ditado</label>
+          <input type="text" id="s-stt_language" placeholder="pt (vazio = detectar)">
+        </div>
+        <div class="field"><div class="check"><input type="checkbox" id="s-stt_autosend"><label for="s-stt_autosend" style="color:var(--txt)">🎤 enviar automaticamente após ditar</label></div></div>
+        <div class="field"><label>🎯 modelo do orquestrador/revisor <span class="hint">(vazio = o mesmo do agente)</span></label>
+          <input type="text" id="s-orchestrator_model" list="modellist" placeholder="ex.: qwen3:8b · gemma3:12b">
+          <span class="hint">pensa o plano e cobra a revisão — forte em raciocínio/instrução</span></div>
+        <div class="field"><label>🔍 modelo do revisor <span class="hint">(vazio = o do orquestrador)</span></label>
+          <input type="text" id="s-reviewer_model" list="modellist" placeholder="ex.: gemma3:12b · qwen3:8b">
+          <span class="hint">o cobrador que assina embaixo — quanto mais forte, mais dura a revisão</span></div>
+        <div class="field"><label>⚡ modelo do executor <span class="hint">(vazio = o mesmo do agente)</span></label>
+          <input type="text" id="s-executor_model" list="modellist" placeholder="ex.: qwen3-coder:8b · llama3.1:8b">
+          <span class="hint">roda as ferramentas — forte em function calling. Um modelo por vez: troca sequencial (nada em paralelo)</span></div>
+        <div class="field"><label>🔌 modelo do Claude Code (vazio = padrão dele)</label>
+          <input type="text" id="s-claude_model" list="modellist" placeholder="ex.: qwen3-coder · hermes3:8b">
+          <span class="hint">vazio = o mesmo modelo do Betterme · só funciona com modelos instalados no Ollama</span></div>
+        <div class="field full" style="margin-top:6px">
+          <button class="b primary" onclick="saveSettings()">💾 salvar configuração</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ══ modal: execução ao vivo ══ -->
+  <div class="modalbg" id="live-modal" onclick="if(event.target===this)closeLive()">
+    <div class="modal">
+      <h3><span class="livedot" id="live-dot" style="display:none"></span>
+        <span id="live-title" style="flex:1">👁 execução ao vivo</span>
+        <span class="hint" id="live-meta"></span>
+        <button class="b small ghost" onclick="closeLive()">✕ fechar</button></h3>
+      <div class="livebox" id="live-box">…</div>
+    </div>
+  </div>
+
+  <footer>betterme-agent <span id="footver"></span> · agente Linux local · Ollama + Betterme ·
+    GUI de ligar/desligar · mantenha o acesso protegido por token</footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ═══ PWA (v3.2): registra o service worker quando o contexto é seguro ═══ */
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register("/sw.js").catch(()=>{});
+}
+
+/* ── v3.11.1: aviso honesto quando o servidor está OFFLINE ──
+   a página pode vir do cache do service worker e parecer "viva";
+   o banner vermelho deixa claro: a aplicação NÃO está rodando. */
+let _offBar = null;
+async function checkOnline(){
+  let on = false;
+  try{
+    const r = await fetch("/api/status", {cache: "no-store"});
+    on = r.ok;
+  }catch(_e){ on = false; }
+  if (on){ if (_offBar){ _offBar.remove(); _offBar = null; } return; }
+  if (_offBar || !document.body) return;
+  _offBar = document.createElement("div");
+  _offBar.id = "offline-bar";
+  _offBar.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;"+
+    "background:#b3261e;color:#fff;font:600 13px system-ui,sans-serif;"+
+    "padding:10px 14px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.4)";
+  _offBar.textContent = "⚠ Betterme server OFFLINE — isto é a casca em cache do navegador (a aplicação NÃO está rodando nesta máquina). Ligue com: betterme server";
+  document.body.appendChild(_offBar);
+}
+if (document.readyState === "loading")
+  document.addEventListener("DOMContentLoaded", checkOnline);
+else
+  checkOnline();
+setInterval(checkOnline, 5000);
+/* ═══════════════ utilidades ═══════════════ */
+const $ = (id) => document.getElementById(id);
+const state = { status:null, paused:false, es:null, sending:false, history:[], token:"", page:"painel", sessionId:null, abort:null };
+
+function store(k, v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){ return null; } }
+function toast(msg, err){
+  const t = $("toast"); t.textContent = msg; t.classList.toggle("err", !!err); t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("show"), 3800);
+}
+async function api(path, opts={}){
+  const o = Object.assign({headers:{}}, opts);
+  if (!(o.body instanceof FormData)) o.headers["Content-Type"] = "application/json";
+  if (state.token) o.headers["X-Betterme-Token"] = state.token;
+  const r = await fetch(path, o);
+  if (r.status === 401){ $("tokenbar").classList.add("show"); throw new Error("token necessário"); }
+  return r;
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function fmtUp(s){ s=s||0; const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=Math.floor(s%60);
+  return (h?h+"h ":"")+m+"m "+x+"s"; }
+function miniMD(text){
+  // v3.0: markdown rico e seguro (escapa tudo, depois insere só tags nossas)
+  let out = "", parts = String(text).split(/```(\w*)\n?([\s\S]*?)```/g);
+  for (let i=0;i<parts.length;i+=3){
+    out += mdInline(parts[i]||"");
+    if (parts[i+2] !== undefined){
+      const lang = (parts[i+1]||"").slice(0,12) || "texto";
+      out += '<div class="codeblock"><div class="cb-bar"><span>'+esc(lang)+'</span>'+
+             '<button class="cb-copy" onclick="copyCode(this)">copiar</button></div>'+
+             "<pre><code>"+esc(parts[i+2].replace(/\n$/,""))+"</code></pre></div>";
+    }
+  }
+  return out;
+}
+function mdInline(src){
+  // blocos por linha: títulos, listas, citação, hr; resto vira <p>
+  const lines = src.split("\n"); let html = "", para = [], list = null;
+  const flushP = ()=>{ if (para.length){ html += "<p>"+para.map(l=>mdFmt(l)).join("<br>")+"</p>"; para = []; } };
+  const flushL = ()=>{ if (list){ html += "</"+list+">"; list = null; } };
+  for (const raw of lines){
+    const l = raw.trimEnd();
+    if (!l.trim()){ flushP(); flushL(); continue; }
+    let m;
+    if ((m = l.match(/^(#{1,4})\s+(.*)$/))){ flushP(); flushL();
+      html += "<h"+m[1].length+">"+mdFmt(m[2])+"</h"+m[1].length+">"; continue; }
+    if (/^(---+|\*\*\*+)$/.test(l.trim())){ flushP(); flushL(); html += "<hr>"; continue; }
+    if ((m = l.match(/^&gt;\s?(.*)$/)) || (m = l.match(/^>\s?(.*)$/))){
+      flushP(); flushL(); html += "<blockquote>"+mdFmt(m[1])+"</blockquote>"; continue; }
+    if ((m = l.match(/^[-*•]\s+(.*)$/))){ flushP();
+      if (list !== "ul"){ flushL(); html += "<ul>"; list = "ul"; }
+      html += "<li>"+mdFmt(m[1])+"</li>"; continue; }
+    if ((m = l.match(/^\d+[.)]\s+(.*)$/))){ flushP();
+      if (list !== "ol"){ flushL(); html += "<ol>"; list = "ol"; }
+      html += "<li>"+mdFmt(m[1])+"</li>"; continue; }
+    para.push(l);
+  }
+  flushP(); flushL();
+  return html;
+}
+function mdFmt(line){
+  return esc(line)
+    .replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>")
+    .replace(/(^|\W)\*([^*\s][^*]*)\*/g,"$1<i>$2</i>")
+    .replace(/`([^`]+)`/g,"<code>$1</code>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+             '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+function copyCode(btn){
+  const code = btn.closest(".codeblock").querySelector("code");
+  navigator.clipboard.writeText(code.textContent).then(()=>{
+    btn.textContent = "✔ copiado"; setTimeout(()=>btn.textContent = "copiar", 1600);
+  }).catch(()=>{ btn.textContent = "✖"; });
+}
+
+/* ═══════════════ navegação ═══════════════ */
+document.querySelectorAll("nav button").forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active"); $("page-"+b.dataset.page).classList.add("active");
+    state.page = b.dataset.page;
+    if (state.page==="chat"){ $("chatin").focus(); loadPending(); }
+    if (state.page==="tarefas"){ loadTasks(); loadSchedules(); loadRecipes(); }
+    if (state.page==="painel"){ loadPerf(); loadOrchStats(); }
+    if (state.page==="agentes"){ loadAgentes(); }
+    if (state.page==="auditoria"){ loadAudit(); }
+    if (state.page==="ollama") loadOllamaPage();
+    if (state.page==="ferramentas") loadToolsPage();
+    if (state.page==="skills") loadSkills();
+    if (state.page==="memoria") loadMemory();
+    if (state.page==="ajustes") loadSettings();
+  };
+});
+
+/* ═══════════════ status ═══════════════ */
+async function refresh(){
+  try{
+    const r = await api("/api/status"); const s = await r.json(); state.status = s;
+    // v3.15.0: Claude Code é plugin opcional — sem a CLI, a opção some
+    const selAg = $("agent-sel");
+    if (selAg && s.claude_available === false){
+      const oc = selAg.querySelector('option[value="claude"]');
+      if (oc) oc.remove();
+      if (selAg.value === "claude") selAg.value = "betterme";
+    }
+    $("ver").textContent = "v"+s.version+(s.mock ? " · ⚠ MODO DEMO (IA simulada)" : " · ✔ modo real (Ollama)")+" · agente linux · ollama";
+    $("footver").textContent = "v"+s.version;
+    $("mockbanner").style.display = s.mock ? "" : "none";
+    const isLocal = /^(127\.|localhost|\[::1\])/.test(location.hostname);
+    $("securebanner").style.display = (!s.auth && !isLocal) ? "" : "none";
+
+    const ag = s.agent, ol = s.ollama;
+    $("pill-agent").textContent = ag.running ? "LIGADO":"DESLIGADO";
+    $("dot-agent").className = "dot "+(ag.running?"on":"off");
+    $("pill-ollama").textContent = !ol.installed ? "NÃO INSTALADO" : (ol.running ? "LIGADO":"DESLIGADO");
+    $("dot-ollama").className = "dot "+(ol.running?"on":(ol.installed?"off":"warn"));
+    $("pill-model").textContent = "◈ "+s.config.model;
+
+    $("ag-state").innerHTML = ag.running
+      ? '<span class="badge on">● LIGADO</span>'+(ag.stale?' <span class="st pend">sem heartbeat</span>':"")
+      : '<span class="badge off">● DESLIGADO</span>';
+    $("ag-pid").textContent = ag.pid || "—";
+    $("ag-act").textContent = ag.running ? (ag.status||"—") : "—";
+    $("ag-up").textContent = ag.running ? fmtUp(ag.uptime_s) : "—";
+    $("ag-task").textContent = ag.task ? ag.task : "—";
+
+    $("ol-state").innerHTML = !ol.installed
+      ? '<span class="badge warn">⚠ NÃO INSTALADO</span>'
+      : (ol.running ? '<span class="badge on">● LIGADO</span>' : '<span class="badge off">● DESLIGADO</span>');
+    $("ol-ver").textContent = ol.version || "—";
+    $("ol-by").textContent = ol.managed_by || "—";
+    $("ol-models").textContent = (ol.models||[]).join(", ") || "—";
+    $("ol-hint").innerHTML = !ol.installed
+      ? "Instale com: <b>curl -fsSL https://ollama.com/install.sh | sh</b> e depois <b>ollama pull "+esc(s.config.model)+"</b>"
+      : (ol.running && !(ol.models||[]).length ? "Nenhum modelo baixado — rode <b>ollama pull "+esc(s.config.model)+"</b>" : "");
+
+    $("btn-ag-start").disabled = ag.running;
+    $("btn-ag-stop").disabled = !ag.running;
+    $("btn-ol-start").disabled = ol.running || !ol.installed;
+    $("btn-ol-stop").disabled = !ol.running;
+
+    // cartão MCP
+    const mcp = s.mcp || [];
+    const mcpEl = $("mcp-list");
+    if (!mcp.length){
+      mcpEl.innerHTML = '<span class="hint">nenhum servidor configurado — adicione <b>mcp_servers</b> no config.yaml</span>';
+    } else {
+      mcpEl.innerHTML = mcp.map(m=>{
+        const cls = m.state==="ativo" ? "on" : (m.state==="erro" ? "off" : "");
+        const err = m.error ? `<div class="hint" style="color:var(--err)">${esc(m.error.slice(0,110))}</div>` : "";
+        return `<div class="kv"><span>${esc(m.name)} <span class="dot ${cls}"></span></span>`+
+               `<span>${esc(m.state)}${m.tools.length?` · ${m.tools.length} ferramentas`:""}</span></div>${err}`;
+      }).join("");
+    }
+    const mcpActive = mcp.some(m=>m.state==="ativo");
+    $("btn-mcp-start").textContent = mcpActive ? "● ativo" : "▶ ativar";
+    $("btn-mcp-start").disabled = mcpActive;
+
+    $("sys-model").textContent = s.config.model;
+    $("sys-dir").textContent = s.data_dir + "/workspace";
+    $("sys-sandbox").textContent = s.config.sandbox ? "ativo" : "desativado";
+    $("sys-steps").textContent = s.config.max_steps;
+    $("sys-timeout").textContent = s.config.cmd_timeout + "s";
+  }catch(e){
+    // sem conexão com a API — sinaliza no topo em vez de falhar em silêncio
+    if (e.message === "token necessário") return;
+    ["agent","ollama"].forEach(k=>{
+      $("pill-"+k).textContent = "sem conexão";
+      $("dot-"+k).className = "dot warn";
+    });
+  }
+}
+setInterval(refresh, 4000); refresh();
+
+/* ═══════════════ ações on/off ═══════════════ */
+async function agentAction(a){
+  const r = await api("/api/agent/"+a, {method:"POST"});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); refresh();
+}
+async function ollamaAction(a){
+  const r = await api("/api/ollama/"+a, {method:"POST"});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); refresh();
+}
+
+/* ═══════════════ log ao vivo (SSE) ═══════════════ */
+function startLog(){
+  if (state.es) state.es.close();
+  const url = "/api/logs/stream" + (state.token ? "?token="+encodeURIComponent(state.token) : "");
+  state.es = new EventSource(url);
+  const box = $("logbox"); let first = true;
+  state.es.onopen = ()=>{ if (first){ box.textContent=""; first=false; } };
+  state.es.onmessage = (ev)=>{
+    if (state.paused) return;
+    try{
+      const d = JSON.parse(ev.data).line || "";
+      const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+      const span = document.createElement("span");
+      span.textContent = d + "\n";
+      if (/tarefa|===|BLOQUEADO/.test(d)) span.className = "hl";
+      box.appendChild(span);
+      if (box.childElementCount > 1500) box.removeChild(box.firstChild);
+      if (atEnd) box.scrollTop = box.scrollHeight;
+    }catch(e){}
+  };
+  state.es.onerror = ()=>{
+    if (box.childElementCount === 0) box.textContent = "⚠ conexão do log caiu — reconectando…";
+  };
+}
+function togglePause(){
+  state.paused = !state.paused;
+  $("btn-logpause").textContent = state.paused ? "▶ continuar" : "⏸ pausar";
+}
+async function clearLog(){ await api("/api/logs/clear",{method:"POST"}); $("logbox").textContent=""; }
+
+/* ═══════════════ chat ═══════════════ */
+function bubble(role, html, cls){
+  const d = document.createElement("div");
+  d.className = "msg "+role+(cls?" "+cls:"");
+  if (html !== null) d.innerHTML = html;
+  $("chatlog").appendChild(d); scrollChat(); return d;
+}
+function scrollChat(){ const l=$("chatlog"); l.scrollTop = l.scrollHeight; }
+function suggest(btn){ $("chatin").value = btn.textContent.trim(); sendChat(); }
+
+function toolBlock(name, args){
+  const d = document.createElement("details");
+  d.className = "tool"; d.open = true;
+  const sum = document.createElement("summary");
+  const argStr = Object.entries(args||{}).map(([k,v])=>k+"="+(typeof v==="string"?v:JSON.stringify(v))).join(" ");
+  sum.innerHTML = "🔧 "+esc(name)+' <span class="args">'+esc(argStr).slice(0,140)+'</span><span class="status run">rodando…</span>';
+  d.appendChild(sum);
+  $("chatlog").appendChild(d); scrollChat(); return d;
+}
+function textDiv(turn){
+  const d = document.createElement("div");
+  d.className = "msg bot raw"; d.style.whiteSpace = "pre-wrap";
+  $("chatlog").appendChild(d); scrollChat(); return d;
+}
+
+/* ═══════════════ chat: sessões e histórico ═══════════════ */
+let CONVS = [];
+async function loadConversations(){
+  try{
+    const r = await api("/api/conversations"); const d = await r.json();
+    CONVS = d.sessions || [];
+    $("hist-count").textContent = CONVS.length;
+    return d;
+  }catch(e){ return {sessions: [], current: null}; }
+}
+async function restoreLastConversation(){
+  const d = await loadConversations();
+  if (d.current){
+    const r = await api("/api/conversations/"+encodeURIComponent(d.current));
+    const j = await r.json();
+    if (j.ok && (j.session.messages||[]).length){
+      state.sessionId = j.session.id;
+      state.history = j.session.messages
+        .filter(m=>m.role==="user"||m.role==="assistant")
+        .map(m=>({role:m.role, content:m.content}));
+      renderSession(j.session);
+      $("chat-session").textContent = "◈ " + (j.session.title || "conversa");
+    }
+  }
+}
+function renderSession(session){
+  $("chatlog").innerHTML = "";
+  (session.messages||[]).forEach(m=>{
+    if (m.role === "user") bubble("user", esc(m.content), "");
+    else if (m.content){
+      const b = bubble("bot", miniMD(m.content), "");
+      if (m.agent === "claude"){
+        const tg = document.createElement("div");
+        tg.className = "agentbadge"; tg.textContent = "🔌 Claude Code";
+        b.insertBefore(tg, b.firstChild);
+      }
+      if (m.dur != null){
+        const t = document.createElement("div");
+        t.className = "hint"; t.style.margin = "-8px 0 10px";
+        t.textContent = "⏱ " + m.dur + "s";
+        b.after(t);
+      }
+    }
+  });
+  scrollChat();
+}
+function toggleHistory(){
+  const p = $("hist-panel");
+  p.style.display = p.style.display === "none" ? "" : "none";
+  if (p.style.display === "none") return;
+  $("hist-results").style.display = "none";
+  $("hist-list").style.display = "";
+  const el = $("hist-list");
+  if (!CONVS.length){ el.innerHTML = "nenhuma conversa anterior — o histórico aparece aqui automaticamente."; return; }
+  el.innerHTML = CONVS.map(c=>`
+    <div class="task"><div class="top">
+      <span class="input"><b>${esc(c.title)}</b><br><span class="hint">${esc(c.updated_at)} · ${c.messages} mensagens</span></span>
+      <span class="btnrow" style="margin:0">
+        <button class="b small primary" onclick="openConversation('${esc(c.id)}')">abrir</button>
+        <button class="b small danger" onclick="deleteConversation('${esc(c.id)}')">🗑</button>
+      </span>
+    </div></div>`).join("");
+}
+async function openConversation(id){
+  const r = await api("/api/conversations/"+encodeURIComponent(id));
+  const j = await r.json();
+  if (!j.ok){ toast("conversa não encontrada", true); return; }
+  state.sessionId = j.session.id;
+  state.history = (j.session.messages||[])
+    .filter(m=>m.role==="user"||m.role==="assistant")
+    .map(m=>({role:m.role, content:m.content}));
+  renderSession(j.session);
+  $("chat-session").textContent = "◈ " + (j.session.title || "conversa");
+  $("hist-panel").style.display = "none";
+  await api("/api/conversations/current", {method:"POST", body: JSON.stringify({id: id})});
+  toast("conversa restaurada ✔");
+}
+async function resetChat(){
+  if (state.history.length && !confirm("zerar a conversa atual? (ela continua salva em 🕘 conversas)")) return;
+  state.history = []; state.sessionId = null;
+  $("chatlog").innerHTML = "";
+  $("chat-session").textContent = "◈ nova conversa";
+  $("hist-panel").style.display = "none";
+  await api("/api/conversations/current", {method:"POST", body: JSON.stringify({id: null})});
+  loadConversations();
+  toast("conversa zerada — as anteriores seguem em 🕘 conversas");
+}
+async function deleteConversation(id){
+  if (!confirm("apagar esta conversa definitivamente?")) return;
+  await api("/api/conversations/delete", {method:"POST", body: JSON.stringify({id: id})});
+  if (state.sessionId === id){ state.sessionId = null; state.history = []; $("chatlog").innerHTML = ""; $("chat-session").textContent = "◈ nova conversa"; }
+  await loadConversations();
+  $("hist-panel").style.display = "";
+  toggleHistory(); toggleHistory();
+}
+
+async function sendChat(){
+  const input = $("chatin"), text = input.value.trim();
+  if (!text || state.sending) return;
+  if (text.startsWith("/")){ input.value=""; autoGrow(input); runSlash(text); return; }
+  input.value = ""; autoGrow(input);
+  state.rawLog = [];
+  bubble("user", esc(text), "");
+  state.history.push({role:"user", content:text});
+  state.sending = true; $("btn-send").disabled = true;
+  $("btn-stop").style.display = "";
+
+  // loading "A trabalhar…" — fica até o primeiro token/resultado da IA
+  const load = document.createElement("div");
+  load.className = "msg bot working";
+  load.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar…';
+  $("chatlog").appendChild(load); scrollChat();
+
+  const cursors = [];
+  const turns = { texts: [], tools: [], cur: null, loading: load, stats: null };
+  let finalMsg = "", errorMsg = "", aborted = false;
+
+  // cronômetro ao vivo no "A trabalhar…"
+  const t0 = performance.now();
+  const tick = setInterval(()=>{
+    if (turns.loading)
+      turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar… <span class="hint">(' + ((performance.now()-t0)/1000).toFixed(0) + 's)</span>';
+  }, 1000);
+
+  try{
+    state.abort = new AbortController();
+    const r = await api("/api/chat", {method:"POST", signal: state.abort.signal,
+      body: JSON.stringify({message:text, history: state.history.slice(0,-1), session_id: state.sessionId,
+                            agent: (($("agent-sel")||{}).value)||"betterme"})});
+    state.agentInUse = (($("agent-sel")||{}).value)||"betterme";
+    const reader = r.body.getReader(); const dec = new TextDecoder();
+    let buf = "";
+    while (true){
+      const {done, value} = await reader.read(); if (done) break;
+      buf += dec.decode(value, {stream:true});
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0){
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl+1);
+        if (!line) continue;
+        let ev; try{ ev = JSON.parse(line); }catch(e){ continue; }
+        handleEvent(ev, turns, cursors);
+        if (ev.type === "done") finalMsg = ev.message;
+        if (ev.type === "error") errorMsg = ev.message;
+      }
+    }
+  }catch(e){
+    if (e.name === "AbortError"){ aborted = true; }
+    else { errorMsg = "falha de conexão: "+e.message; }
+  }
+  cursors.forEach(c=>c.remove());
+  clearInterval(tick);
+  if (turns.loading){ turns.loading.remove(); turns.loading = null; }
+  turns.texts.forEach(t=>{ if (t && t.textContent.trim()) t.innerHTML = miniMD(t.textContent); });
+  // v3.5: a resposta final SEMPRE aparece — mesmo se nenhum token foi
+  // streamado (done direto) ou se o final difere do streamado (selo 🔍)
+  const lastText = [...turns.texts].reverse().find(t=>t && t.textContent.trim());
+  if (finalMsg){
+    if (!lastText) bubble("bot", miniMD(finalMsg), "");
+    else if (finalMsg.trim() !== lastText.textContent.trim())
+      lastText.innerHTML = miniMD(finalMsg);
+  }
+  if (lastText){
+    const dur = turns.stats ? turns.stats.duration_s : ((performance.now()-t0)/1000).toFixed(1);
+    const extra = turns.stats ? " · " + turns.stats.tokens + " tokens · " +
+      (turns.stats.tok_s ? turns.stats.tok_s + " tok/s · " : "") +
+      turns.stats.steps + " passo(s)" : "";
+    const badge = document.createElement("div");
+    badge.className = "hint"; badge.style.margin = "-8px 0 10px";
+    badge.textContent = "⏱ " + dur + "s" + extra;
+    lastText.after(badge);
+  }
+  if (errorMsg && !finalMsg) bubble("bot", "⚠ "+esc(errorMsg), "waiting");
+  if (aborted) bubble("bot", "⏹ geração interrompida — texto parcial preservado", "waiting");
+  const said = turns.texts.some(t=>t && t.textContent.trim());
+  if (!finalMsg && !errorMsg && !aborted && !said) bubble("bot", "(a IA não retornou texto)","waiting");
+  state.history.push({role:"assistant", content: finalMsg || errorMsg || ""});
+  state.sending = false; state.abort = null;
+  $("btn-send").disabled = false; $("btn-stop").style.display = "none"; scrollChat();
+}
+function stopChat(){ if (state.abort) state.abort.abort(); }
+function handleEvent(ev, turns, cursors){
+  (state.rawLog = state.rawLog || []).push(ev);   // 🧾 fluxo bruto do turno
+  if (ev.type === "session"){ state.sessionId = ev.id; return; }  // sessão persistida
+  if (ev.type === "stats"){ turns.stats = ev; return; }           // tempo/tokens da resposta
+  if (ev.type === "ping") return;  // keepalive do servidor enquanto a IA pensa
+  if (ev.type === "note"){          // v3.3: etapas do pipeline (🎯/🔍)
+    const nd = document.createElement("div");
+    nd.className = "sysnote"; nd.textContent = ev.message || "";
+    $("chatlog").appendChild(nd); turns.cur = null; scrollChat();
+    return;
+  }
+  if (ev.type === "approval_request"){   // v3.4: 🔒 portão do operador
+    if (turns.loading){ turns.loading.remove(); turns.loading = null; }
+    renderApproval(ev); return;
+  }
+  if (ev.type === "brain"){              // v3.4: 🔬 por baixo dos panos
+    if (state.brain) renderBrain(ev); return;
+  }
+  if (ev.type === "step"){
+    if (turns.loading)
+      turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar… <span class="hint">(passo '+ev.step+')</span>';
+    return;
+  }
+  if (ev.type === "cancelled"){
+    if (turns.loading){ turns.loading.remove(); turns.loading = null; }
+    return;
+  }
+  if (ev.type === "token"){
+    if (turns.loading){ turns.loading.remove(); turns.loading = null; }
+    if (!turns.cur){
+      const d = document.createElement("div");
+      d.className = "msg bot"; d.style.whiteSpace = "pre-wrap";
+      if (state.agentInUse === "claude"){
+        const tg = document.createElement("div");
+        tg.className = "agentbadge"; tg.textContent = "🔌 Claude Code";
+        d.appendChild(tg);
+      }
+      const c = document.createElement("span"); c.className = "cursor";
+      d.appendChild(c); d._cursor = c; cursors.push(c);
+      turns.cur = d; turns.texts.push(d);
+      $("chatlog").appendChild(d);
+    }
+    turns.cur.insertBefore(document.createTextNode(ev.content), turns.cur._cursor);
+    scrollChat();
+  } else if (ev.type === "tool_start"){
+    if (turns.loading)
+      turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar… <span class="hint">(executando '+esc(ev.name)+')</span>';
+    turns.cur = null;
+    turns.tools.push(toolBlock(ev.name, ev.args));
+  } else if (ev.type === "tool_end"){
+    const t = turns.tools[turns.tools.length-1];
+    if (t){
+      const st = t.querySelector(".status");
+      if (st){ st.textContent = ev.ok ? "ok" : "erro"; st.className = "status "+(ev.ok?"ok":"err"); }
+      const out = document.createElement("div"); out.className = "out"; out.textContent = ev.output || "";
+      t.appendChild(out);
+      if (ev.ok) setTimeout(()=>{ t.open = false; }, 1200);
+    }
+  }
+}
+
+/* ═══════════════ tarefas ═══════════════ */
+async function loadTasks(){
+  try{
+    const r = await api("/api/tasks"); const d = await r.json();
+    const el = $("tasklist");
+    if (!d.pending.length && !d.done.length){
+      el.innerHTML = '<div class="hint">fila vazia — enfileire uma tarefa acima.</div>'; return;
+    }
+    let html = "";
+    d.pending.forEach(t=>{
+      html += '<div class="task"><div class="top"><span class="st pend">⏳ pendente</span>'+
+              '<span class="input">'+esc(t.input)+'</span><span class="id">'+esc(t.id)+'</span></div></div>';
+    });
+    d.done.forEach(t=>{
+      const tools = (t.tools||[]).map(x=>"🔧 "+esc(x.name)).join(" · ");
+      html += '<div class="task"><div class="top"><span class="st '+esc(t.status)+'">'+(t.status==="ok"?"✔ ok":"✖ erro")+'</span>'+
+              '<span class="input">'+esc(t.input)+'</span><span class="id">'+esc(t.id)+' · '+esc(t.duration_s)+'s</span></div>'+
+              (tools?'<div class="hint">'+tools+'</div>':"")+
+              '<details><summary>ver saída completa</summary><pre>'+esc(t.output||"")+'</pre></details></div>';
+    });
+    el.innerHTML = html;
+  }catch(e){}
+}
+async function addTask(){
+  const inp = $("taskin"), text = inp.value.trim();
+  if (!text) return;
+  inp.value = "";
+  const r = await api("/api/tasks", {method:"POST", body: JSON.stringify({input:text})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast(j.msg || j.ok && "tarefa enfileirada", !j.ok);
+  loadTasks();
+}
+async function clearTasks(){
+  await api("/api/tasks/clear", {method:"POST"}); loadTasks();
+}
+setInterval(()=>{ if (state.page==="tarefas") loadTasks(); }, 5000);
+
+/* ═══════════════ tarefas agendadas ═══════════════ */
+let SCHEDS = [];
+async function loadSchedules(){
+  try{
+    const r = await api("/api/schedules"); const d = await r.json();
+    SCHEDS = d.schedules || [];
+    const el = $("sched-list");
+    if (!SCHEDS.length){
+      el.innerHTML = '<div class="hint">nenhuma tarefa agendada — use o formulário acima (ex.: "resumo dos e-mails", "diário 07:30").</div>';
+      return;
+    }
+    el.innerHTML = SCHEDS.map(s=>`
+      <div class="task"><div class="top">
+        <span class="st ${s.running?"pend":(s.enabled?(s.last_status==="ok"?"ok":(s.last_status?"err":"pend")):"err")}">${s.running?"rodando…":(s.enabled?"ativa":"pausada")}</span>
+        <span class="input"><b>${esc(s.input.slice(0,110))}</b><br>
+          <span class="hint">${schedTrigIcon(s)} ${esc(s.human)}${s.agent==="claude"?" · 🔌 Claude Code":""}${schedNext(s)} · ${s.run_count} execução(ões)${schedTags(s)}${s.last_run?` · última: ${esc(s.last_run)} (${esc(s.last_duration_s)}s)`:''}</span>
+          ${schedHist(s)}</span>
+        <span class="btnrow" style="margin:0">
+          ${s.running?`<button class="b small" onclick="openLive('${esc(s.id)}')">👁 ao vivo</button>`:""}
+          <button class="b small" onclick="schedRun('${esc(s.id)}')">▶ agora</button>
+          <button class="b small ghost" onclick="schedToggle('${esc(s.id)}',${!s.enabled})">${s.enabled?"⏸ pausar":"▶ ativar"}</button>
+          <button class="b small danger" onclick="schedDel('${esc(s.id)}')">🗑</button>
+        </span>
+      </div></div>`).join("");
+  }catch(e){}
+}
+async function schedAdd(){
+  const input = $("sched-input").value.trim(), when = $("sched-when").value.trim();
+  const trig = $("sched-trigger").value;
+  if (!input){ toast("descreva o que o agente deve fazer", true); return; }
+  if (!trig && !when){ toast("preencha o que fazer e quando", true); return; }
+  const body = {input, when: when || "a cada 1h", agent: (($("sched-agent")||{}).value)||"betterme",
+    retries: parseInt($("sched-retries").value||"0"), only_idle: $("sched-idle").checked};
+  if (trig === "webhook") body.trigger = {type: "webhook"};
+  if (trig === "watch"){
+    const path = $("sched-watch-path").value.trim();
+    if (!path){ toast("informe a pasta a vigiar", true); return; }
+    body.trigger = {type: "watch", path, glob: $("sched-watch-glob").value.trim() || "*"};
+  }
+  const r = await api("/api/schedules", {method:"POST", body: JSON.stringify(body)});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  if (j.ok){ $("sched-input").value=""; $("sched-when").value="";
+    if (j.msg && j.msg.includes("POST /api/hooks")) prompt("Tarefa webhook criada — dispare com este comando:", j.msg);
+  }
+  loadSchedules();
+}
+function schedTrigUI(){
+  const trig = $("sched-trigger").value;
+  $("sched-watch-path").style.display = trig === "watch" ? "" : "none";
+  $("sched-watch-glob").style.display = trig === "watch" ? "" : "none";
+  $("sched-trig-note").innerHTML = trig === "webhook"
+    ? "a tarefa roda quando algo chamar o webhook (endereço mostrado após criar)"
+    : (trig === "watch" ? "a tarefa roda quando um arquivo novo casar com o padrão na pasta" : "");
+}
+async function schedToggle(id, enable){
+  const r = await api("/api/schedules/toggle", {method:"POST", body: JSON.stringify({id, enabled: enable})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); loadSchedules();
+}
+async function schedRun(id){
+  const r = await api("/api/schedules/run", {method:"POST", body: JSON.stringify({id})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  if (j.ok) openLive(id);
+  setTimeout(loadSchedules, 1500); setTimeout(loadTasks, 4000);
+}
+async function schedDel(id){
+  if (!confirm("remover este agendamento?")) return;
+  await api("/api/schedules/delete", {method:"POST", body: JSON.stringify({id})});
+  loadSchedules();
+}
+setInterval(()=>{ if (state.page==="tarefas") loadSchedules(); }, 5000);
+
+function schedTrigIcon(s){
+  const tr = s.trigger || {};
+  if (tr.type === "webhook") return "🌐 webhook";
+  if (tr.type === "watch") return "📂 " + (tr.glob||"*") + " em " + (tr.path||"?");
+  return "⏰";
+}
+function schedNext(s){
+  const tr = s.trigger || {};
+  if (tr.type === "webhook") return " · dispara por POST /api/hooks/" + s.id;
+  if (tr.type === "watch") return "";
+  return " · próxima: " + (s.next_run||"—");
+}
+function schedTags(s){
+  let out = "";
+  if (s.retries > 0) out += ` <span class="tag">↻ retry ×${s.retries}${s.retries_used?` (${s.retries_used} usado(s))`:""}</span>`;
+  if (s.only_idle) out += ' <span class="tag idle">💤 só ociosa</span>';
+  return out;
+}
+function schedHist(s){
+  const h = s.history || [];
+  if (!h.length) return "";
+  return '<div class="hist-mini">' + h.map(x =>
+    `<div class="h">${x.status==="ok"?"✔":"✖"} ${esc(x.ts||"")} · ${x.duration_s}s — ${esc((x.output||"").slice(0,90))}</div>`
+  ).join("") + (s.history_n > h.length ? `<div class="h hint">+${s.history_n - h.length} execuções anteriores…</div>` : "") + "</div>";
+}
+
+/* ═══════════════ v3.0 — tema claro/escuro ═══════════════ */
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  const next = cur === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+  try{ localStorage.setItem("betterme-theme", next); }catch(e){}
+  $("theme-btn").textContent = next === "light" ? "☀" : "🌙";
+}
+(function initTheme(){
+  let th = "dark";
+  try{ th = localStorage.getItem("betterme-theme") || "dark"; }catch(e){}
+  document.documentElement.setAttribute("data-theme", th);
+  const tb = document.querySelector("#theme-btn"); if (tb) tb.textContent = th === "light" ? "☀" : "🌙";
+})();
+
+/* ═══════════════ v3.0 — notificações (sino) ═══════════════ */
+async function pollBell(){
+  try{
+    const d = await (await api("/api/notifications")).json();
+    const n = d.unread || 0, badge = $("bell-badge");
+    badge.textContent = n > 9 ? "9+" : n;
+    badge.className = "badge" + (n ? " show" : "");
+    if ($("notifbox").classList.contains("show")) renderNotifs(d.items || []);
+  }catch(e){}
+}
+function toggleBell(){
+  const box = $("notifbox");
+  if (box.classList.contains("show")){ box.classList.remove("show"); return; }
+  box.classList.add("show");
+  pollBell();
+  api("/api/notifications/read", {method:"POST"}).then(()=>setTimeout(pollBell, 400)).catch(()=>{});
+}
+function renderNotifs(items){
+  $("notifbox").innerHTML = items.length
+    ? items.map(n=>`<div class="notif${n.read?"":" unread"}"><b>${esc(n.title)}</b>` +
+        (n.body ? `<span class="hint">${esc(n.body)}</span>` : "") +
+        `<div class="when">${esc(n.ts||"")}</div></div>`).join("")
+    : '<div class="hint" style="padding:8px">sem notificações — falhas de tarefas e reinícios de MCP aparecem aqui.</div>';
+}
+setInterval(pollBell, 30000); pollBell();
+
+/* ═══════════════ v3.0 — auditoria ═══════════════ */
+let AUDIT_TIMER = null;
+function auditDeb(){ if (AUDIT_TIMER) clearTimeout(AUDIT_TIMER); AUDIT_TIMER = setTimeout(loadAudit, 300); }
+async function loadAudit(){
+  try{
+    const ag = $("audit-agent").value, tool = $("audit-tool").value.trim();
+    const lim = $("audit-limit").value;
+    const d = await (await api(`/api/audit?agent=${encodeURIComponent(ag)}&tool=${encodeURIComponent(tool)}&limit=${lim}`)).json();
+    const sum = (d.summary || []);
+    $("audit-summary").innerHTML = sum.length
+      ? "mais usadas no mês: " + sum.map(s=>`<span class="tag" style="cursor:default">${esc(s.tool)} ×${s.count}${s.fails?` <b style="color:var(--err)">(${s.fails} falhas)</b>`:""}</span>`).join(" ")
+      : "nenhuma ação registrada ainda — use o agente e a trilha aparece aqui.";
+    const recs = d.records || [];
+    $("audit-list").innerHTML = recs.length
+      ? recs.map(r=>`<div class="auditrow">
+          <span class="ts">${esc(r.ts||"")}</span>
+          <span>${r.agent==="claude"?"🔌":(r.agent==="operador"?"👤":"◈")}</span>
+          <span class="tool">${esc(r.tool||"")}</span>
+          <span class="out" title="${esc(r.output||"")}">${r.ok?"✔":"<b style=\"color:var(--err)\">✖</b>"} ${esc((r.output||"").slice(0,150))}</span>
+        </div>`).join("")
+      : '<div class="hint">nada encontrado com esses filtros.</div>';
+  }catch(e){ $("audit-list").innerHTML = '<div class="hint">sem dados ('+esc(e.message)+')</div>'; }
+}
+
+/* ═══════════════ v3.0 — métricas (painel) ═══════════════ */
+async function loadOrchStats(){
+  try{
+    const r = await api("/api/orchestrator/stats"); const d = await r.json();
+    $("orch-total").textContent = d.total || "0";
+    $("orch-1a").textContent = (d.aprov_1a_pct != null) ? d.aprov_1a_pct + "%" : "—";
+    $("orch-tent").textContent = d.tentativas_media != null ? d.tentativas_media : "—";
+    $("orch-dur").textContent = (d.dur_media_s != null) ? d.dur_media_s + "s" : "—";
+    $("orch-edits").textContent = d.edicoes_operador || 0;
+    const dias = d.por_dia || [];
+    const max = Math.max(1, ...dias.map(x=>x[1]));
+    $("orch-days").innerHTML = dias.length
+      ? dias.map(x=>'<div class="h">'+esc(x[0].slice(5))+' '+'█'.repeat(Math.max(1,Math.round(x[1]/max*12)))+' '+x[1]+'</div>').join("")
+      : '<div class="h">sem tasks ainda — peça uma ação no chat</div>';
+    $("orch-skills").innerHTML = (d.skills_top || [])
+      .map(s=>'<span class="tag trig">✦ '+esc(s[0])+' ×'+s[1]+'</span>').join(" ");
+  }catch(e){}
+}
+async function autoAssign(){
+  try{
+    toast("✨ escolhendo os melhores modelos para cada papel…");
+    const r = await api("/api/ollama/auto-assign", {method:"POST", body:"{}"});
+    const d = await r.json();
+    if (d.ok){
+      const ic = {chat:"💬", orchestrator:"🎯", reviewer:"🔍", executor:"⚡", claude:"🔌"};
+      toast("✔ " + Object.entries(d.assignments).map(([k,v])=>ic[k]+" "+(v||"herda 💬")).join(" · "));
+      loadModels();
+      loadSettings();
+    } else { toast("✖ " + (d.msg || "falhou")); }
+  }catch(e){ toast("✖ " + e.message); }
+}
+async function loadPerf(){
+  try{
+    const d = await (await api("/api/metrics?limit=30")).json();
+    const s = d.summary || {};
+    $("perf-n").textContent = s.n || 0;
+    $("perf-toks").textContent = s.avg_tok_s != null ? s.avg_tok_s : "—";
+    $("perf-dur").textContent = s.avg_duration_s != null ? (s.avg_duration_s + "s") : "—";
+    const spark = (s.spark || []).filter(x => x != null);
+    const svg = $("perf-spark");
+    if (spark.length >= 2){
+      const max = Math.max(...spark), min = Math.min(...spark);
+      const rng = (max - min) || 1;
+      const pts = spark.map((v,i)=>
+        `${(i/(spark.length-1))*300},${44 - ((v-min)/rng)*40}`).join(" ");
+      svg.innerHTML = `<polyline points="${pts}" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linejoin="round"/>` +
+        spark.map((v,i)=>`<circle cx="${(i/(spark.length-1))*300}" cy="${44-((v-min)/rng)*40}" r="1.6" fill="var(--acc2)"/>`).join("");
+    } else {
+      svg.innerHTML = '<text x="150" y="26" text-anchor="middle" fill="var(--faint)" font-size="11">sem dados ainda — converse com o agente</text>';
+    }
+  }catch(e){}
+}
+setInterval(()=>{ if (state.page==="painel"){ loadPerf(); loadOrchStats(); } }, 15000);
+
+/* ═══════════════ v3.0 — receitas prontas ═══════════════ */
+async function loadRecipes(){
+  try{
+    const d = await (await api("/api/recipes")).json();
+    const rs = d.recipes || [];
+    $("recipes-grid").innerHTML = rs.map(r=>`
+      <div class="recipe">
+        <div class="ttl">${r.icon} ${esc(r.title)}</div>
+        <div class="desc">${esc(r.desc)}</div>
+        <div class="hint" style="margin-bottom:8px">${esc(r.when)}</div>
+        <button class="b small primary" onclick="recipeAdd('${esc(r.id)}')">ativar</button>
+      </div>`).join("");
+    (window.RECIPES = rs);
+  }catch(e){}
+}
+async function recipeAdd(id){
+  const r = (window.RECIPES || []).find(x=>x.id === id);
+  if (!r) return;
+  const resp = await api("/api/schedules", {method:"POST", body: JSON.stringify(
+    {input: r.input, when: r.when, agent: r.agent})});
+  const j = await resp.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  loadSchedules();
+}
+
+/* ═══════════════ v3.0 — exportar conversa ═══════════════ */
+function exportConv(){
+  const sid = state.sessionId;
+  if (!sid){ toast("nenhuma conversa ativa para exportar", true); return; }
+  const tok = state.token || "";
+  window.open("/api/conversations/" + sid + "/export?fmt=md" + (tok ? "&token=" + encodeURIComponent(tok) : ""), "_blank");
+}
+
+/* ═══════════════ v3.0 — doctor (wizard de primeira execução) ═══════════════ */
+async function runDoctorWizard(){
+  try{
+    const d = await (await api("/api/doctor")).json();
+    const checks = d.checks || [];
+    const criticos = checks.filter(c=>!c.ok && !c.optional);
+    if (!criticos.length) return;
+    let dismissed = "";
+    try{ dismissed = localStorage.getItem("betterme-doctor-dismissed") || ""; }catch(e){}
+    if (dismissed === "v3") return;
+    $("doctor-list").innerHTML = checks.map(c=>`
+      <div class="docrow">
+        <span class="mark">${c.ok ? "✔" : (c.optional ? "⚠" : "✖")}</span>
+        <span><b>${esc(c.name)}</b> — <span class="hint">${esc(c.detail)}</span>
+          ${c.ok ? "" : `<div class="fix">→ ${esc(c.fix)}</div>`}</span>
+      </div>`).join("");
+    $("doctor-modal").classList.add("show");
+  }catch(e){}
+}
+function closeDoctor(never){
+  $("doctor-modal").classList.remove("show");
+  if (never){ try{ localStorage.setItem("betterme-doctor-dismissed", "v3"); }catch(e){} }
+}
+setTimeout(runDoctorWizard, 1200);
+
+/* ═══════════════ v3.0 — MCP: adicionar servidor ═══════════════ */
+async function mcpAdd(){
+  const name = $("mcp-name").value.trim(), url = $("mcp-url").value.trim(),
+        command = $("mcp-command").value.trim(), args = $("mcp-args").value.trim();
+  if (!name){ toast("dê um nome ao servidor", true); return; }
+  if (!url && !command){ toast("preencha a url OU o comando", true); return; }
+  const body = {name};
+  if (url) body.url = url;
+  if (command){ body.command = command; if (args) body.args = args.split(/\s+/); }
+  const r = await api("/api/mcp/add", {method:"POST", body: JSON.stringify(body)});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  if (j.ok){ $("mcp-name").value=""; $("mcp-url").value=""; $("mcp-command").value=""; $("mcp-args").value=""; refresh(); }
+}
+
+/* ═══════════════ memória ═══════════════ */
+async function loadMemory(){
+  try{
+    const r = await api("/api/memory"); const d = await r.json();
+    const facts = d.facts || [];
+    const el = $("mem-list");
+    $("mem-count").textContent = facts.length ? facts.length+" fato(s) guardado(s)" : "";
+    if (!facts.length){
+      el.innerHTML = '<div class="hint">memória vazia — conte algo ao agente no chat, ou adicione um fato acima.</div>';
+      return;
+    }
+    el.innerHTML = facts.map(f=>`
+      <div class="fact">
+        <span class="ic">🔖</span>
+        <span class="txt">${esc(f.text)}
+          <div class="meta">desde ${esc(f.created)}${f.edited?` · editado ${esc(f.edited)}`:""} · id ${esc(f.id)}</div></span>
+        <span class="btnrow" style="margin:0">
+          <button class="b small ghost" onclick="memEdit('${esc(f.id)}')">✏</button>
+          <button class="b small danger" onclick="memDel('${esc(f.id)}')">🗑</button>
+        </span>
+      </div>`).join("");
+  }catch(e){}
+}
+async function memAdd(){
+  const t = $("mem-new").value.trim();
+  if (!t){ toast("escreva o que devo lembrar", true); return; }
+  const r = await api("/api/memory", {method:"POST", body: JSON.stringify({text:t})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  if (j.ok) $("mem-new").value="";
+  loadMemory();
+}
+async function memEdit(id){
+  let f = null;
+  try{ const d = await (await api("/api/memory")).json(); f = (d.facts||[]).find(x=>x.id===id); }catch(e){}
+  if (!f) return;
+  const nt = prompt("editar fato da memória:", f.text);
+  if (nt===null || !nt.trim()) return;
+  const j = await (await api("/api/memory/update", {method:"POST", body: JSON.stringify({id, text:nt.trim()})})).json();
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  loadMemory();
+}
+async function memDel(id){
+  if (!confirm("apagar este fato da memória?")) return;
+  await api("/api/memory/delete", {method:"POST", body: JSON.stringify({id})});
+  loadMemory();
+}
+
+/* ═══════════════ execução ao vivo ═══════════════ */
+let LIVE_TIMER = null, LIVE_ID = null;
+function fmtDur(s){ s = Math.max(0, s||0); return s>=60 ? Math.floor(s/60)+"m"+String(Math.round(s%60)).padStart(2,"0")+"s" : (Math.round(s*10)/10)+"s"; }
+async function openLive(id){
+  LIVE_ID = id;
+  $("live-modal").classList.add("show");
+  $("live-box").textContent = "conectando…";
+  await refreshLive();
+  if (LIVE_TIMER) clearInterval(LIVE_TIMER);
+  LIVE_TIMER = setInterval(refreshLive, 1500);
+}
+function closeLive(){
+  $("live-modal").classList.remove("show");
+  if (LIVE_TIMER){ clearInterval(LIVE_TIMER); LIVE_TIMER = null; }
+  LIVE_ID = null;
+}
+async function refreshLive(){
+  if (!LIVE_ID) return;
+  let d;
+  try{
+    const r = await api("/api/schedules/live?id="+encodeURIComponent(LIVE_ID));
+    d = await r.json();
+  }catch(e){ return; }
+  const box = $("live-box");
+  if (!d.ok){
+    $("live-dot").style.display = "none";
+    box.innerHTML = '<span class="err">'+esc(d.msg||"sem dados ao vivo")+"</span>";
+    return;
+  }
+  const L = d.live;
+  $("live-dot").style.display = L.running ? "inline-block" : "none";
+  $("live-title").textContent = "👁 " + (L.input||"").slice(0,90);
+  const el2 = (Date.now()/1000-L.t0);
+  const tps = (L.running && el2 > 2) ? " · " + ((L.tokens||0)/el2).toFixed(1) + " tok/s" : "";
+  $("live-meta").textContent = (L.running ? "⏱ "+fmtDur(el2)+tps : "finalizada em ⏱ "+fmtDur(L.duration_s)) + " · " + (L.tokens||0) + " tokens";
+  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  box.innerHTML = (L.events||[]).map(e=>{
+    if (e.type==="step")        return '<span class="ln">── passo '+e.step+(e.t!=null?' · +'+e.t+'s':'')+' ──</span>';
+    if (e.type==="note")        return '<span class="ln">ℹ '+esc(e.message||"")+'</span>';
+    if (e.type==="tool_start")  return '⚙ <b>'+esc(e.name)+'</b> '+esc(JSON.stringify(e.args||{}).slice(0,160));
+    if (e.type==="tool_end")    return '<span class="'+(e.ok?"ok":"err")+'">'+(e.ok?"✔":"✖")+" "+esc(e.name)+"</span>\n"+esc((e.output||"").slice(0,600));
+    if (e.type==="done")        return '<span class="ok">✅ resposta final:</span>\n'+esc(e.message||"");
+    if (e.type==="error")       return '<span class="err">✖ '+esc(e.message||"")+"</span>";
+    if (e.type==="cancelled")   return '<span class="warn">⏹ interrompida</span>';
+    return "";
+  }).join("\n") + (L.running ? "\n\n<span class='ln'>✍ gerando… ("+(L.tokens||0)+" tokens)</span>" : "");
+  if (nearBottom) box.scrollTop = box.scrollHeight;
+}
+
+/* ═══════════════ página Ollama ═══════════════ */
+async function loadOllamaPage(){
+  try{
+    const [rs, rset] = await Promise.all([api("/api/status").then(r=>r.json()),
+                                          api("/api/settings").then(r=>r.json())]);
+    const ol = rs.ollama, set = rset.settings || {};
+    $("olp-state").innerHTML = !ol.installed ? '<span class="badge warn">⚠ NÃO INSTALADO</span>'
+      : (ol.running ? '<span class="badge on">● LIGADO</span>' : '<span class="badge off">● DESLIGADO</span>');
+    $("olp-badge").textContent = rs.mock ? "simulado" : "";
+    $("olp-ver").textContent = ol.version || "—";
+    $("olp-pid").textContent = ol.pid || "—";
+    $("olp-up").textContent = ol.running ? fmtUp(ol.uptime_s) : "—";
+    $("olp-mem").textContent = ol.mem_mb ? ol.mem_mb + " MB" : "—";
+    $("olp-by").textContent = ol.managed_by || "—";
+    $("olp-boot").textContent = ol.boot_enabled ? "sim (systemd)" : "não";
+    $("olp-start").disabled = ol.running || !ol.installed;
+    $("olp-stop").disabled = !ol.running;
+    $("olp-url").value = set.ollama_url || "http://127.0.0.1:11434";
+    $("olp-auto").checked = !!set.auto_start_ollama;
+  }catch(e){}
+  loadModels();
+}
+async function ollamaAction2(a){
+  const r = await api("/api/ollama/"+a, {method:"POST"});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  loadOllamaPage(); refresh();
+}
+async function saveOllamaConn(){
+  const body = {ollama_url: $("olp-url").value.trim(), auto_start_ollama: $("olp-auto").checked};
+  const r = await api("/api/settings", {method:"POST", body: JSON.stringify(body)});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+}
+async function testConnection(){
+  const box = $("olp-test");
+  $("olp-testbtn").disabled = true;
+  box.innerHTML = '<div class="hint">verificando…</div>';
+  try{
+    const r = await api("/api/ollama/test", {method:"POST"});
+    const d = await r.json();
+    box.innerHTML = d.steps.map(s=>{
+      const cor = s.ok ? "var(--ok)" : "var(--err)";
+      const ico = s.ok ? "✔" : "✖";
+      return `<div class="kv"><span style="color:${cor};font-weight:700">${ico} ${esc(s.name)}</span>`+
+             `<span class="hint" style="max-width:62%;text-align:right">${esc(s.detail)}</span></div>`;
+    }).join("") + (d.ok ? '<div class="kv"><span style="color:var(--ok);font-weight:700">✔ conexão validada</span></div>'
+                            : '<div class="kv"><span style="color:var(--err);font-weight:700">✖ corrija os pontos acima</span></div>');
+  }catch(e){ box.innerHTML = '<div class="hint" style="color:var(--err)">falha: '+esc(e.message)+'</div>'; }
+  $("olp-testbtn").disabled = false;
+}
+const ROLE_INFO = {
+  chat:  {k:"model",             ic:"💬", nome:"chat"},
+  orchestrator: {k:"orchestrator_model", ic:"🎯", nome:"orquestrador"},
+  reviewer:     {k:"reviewer_model",     ic:"🔍", nome:"revisor"},
+  executor:     {k:"executor_model",     ic:"⚡", nome:"executor"},
+};
+async function loadModels(){
+  try{
+    const r = await api("/api/ollama/models"); const d = await r.json();
+    const loaded = (d.loaded||[]);
+    const roles = d.roles || {};
+    $("olp-loaded").textContent =
+      (d.models.length ? d.models.length + " instalado(s) · " : "") +
+      (loaded.length ? loaded.map(l=>l.name).join(", ")+" em memória" : "");
+    const el = $("olp-models");
+    let html = "";
+    if (d.server_off){
+      html += '<div class="hint" style="color:var(--warn);margin-bottom:8px">⚠ servidor Ollama desligado — ' +
+        (d.models.length
+          ? 'mostrando a última lista conhecida ('+esc(d.cached_at||"?")+')'
+          : 'ligue o servidor para listar (a lista fica em cache para a próxima)') + '</div>';
+    }
+    if (!d.models.length){
+      html += '<div class="hint">nenhum modelo listado — baixe um acima (ex.: hermes3:8b)' +
+        (d.server_off ? ' ou ligue o servidor' : '') + '</div>';
+      el.innerHTML = html; return;
+    }
+    el.innerHTML = html + d.models.map(m=>{
+      const meus = Object.keys(ROLE_INFO).filter(r=>roles[r]===m.name);
+      const claude = roles.claude===m.name ? ' <span class="tag">🔌 claude</span>' : "";
+      const chips = meus.map(r=>'<span class="tag trig">'+ROLE_INFO[r].ic+" "+ROLE_INFO[r].nome+"</span>").join(" ") + claude;
+      const btns = Object.keys(ROLE_INFO).map(r=>{
+        const ativo = roles[r]===m.name;
+        return '<button class="b small '+(ativo?"primary":"ghost")+'" title="definir como '+ROLE_INFO[r].nome+
+               '\' onclick="assignRole(\''+esc(m.name)+'\',\''+r+'\')">'+ROLE_INFO[r].ic+'</button>';
+      }).join("");
+      return `
+      <div class="task"><div class="top">
+        <span class="st ${m.current?"ok":"pend"}">${m.current?"em uso":"instalado"}</span>
+        <span class="input"><b>${esc(m.name)}</b> <span class="hint">· ${m.size_gb} GB · ${esc(m.modified)}</span>
+          ${chips?('<div style="margin-top:4px">'+chips+'</div>'):""}</span>
+        <span class="btnrow" style="margin:0">
+          ${btns}
+          <button class="b small danger" title="remover do disco" onclick="delModel('${esc(m.name)}')">🗑</button>
+        </span>
+      </div></div>`;}).join("");
+  }catch(e){}
+}
+async function assignRole(name, role){
+  // clica no papel que o modelo já exerce → limpa (volta ao padrão)
+  const r = await api("/api/ollama/models"); const d = await r.json().catch(()=>({roles:{}}));
+  const atual = (d.roles||{})[role];
+  const body = {}; body[ROLE_INFO[role].k] = (atual===name ? "" : name);
+  const rr = await api("/api/settings", {method:"POST", body: JSON.stringify(body)});
+  const j = await rr.json().catch(()=>({msg:"sem resposta"}));
+  toast(j.ok ? (body[ROLE_INFO[role].k]
+      ? ROLE_INFO[role].ic+" "+name+" → papel "+ROLE_INFO[role].nome
+      : "papel "+ROLE_INFO[role].nome+" voltou ao padrão") : "✖ "+j.msg, !j.ok);
+  loadModels(); refresh();
+}
+async function useModel(name){
+  const r = await api("/api/settings", {method:"POST", body: JSON.stringify({model: name})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ modelo atual: "+name : "✖ "+j.msg), !j.ok);
+  loadModels(); refresh();
+}
+async function delModel(name){
+  if (!confirm("remover o modelo "+name+" do disco?")) return;
+  const r = await api("/api/ollama/delete", {method:"POST", body: JSON.stringify({model: name})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); loadModels();
+}
+async function toggleBoot(){
+  let on = false;
+  try{ const s = await api("/api/status").then(x=>x.json()); on = !!s.ollama.boot_enabled; }catch(e){}
+  const rr = await api("/api/ollama/boot", {method:"POST", body: JSON.stringify({enable: !on})});
+  const j = await rr.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); loadOllamaPage();
+}
+async function pullModel(){
+  const name = $("olp-pullin").value.trim();
+  if (!name){ toast("informe o nome do modelo (ex.: hermes3:3b)", true); return; }
+  $("olp-pullbtn").disabled = true;
+  window.__pullingModel = name;
+  $("olp-pullcancel").style.display = "";
+  $("olp-progress").style.display = "";
+  $("olp-bar").style.width = "0%";
+  $("olp-status").textContent = "iniciando…";
+  try{
+    const r = await api("/api/ollama/pull", {method:"POST", body: JSON.stringify({model: name})});
+    const reader = r.body.getReader(); const dec = new TextDecoder();
+    let buf = "";
+    while (true){
+      const {done, value} = await reader.read(); if (done) break;
+      buf += dec.decode(value, {stream:true});
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0){
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl+1);
+        if (!line) continue;
+        let ev; try{ ev = JSON.parse(line); }catch(e){ continue; }
+        if (ev.type === "progress"){
+          if (ev.pct != null) $("olp-bar").style.width = ev.pct+"%";
+          $("olp-status").textContent = ev.status + (ev.pct != null ? " — "+ev.pct+"%" : "");
+        } else if (ev.type === "done"){
+          $("olp-pullcancel").style.display = "none";
+          $("olp-bar").style.width = "100%"; $("olp-status").textContent = "✔ "+ev.msg;
+          toast("✔ "+ev.msg); $("olp-pullin").value = ""; loadModels(); refresh();
+        } else if (ev.type === "error"){
+          $("olp-pullcancel").style.display = "none";
+          $("olp-status").textContent = "✖ "+ev.msg; toast(ev.msg, true);
+        }
+      }
+    }
+  }catch(e){ $("olp-status").textContent = "✖ falha: "+e.message; }
+  $("olp-pullbtn").disabled = false;
+}
+
+/* ═══════════════ MCP ═══════════════ */
+async function mcpStart(restart){
+  const r = await api(restart ? "/api/mcp/restart" : "/api/mcp/start", {method:"POST"});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); refresh();
+}
+
+/* ═══════════════ skills ═══════════════ */
+let SKILLS = [];
+async function loadSkills(){
+  try{
+    const r = await api("/api/skills"); const d = await r.json();
+    SKILLS = d.skills || [];
+    $("skill-count").textContent = SKILLS.length + " instalada(s)";
+    const el = $("skill-list");
+    if (!SKILLS.length){
+      el.innerHTML = '<div class="hint">nenhuma skill — instale do GitHub acima.</div>'; return;
+    }
+    el.innerHTML = SKILLS.map((s,i)=>`
+      <div class="task">
+        <div class="top">
+          <span class="st ${s.enabled?"ok":"err"}">${s.enabled?"habilitada":"desabilitada"}</span>
+          <span class="input"><b>${esc(s.name)}</b> <span class="hint">· ${esc(s.source)}</span><br>
+            <span class="hint">${esc(s.description).slice(0,220)}</span></span>
+        </div>
+        <div class="btnrow">
+          <button class="b small ghost" onclick="viewSkill(${i})">📄 ver SKILL.md</button>
+          <button class="b small" onclick="toggleSkill(${i})">${s.enabled?"⛔ desabilitar":"✅ habilitar"}</button>
+        </div>
+      </div>`).join("");
+  }catch(e){}
+}
+async function viewSkill(i){
+  const s = SKILLS[i]; if (!s) return;
+  const r = await api("/api/skills/content?path="+encodeURIComponent(s.skill_md));
+  const d = await r.json();
+  $("skill-view-name").textContent = s.name;
+  $("skill-view").textContent = d.ok ? d.content : ("ERRO: "+d.msg);
+  $("skill-view-card").style.display = "";
+  $("skill-view-card").scrollIntoView({behavior:"smooth"});
+}
+function closeSkillView(){ $("skill-view-card").style.display = "none"; }
+async function toggleSkill(i){
+  const s = SKILLS[i]; if (!s) return;
+  const r = await api("/api/skills/toggle", {method:"POST",
+    body: JSON.stringify({name: s.name, enabled: !s.enabled})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok); loadSkills();
+}
+async function installSkill(){
+  const repo = $("skill-repo").value.trim(), sub = $("skill-sub").value.trim();
+  if (!repo){ toast("informe owner/repo ou a URL", true); return; }
+  toast("baixando skills…");
+  const r = await api("/api/skills/install", {method:"POST",
+    body: JSON.stringify({repo, subpath: sub})});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  if (j.ok){ $("skill-repo").value = ""; $("skill-sub").value = ""; }
+  loadSkills();
+}
+
+/* ═══════════════ ajustes ═══════════════ */
+function fastMode(){
+  $("s-num_predict").value = 768; $("s-num_ctx").value = 4096; $("s-keep_alive").value = "1h";
+  saveSettings();
+  toast("⚡ modo rápido aplicado — e use um modelo 3B (ex.: llama3.2:3b) no campo 'modelo' para o maior ganho");
+}
+async function loadSettings(){
+  try{
+    const r = await api("/api/settings"); const d = await r.json();
+    const s = d.settings;
+    $("cfgpath").textContent = d.path;
+    $("s-model").value = s.model; $("s-max_steps").value = s.max_steps;
+    $("s-num_ctx").value = s.num_ctx; $("s-cmd_timeout").value = s.cmd_timeout;
+    $("s-temperature").value = s.temperature; $("s-system_prompt_extra").value = s.system_prompt_extra;
+    $("s-auth_token").value = s.auth_token || "";
+    $("s-sandbox").checked = !!s.sandbox; $("s-confirm_dangerous").checked = !!s.confirm_dangerous;
+    $("s-claude_use_ollama").checked = !!s.claude_use_ollama;
+    $("s-orchestrator_on").checked = s.orchestrator_on !== false;
+    $("s-reviewer_on").checked = s.reviewer_on !== false;
+    $("s-creation_approval").checked = s.creation_approval !== false;
+    $("s-orchestrator_model").value = s.orchestrator_model || "";
+    $("s-executor_model").value = s.executor_model || "";
+    $("s-reviewer_model").value = s.reviewer_model || ""; $("s-claude_model").value = s.claude_model || "";
+    $("s-web_access").checked = !!s.web_access;
+    $("s-stt_model").value = s.stt_model || "base"; $("s-stt_language").value = s.stt_language || "pt";
+    $("s-stt_autosend").checked = !!s.stt_autosend; window.STT_AUTOSEND = !!s.stt_autosend;
+    $("s-keep_alive").value = s.keep_alive || "30m"; $("s-num_predict").value = s.num_predict ?? 0;
+    const dl = $("modellist"); dl.innerHTML = "";
+    ((state.status&&state.status.ollama.models)||[]).forEach(m=>{
+      const o = document.createElement("option"); o.value = m; dl.appendChild(o);
+    });
+  }catch(e){}
+}
+async function saveSettings(){
+  const body = {
+    model: $("s-model").value.trim() || "hermes3:8b",
+    max_steps: +$("s-max_steps").value, num_ctx: +$("s-num_ctx").value,
+    cmd_timeout: +$("s-cmd_timeout").value, temperature: +$("s-temperature").value,
+    system_prompt_extra: $("s-system_prompt_extra").value,
+    auth_token: $("s-auth_token").value,
+    sandbox: $("s-sandbox").checked, confirm_dangerous: $("s-confirm_dangerous").checked,
+    claude_use_ollama: $("s-claude_use_ollama").checked, claude_model: $("s-claude_model").value.trim(),
+    orchestrator_on: $("s-orchestrator_on").checked, reviewer_on: $("s-reviewer_on").checked,
+    orchestrator_model: $("s-orchestrator_model").value.trim(), executor_model: $("s-executor_model").value.trim(),
+    reviewer_model: $("s-reviewer_model").value.trim(),
+    creation_approval: $("s-creation_approval").checked,
+    web_access: $("s-web_access").checked,
+    stt_model: $("s-stt_model").value, stt_language: $("s-stt_language").value.trim(),
+    stt_autosend: $("s-stt_autosend").checked,
+    keep_alive: $("s-keep_alive").value.trim() || "30m", num_predict: +$("s-num_predict").value || 0,
+  };
+  const r = await api("/api/settings", {method:"POST", body: JSON.stringify(body)});
+  const j = await r.json().catch(()=>({msg:"sem resposta"}));
+  toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  if (j.ok && body.auth_token){ state.token = body.auth_token; store("hermes_token", body.auth_token); }
+  refresh();
+}
+
+/* ═══════════════ token ═══════════════ */
+function saveToken(){
+  state.token = $("tokenin").value.trim();
+  store("hermes_token", state.token);
+  $("tokenbar").classList.remove("show");
+  startLog(); refresh(); toast("token aplicado");
+}
+
+/* ═══════════════ input ═══════════════ */
+function autoGrow(el){ el.style.height="auto"; el.style.height=Math.min(el.scrollHeight,160)+"px"; }
+$("chatin").addEventListener("input", e=>{ autoGrow(e.target); updateSlashMenu(); });
+$("chatin").addEventListener("keydown", e=>{
+  const menu = $("slashmenu");
+  const aberto = menu.classList.contains("show");
+  if (aberto && (e.key==="ArrowDown" || e.key==="ArrowUp" || e.key==="Tab")){
+    e.preventDefault();
+    const itens = menu.querySelectorAll(".it"); if (!itens.length) return;
+    if (e.key==="Tab" || e.key==="Enter"){ pickSlash(itens[Math.min(slashSel, itens.length-1)].dataset.c); return; }
+    slashSel = e.key==="ArrowDown" ? Math.min(slashSel+1, itens.length-1) : Math.max(slashSel-1, 0);
+    itens.forEach((el,i)=>el.classList.toggle("sel", i===slashSel));
+    return;
+  }
+  if (e.key==="Escape" && aberto){ menu.classList.remove("show"); return; }
+  if (e.key==="Enter" && !e.shiftKey){
+    e.preventDefault();
+    const txt = $("chatin").value.trim();
+    if (txt.startsWith("/")){
+      $("chatin").value=""; autoGrow($("chatin")); menu.classList.remove("show");
+      runSlash(txt);
+    } else sendChat();
+  }
+});
+
+/* ═══════════════ v3.4 — comandos / aprovação / por baixo dos panos ═══════════════ */
+const SLASH = [
+  {c:"/goal",    d:"define o objetivo da sessão (o orquestrador usa em cada task)"},
+  {c:"/reset",   d:"limpa o objetivo da sessão"},
+  {c:"/tools",   d:"ferramentas disponíveis ao agente"},
+  {c:"/skills",  d:"skills ativas (aplicadas automaticamente às tasks)"},
+  {c:"/tasks",   d:"últimas tasks do orquestrador"},
+  {c:"/memoria", d:"o que o agente lembra de você"},
+  {c:"/ajuda",   d:"lista os comandos"},
+];
+let slashSel = 0;
+function updateSlashMenu(){
+  const input = $("chatin"), menu = $("slashmenu");
+  const v = input.value;
+  if (!v.startsWith("/") || v.includes("\n")){ menu.classList.remove("show"); return; }
+  const q = v.slice(1).split(" ")[0].toLowerCase();
+  const itens = SLASH.filter(x=>x.c.slice(1).startsWith(q));
+  if (!itens.length){ menu.classList.remove("show"); return; }
+  slashSel = 0;
+  menu.innerHTML = itens.map(x=>'<div class="it" data-c="'+x.c+'"><b>'+x.c+'</b><span>'+esc(x.d)+'</span></div>').join("");
+  menu.querySelectorAll(".it").forEach(el=>el.addEventListener("click", ()=>pickSlash(el.dataset.c)));
+  menu.classList.add("show");
+}
+function pickSlash(c){
+  const input = $("chatin");
+  const args = input.value.split(" ").slice(1).join(" ");
+  input.value = c + (args ? " " + args : "");
+  $("slashmenu").classList.remove("show");
+  input.focus();
+}
+async function runSlash(text){
+  // v3.14.2 (bug de campo): guarda contra eco múltiplo — cada Enter
+  // durante a resposta disparava um POST novo (/goal aparecia 3×).
+  if (state.cmdBusy) return;
+  state.cmdBusy = true;
+  const d = document.createElement("div");
+  d.className = "syscmd";
+  const c = document.createElement("span"); c.className = "cmd";
+  c.textContent = text.split(" ")[0];
+  d.appendChild(c);
+  $("chatlog").appendChild(d); scrollChat();
+  const add = (txt)=> d.appendChild(document.createTextNode(txt));
+  try{
+    const r = await api("/api/chat/command", {method:"POST",
+      body: JSON.stringify({text: text, session_id: state.sessionId || ""})});
+    const j = await r.json().catch(()=>({msg:"sem resposta"}));
+    add(j.ok ? ("\n"+(j.output||"")) : ("\n✖ "+(j.msg||"erro")));
+  }catch(e){ add("\n✖ "+e.message); }
+  finally { state.cmdBusy = false; }
+  scrollChat();
+}
+function mkBtn(label, cls, fn){
+  const b = document.createElement("button");
+  b.className = "b small " + cls; b.textContent = label;
+  b.addEventListener("click", fn); return b;
+}
+function renderApproval(ev, target){
+  const card = document.createElement("div");
+  card.className = "approval"; card.dataset.id = ev.id || "";
+  const ttl = document.createElement("div"); ttl.className = "ttl";
+  ttl.textContent = (ev.kind === "entrega" ? "📦 " : "🔒 ") + (ev.msg || "aprovação necessária");
+  card.appendChild(ttl);
+  if (ev.kind === "entrega"){
+    const ta = document.createElement("textarea"); ta.className = "ed-txt"; ta.rows = 10;
+    ta.value = ev.texto || ""; card.appendChild(ta);
+    const acts = document.createElement("div"); acts.className = "acts";
+    acts.appendChild(mkBtn("✅ Entregar", "primary", ()=>approveTask(card, "entregar")));
+    acts.appendChild(mkBtn("💾 Entregar editada", "ghost", ()=>approveTask(card, "editar")));
+    acts.appendChild(mkBtn("🔁 Refazer", "ghost", ()=>approveTask(card, "refazer")));
+    card.appendChild(acts);
+  } else {
+    const corpo = document.createElement("div"); corpo.className = "corpo";
+    let txt = "🎯 " + (ev.objetivo || "");
+    (ev.passos||[]).forEach(p=> txt += "\n  • " + p);
+    if ((ev.skills||[]).length) txt += "\n✦ skills: " + ev.skills.join(", ");
+    corpo.textContent = txt; card.appendChild(corpo);
+    const ed = document.createElement("div"); ed.style.display = "none";
+    const obj = document.createElement("input"); obj.type = "text"; obj.className = "ed-obj"; obj.value = ev.objetivo || "";
+    const ps = document.createElement("textarea"); ps.className = "ed-passos"; ps.rows = 3; ps.value = (ev.passos||[]).join("\n");
+    ed.appendChild(obj); ed.appendChild(ps); card.appendChild(ed);
+    const acts = document.createElement("div"); acts.className = "acts";
+    acts.appendChild(mkBtn("✅ Aprovar", "primary", ()=>approveTask(card, "aprovar")));
+    acts.appendChild(mkBtn("✏️ Editar", "ghost", ()=>{
+      const aberto = ed.style.display !== "none";
+      ed.style.display = aberto ? "none" : "";
+      if (!aberto) obj.focus();
+    }));
+    acts.appendChild(mkBtn("⛔ Cancelar", "danger", ()=>approveTask(card, "cancelar")));
+    card.appendChild(acts);
+  }
+  const st = document.createElement("div"); st.className = "status";
+  st.textContent = "aguardando sua decisão…";
+  card.appendChild(st);
+  (target || $("chatlog")).appendChild(card);
+  if (!target) scrollChat();
+}
+async function approveTask(card, action){
+  const st = card.querySelector(".status");
+  let edit = null;
+  if (action === "editar"){
+    const ta = card.querySelector(".ed-txt");
+    edit = ta ? {texto: ta.value}
+              : {objetivo: card.querySelector(".ed-obj").value,
+                 passos: card.querySelector(".ed-passos").value.split("\n").map(s=>s.trim()).filter(Boolean)};
+  }
+  card.querySelectorAll("button").forEach(b=>b.disabled = true);
+  st.textContent = "enviando decisão…";
+  try{
+    const r = await api("/api/chat/approve", {method:"POST",
+      body: JSON.stringify({id: card.dataset.id, action: action, edit: edit})});
+    const j = await r.json().catch(()=>({msg:"sem resposta"}));
+    st.textContent = j.ok ? ("✓ " + j.msg) : ("✖ " + j.msg);
+    if (!j.ok) card.querySelectorAll("button").forEach(b=>b.disabled = false);
+  }catch(e){
+    st.textContent = "✖ " + e.message;
+    card.querySelectorAll("button").forEach(b=>b.disabled = false);
+  }
+}
+/* ── v3.11: pendências que sobreviveram a restart ── */
+const _pendOff = new Set();
+async function loadPending(){
+  try{
+    if (state.page!=="chat") return;
+    const r = await api("/api/approvals/pending"); const d = await r.json();
+    let b = $("pending-box");
+    const pend = d.pending || [];
+    const ret = (d.retomadas || []).filter(x => !x.done || !_pendOff.has(x.id));
+    if (!pend.length && !ret.length){ if (b) b.remove(); return; }
+    if (b && b.contains(document.activeElement)) return;  // não atrapalhar edição em curso
+    if (!b){
+      b = document.createElement("div");
+      b.id = "pending-box";
+      b.style.cssText = "display:flex;flex-direction:column;gap:10px;margin:0 0 10px 0";
+      $("chatlog").parentNode.insertBefore(b, $("chatlog"));
+    }
+    b.innerHTML = "";
+    for (const p of pend){
+      renderApproval({id: p.id, kind: p.kind,
+        msg: p.kind === "plano" ? "🔒 plano pendente de antes do restart"
+                                : "📦 entrega pendente de antes do restart",
+        objetivo: p.objetivo, passos: p.passos || [], skills: [],
+        texto: p.texto || ""}, b);
+    }
+    for (const tk of ret){
+      const c = document.createElement("div"); c.className = "approval";
+      const ttl = document.createElement("div"); ttl.className = "ttl";
+      ttl.textContent = tk.done ? "✅ task " + tk.id + " concluída (retomada)"
+                                : "🔁 task " + tk.id + " retomada — executando…";
+      c.appendChild(ttl);
+      const corpo = document.createElement("div"); corpo.className = "corpo";
+      corpo.style.whiteSpace = "pre-wrap";
+      corpo.textContent = tk.done ? (tk.final || "") :
+        (((tk.events || []).map(e => e.message || e.msg || "").join("\n")) || "executando…");
+      c.appendChild(corpo);
+      if (tk.done){
+        const acts = document.createElement("div"); acts.className = "acts";
+        acts.appendChild(mkBtn("✖ Fechar", "ghost", ()=>{ _pendOff.add(tk.id); loadPending(); }));
+        c.appendChild(acts);
+      }
+      b.appendChild(c);
+    }
+  }catch(e){}
+}
+setInterval(()=>{ if (state.page==="chat") loadPending(); }, 8000);
+
+function renderBrain(ev){
+  const d = document.createElement("details"); d.className = "brain";
+  const s = document.createElement("summary"); s.textContent = ev.stage || "🔬";
+  const pre = document.createElement("pre");
+  try{ pre.textContent = JSON.stringify(ev.data, null, 2); }
+  catch(_){ pre.textContent = String(ev.data); }
+  d.appendChild(s); d.appendChild(pre);
+  $("chatlog").appendChild(d); scrollChat();
+}
+function toggleBrain(){
+  state.brain = !state.brain;
+  store("hermes_brain", state.brain ? "1" : "0");
+  $("btn-brain").classList.toggle("primary", state.brain);
+  toast(state.brain ? "🔬 por baixo dos panos: LIGADO — decisões do orquestrador, skills e revisor aparecem na conversa"
+                    : "🔬 por baixo dos panos: desligado (🧾 fluxo segue disponível)");
+}
+function openRawLog(){
+  if (LIVE_TIMER){ clearInterval(LIVE_TIMER); LIVE_TIMER = null; }
+  LIVE_ID = null;
+  $("live-modal").classList.add("show");
+  $("live-dot").style.display = "none";
+  $("live-title").textContent = "🧾 por baixo dos panos — fluxo bruto desta conversa";
+  const evs = state.rawLog || [];
+  $("live-meta").textContent = evs.length + " eventos";
+  $("live-box").textContent = evs.length
+    ? evs.map(e=>JSON.stringify(e)).join("\n")
+    : "(vazio — mande uma mensagem no chat e abra de novo)";
+}
+
+/* ═══════════════ boot ═══════════════ */
+state.token = store("hermes_token") || "";
+state.brain = store("hermes_brain") === "1";
+if (state.brain) $("btn-brain").classList.add("primary");
+if (state.token) $("tokenin").value = state.token;
+startLog();
+restoreLastConversation();   // a última conversa volta sozinha (nem F5 perde)
+
+/* ═══════════════ ferramentas (funções manuais do agente) ═══════════════ */
+let TOOL_FILES = [], TOOL_BASE = "";
+async function toolRun(){
+  const c = $("tool-cmd").value.trim();
+  if (!c){ toast("digite um comando", true); return; }
+  const out = $("tool-out");
+  out.style.display = ""; out.textContent = "$ " + c + "\n…";
+  try{
+    const j = await (await api("/api/tools/run", {method:"POST", body: JSON.stringify({command:c})})).json();
+    out.textContent = j.output || "(sem saída)";
+  }catch(e){ out.textContent = "✖ falha: " + e.message; }
+}
+async function toolSysInfo(){
+  const out = $("tool-out");
+  out.style.display = ""; out.textContent = "coletando…";
+  try{
+    const j = await (await api("/api/tools/sys_info", {method:"POST", body:"{}"})).json();
+    out.textContent = j.output || "(sem saída)";
+  }catch(e){ out.textContent = "✖ falha: " + e.message; }
+}
+async function toolList(){
+  const path = $("tool-path").value.trim() || ".";
+  try{
+    const j = await (await api("/api/tools/list_dir", {method:"POST", body: JSON.stringify({path})})).json();
+    const el = $("tool-files");
+    if (!j.ok){ el.innerHTML = '<span class="hint">✖ ' + esc(j.output) + "</span>"; return; }
+    const lines = (j.output||"").split("\n");
+    TOOL_BASE = (lines[0]||"").replace(/\s+\(\d+ entradas\)\s*$/,"").trim();
+    TOOL_FILES = [];
+    let chips = "";
+    lines.slice(1).forEach(l=>{
+      const m = l.match(/^\[(dir|file)\] (.*)$/);
+      if (!m) return;
+      let nm = m[2].replace(/\s+\d+ B$/, "");
+      const i = TOOL_FILES.length;
+      TOOL_FILES.push({kind:m[1], name:nm});
+      chips += `<button class="chip" onclick="toolNav(${i})">${m[1]==="dir"?"📁":"📄"} ${esc(nm)}</button> `;
+    });
+    el.innerHTML = chips || '<span class="hint">(diretório vazio)</span>';
+  }catch(e){ $("tool-files").innerHTML = '<span class="hint">✖ '+esc(e.message)+"</span>"; }
+}
+function toolNav(i){
+  const f = TOOL_FILES[i]; if (!f) return;
+  $("tool-path").value = TOOL_BASE ? TOOL_BASE + "/" + f.name : f.name;
+  if (f.kind === "dir") toolList(); else toolRead();
+}
+async function toolRead(){
+  const path = $("tool-path").value.trim();
+  if (!path){ toast("informe o caminho do arquivo", true); return; }
+  try{
+    const j = await (await api("/api/tools/read_file", {method:"POST", body: JSON.stringify({path})})).json();
+    if (j.ok){ $("tool-filecontent").value = j.output; $("tool-filemsg").textContent = "📄 " + path; }
+    else { $("tool-filemsg").textContent = "✖ " + j.output; }
+  }catch(e){ $("tool-filemsg").textContent = "✖ " + e.message; }
+}
+async function toolWrite(){
+  const path = $("tool-path").value.trim();
+  if (!path){ toast("informe o caminho do arquivo", true); return; }
+  try{
+    const j = await (await api("/api/tools/write_file", {method:"POST",
+      body: JSON.stringify({path, content: $("tool-filecontent").value})})).json();
+    toast((j.ok?"✔ ":"✖ ")+j.output, !j.ok);
+    if (j.ok) toolList();
+  }catch(e){ toast("✖ "+e.message, true); }
+}
+async function loadToolsPage(){
+  try{
+    const d = await (await api("/api/tools")).json();
+    const all = [
+      ...(d.tools||[]).map(t=>({n:t.name, d:t.description, k:"nativa"})),
+      ...(d.mcp||[]).map(t=>({n:t.name, d:t.description, k:"MCP"})),
+    ];
+    $("tool-count").textContent = all.length + " função(ões)";
+    $("tool-catalog").innerHTML = all.map(t=>`
+      <div class="toolcard">
+        <b>${esc(t.n)}</b> <span class="hint">· ${esc(t.k)}</span>
+        <div class="hint" style="margin-top:4px">${esc((t.d||"").split("\n")[0].slice(0,150))}</div>
+      </div>`).join("") || '<span class="hint">nenhuma</span>';
+  }catch(e){}
+}
+
+/* ═══════════════ 🎤 ditado por voz (Whisper local) ═══════════════ */
+let mediaRec = null, micChunks = [];
+async function toggleMic(){
+  if (mediaRec && mediaRec.state === "recording"){ mediaRec.stop(); return; }
+  if (!navigator.mediaDevices || !window.MediaRecorder){
+    toast("este navegador não suporta gravação de áudio", true); return;
+  }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    mediaRec = new MediaRecorder(stream);
+    micChunks = [];
+    mediaRec.ondataavailable = e => { if (e.data.size) micChunks.push(e.data); };
+    mediaRec.onstop = async () => {
+      stream.getTracks().forEach(t=>t.stop());
+      $("btn-mic").className = "b ghost"; $("btn-mic").textContent = "🎤";
+      const blob = new Blob(micChunks, {type: mediaRec.mimeType || "audio/webm"});
+      if (!blob.size){ toast("nada gravado", true); return; }
+      await transcribeBlob(blob);
+    };
+    mediaRec.start();
+    $("btn-mic").className = "b danger"; $("btn-mic").textContent = "⏹";
+    toast("🎤 gravando — clique ⏹ quando terminar de falar");
+    $("chatin").placeholder = "🎙 gravando…";
+    setTimeout(()=>{ if (mediaRec && mediaRec.state === "recording")
+      $("chatin").placeholder = "fale e clique ⏹ (ou continue digitando)…"; }, 1200);
+  }catch(e){
+    toast("microfone indisponível: "+e.message, true);
+  }
+}
+async function transcribeBlob(blob){
+  toast("🎧 transcrevendo com o Whisper…");
+  const fd = new FormData(); fd.append("audio", blob, "dictado.webm");
+  try{
+    const r = await api("/api/stt", {method:"POST", body: fd});
+    const j = await r.json();
+    if (!j.ok){ toast((j.msg||"falha na transcrição"), true); return; }
+    if (!j.text){ toast("não entendi nada — tente falar mais perto do microfone", true); return; }
+    const inp = $("chatin");
+    inp.value = (inp.value ? inp.value.trimEnd()+" " : "") + j.text;
+    inp.placeholder = "fale com o Betterme…  (Enter envia · Shift+Enter quebra linha)";
+    autoGrow(inp); inp.focus();
+    toast("🎧 "+(j.text.length>48 ? j.text.slice(0,48)+"…" : j.text));
+    if (window.STT_AUTOSEND !== false) sendChat();
+  }catch(e){
+    inp_placeholder_reset();
+    toast("falha: "+e.message, true);
+  }
+}
+function inp_placeholder_reset(){
+  $("chatin").placeholder = "fale com o Betterme…  (Enter envia · Shift+Enter quebra linha)";
+}
+
+/* ═══════════════ web (busca + páginas) ═══════════════ */
+async function webSearch(){
+  const q = $("web-q").value.trim();
+  if (!q){ toast("digite o que pesquisar", true); return; }
+  const out = $("web-out");
+  out.style.display = ""; out.textContent = "🔍 pesquisando…";
+  try{
+    const j = await (await api("/api/tools/web_search", {method:"POST", body: JSON.stringify({query:q})})).json();
+    out.textContent = j.output || "(sem resultados)";
+  }catch(e){ out.textContent = "✖ falha: "+e.message; }
+}
+async function webFetch(){
+  const u = $("web-url").value.trim();
+  if (!u){ toast("informe o endereço (https://…)", true); return; }
+  const out = $("web-out");
+  out.style.display = ""; out.textContent = "🌐 abrindo…";
+  try{
+    const j = await (await api("/api/tools/web_fetch", {method:"POST", body: JSON.stringify({url:u})})).json();
+    out.textContent = j.output || "(vazio)";
+  }catch(e){ out.textContent = "✖ falha: "+e.message; }
+}
+
+/* ═══════════════ catálogo de modelos (LMMs) ═══════════════ */
+async function searchLibrary(){
+  const q = $("olp-libq").value.trim();
+  const el = $("olp-lib");
+  el.innerHTML = '<span class="hint">buscando…</span>';
+  try{
+    const d = await (await api("/api/ollama/library" + (q ? "?q=" + encodeURIComponent(q) : ""))).json();
+    const ms = d.models || [];
+    if (!ms.length){
+      el.innerHTML = '<span class="hint">nada encontrado — digite o nome completo (ex.: qwen2.5:7b) e use ⬇ baixar.</span>';
+      return;
+    }
+    el.innerHTML = '<div class="hint" style="margin-bottom:6px">' + ms.length + " modelo(s) · fonte: " +
+      esc(d.source||"—") + " · clique em ⬇ para baixar (a tag padrão vem sem sufixo; use o campo manual p/ tags específicas)</div>" +
+      ms.map(m=>`
+      <div class="librow">
+        <span class="input"><b>${esc(m.name)}</b><br>
+          <span class="hint">${esc(m.desc||"—")}${m.caps?" · "+esc(m.caps):""}${m.sizes?" · "+esc(m.sizes):""}</span></span>
+        <button class="b small primary" onclick="pullFromLib('${esc(m.name)}')">⬇ baixar</button>
+      </div>`).join("");
+  }catch(e){
+    el.innerHTML = '<span class="hint">falha na busca — use o campo manual abaixo.</span>';
+  }
+}
+function pullFromLib(name){
+  $("olp-pullin").value = name;
+  pullModel();
+}
+async function cancelPull(){
+  const name = window.__pullingModel || $("olp-pullin").value.trim();
+  if (!name){ toast("nenhum download em andamento", true); return; }
+  try{
+    const j = await (await api("/api/ollama/pull/cancel", {method:"POST", body: JSON.stringify({model:name})})).json();
+    toast((j.ok?"✔ ":"✖ ")+j.msg, !j.ok);
+  }catch(e){ toast("✖ "+e.message, true); }
+}
+
+/* ═══════════════ conversas: nova + busca ═══════════════ */
+function newConversation(){
+  if (state.sending){ toast("aguarde a resposta terminar…", true); return; }
+  state.history = []; state.sessionId = null; state.agentInUse = null;
+  $("chatlog").innerHTML = "";
+  $("chat-session").textContent = "◈ nova conversa";
+  $("hist-panel").style.display = "none";
+  api("/api/conversations/current", {method:"POST", body: JSON.stringify({id: null})});
+  loadConversations();
+  toast("nova conversa — as anteriores seguem em 🕘 conversas");
+  $("chatin").focus();
+}
+let HIST_TIMER = null;
+function searchConversations(){
+  if (HIST_TIMER) clearTimeout(HIST_TIMER);
+  HIST_TIMER = setTimeout(doSearchConversations, 250);
+}
+async function doSearchConversations(){
+  const q = $("hist-search").value.trim();
+  const res = $("hist-results"), lst = $("hist-list");
+  if (q.length < 2){ res.style.display = "none"; res.innerHTML = ""; lst.style.display = ""; return; }
+  try{
+    const d = await (await api("/api/conversations/search?q=" + encodeURIComponent(q))).json();
+    const rs = d.results || [];
+    lst.style.display = "none"; res.style.display = "";
+    res.innerHTML = rs.length ? rs.map(r=>`
+      <div class="task"><div class="top">
+        <span class="input"><b>${esc(r.title)}</b><br>
+          <span class="hint">${r.role==="user"?"👤":"🤖"} ${esc(r.preview)}</span>
+          <div class="hint">${esc(r.updated_at)}</div></span>
+        <span class="btnrow" style="margin:0">
+          <button class="b small primary" onclick="openConversation('${esc(r.id)}')">abrir</button>
+        </span>
+      </div></div>`).join("")
+      : '<div class="hint">nenhuma conversa contém “'+esc(q)+'”</div>';
+  }catch(e){}
+}
+</script>
+
+<div class="modalwrap" id="doctor-modal">
+  <div class="modal">
+    <h3 style="margin-bottom:6px">🩺 Doctor — checagem do ambiente</h3>
+    <div class="hint" style="margin-bottom:10px">Alguns itens precisam da sua atenção para o Betterme render o máximo:</div>
+    <div id="doctor-list"></div>
+    <div class="btnrow" style="margin-top:16px">
+      <button class="b primary" onclick="closeDoctor()">entendi — verificar depois</button>
+      <button class="b ghost" onclick="closeDoctor(true)">não mostrar novamente</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* v4.0.0 (M8): página Agentes — especialistas, autonomia, aprendizados, gerente */
+async function loadAgentes(){
+  try{
+    const r = await api("/api/especialistas"); const d = await r.json();
+    const esp = d.especialistas || [];
+    const okN = esp.filter(e=>e.exame && e.exame.aprovado).length;
+    $("esp-badge").textContent = okN + "/" + esp.length + " exames ok";
+    $("esp-list").innerHTML = esp.map(e=>{
+      const ok = e.exame && e.exame.aprovado;
+      return '<div style="padding:6px 0;border-bottom:1px solid rgba(128,128,128,.25)">'
+        +'<b>'+esc(e.nome)+'</b> <span class="hint">'+esc(e.skill)+'</span>'
+        +'<span style="float:right" class="'+(ok?'hint':'hint')+'">'+(ok?'✔ exame ok':'✖ exame pendente')+'</span></div>';
+    }).join("") || '<p class="hint">nenhum especialista</p>';
+  }catch(_){}
+  try{
+    const r2 = await api("/api/autonomia"); const d2 = await r2.json();
+    $("aut-radios").innerHTML = ["cauteloso","padrao","autonomo"].map(n=>
+      '<label style="margin-right:14px;cursor:pointer"><input type="radio" name="autnivel" value="'+n+'" '
+      +(d2.nivel===n?"checked":"")+' onchange="setAutonomia(\''+n+'\')"> '+n+'</label>').join("");
+  }catch(_){}
+  try{
+    const r3 = await api("/api/aprendizados"); const d3 = await r3.json();
+    const ps = d3.pendentes || [];
+    $("ap-count").textContent = ps.length ? ps.length+" pendente(s)" : "";
+    $("ap-list").innerHTML = ps.map(e=>
+      '<div style="padding:6px 0;border-bottom:1px solid rgba(128,128,128,.25)">'
+      +'<b>['+esc(e.tipo)+']</b> '+esc(e.titulo)+' <span class="hint">'+esc(e.id)+'</span>'
+      +'<span style="float:right">'
+      +'<button class="b small" onclick="apDecide(\''+e.id+'\',\'aprovar\')">✔ aprovar</button> '
+      +'<button class="b small ghost" onclick="apDecide(\''+e.id+'\',\'rejeitar\')">✖ descartar</button></span></div>'
+    ).join("") || '<p class="hint">nenhum aprendizado pendente</p>';
+  }catch(_){}
+  try{
+    const r4 = await api("/api/gerente"); const d4 = await r4.json();
+    $("ger-status").textContent = d4.ativo
+      ? "ATIVO — o cérebro pode delegar tarefas de código ao Claude (o código sai da máquina)."
+      : "desligado — código 100% local (pool gratuito jamais recebe código).";
+  }catch(_){}
+}
+async function setAutonomia(n){
+  await api("/api/autonomia", {method:"POST", body: JSON.stringify({nivel:n})});
+  loadAgentes();
+}
+async function apDecide(id, acao){
+  const r = await api("/api/aprendidos", {method:"POST", body: JSON.stringify({id:id, acao:acao})});
+  await r.json();
+  loadAgentes();
+}
+async function gerenteToggle(on){
+  if (on && !confirm("AVISO DE PRIVACIDADE: o código das tarefas delegadas será processado pelo Claude Code (nuvem Anthropic). Memória e segredos nunca saem. Ativar?")) return;
+  await api("/api/gerente", {method:"POST", body: JSON.stringify({acao: on?"on":"off", yes: on})});
+  loadAgentes();
+}
+</script>
+</body>
+</html>

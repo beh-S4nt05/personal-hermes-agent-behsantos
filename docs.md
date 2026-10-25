@@ -1,4 +1,4 @@
-# 📘 Hermes Agent — Documentação completa
+# 📘 Betterme Agent — Documentação completa
 
 **Versão 2.0.0** · agente Linux local com Ollama + GUI web · Claude Code integrado
 
@@ -10,11 +10,11 @@ CLI, configuração, segurança e solução de problemas.
 
 ## Índice
 
-1. [O que é o Hermes Agent](#1-o-que-é-o-hermes-agent)
+1. [O que é o Betterme Agent](#1-o-que-é-o-betterme-agent)
 2. [Instalação e primeiros passos](#2-instalação-e-primeiros-passos)
 3. [Arquitetura e fluxo de dados](#3-arquitetura-e-fluxo-de-dados)
 4. [A GUI (abas)](#4-a-gui-abas)
-5. [Os dois agentes: Hermes e Claude Code](#5-os-dois-agentes-hermes-e-claude-code)
+5. [Os dois agentes: Betterme e Claude Code](#5-os-dois-agentes-betterme-e-claude-code)
 6. [Chat: como uma mensagem flui](#6-chat-como-uma-mensagem-flui)
 7. [Conversas: persistência, nova e busca](#7-conversas-persistência-nova-e-busca)
 8. [Tarefas: fila e agendadas (⏰)](#8-tarefas-fila-e-agendadas-)
@@ -32,7 +32,7 @@ CLI, configuração, segurança e solução de problemas.
 
 ---
 
-## 1. O que é o Hermes Agent
+## 1. O que é o Betterme Agent
 
 Um **agente de operação Linux que roda 100% na sua máquina**, controlável por
 terminal (CLI/TUI) e por uma **GUI web local**. Ele conversa com modelos do
@@ -46,7 +46,7 @@ Principais capacidades:
 |---|---|
 | Conversar e executar ferramentas (loop agente) | Chat / CLI / TUI |
 | 🌐 Pesquisar na web e ler páginas | chat, tarefas e aba 🛠 Ferramentas |
-| Dois agentes: Hermes (Ollama) e Claude Code | Seletor no chat |
+| Dois agentes: Betterme (Ollama) e Claude Code | Seletor no chat |
 | Tarefas agendadas em português ("diário 07:30") | Aba Tarefas / CLI |
 | Execução ao vivo (ver o agente trabalhando) | Modal 👁 na GUI |
 | Memória persistente entre conversas | Aba Memória / tool `lembrar` |
@@ -60,12 +60,12 @@ Principais capacidades:
 Requisitos: Linux, Python 3.10+, Ollama instalado (e um modelo baixado).
 
 ```bash
-unzip hermes-agent-v2.0.0.zip        # (ou a versão atual)
-cd hermes-agent
+unzip betterme-agent-v2.0.0.zip        # (ou a versão atual)
+cd betterme-agent
 python3 -m venv .venv
-./.venv/bin/pip install -e .         # instala o comando `hermes`
+./.venv/bin/pip install -e .         # instala o comando `betterme`
 ollama pull hermes3:8b               # modelo padrão
-./.venv/bin/hermes server            # sobe a GUI
+./.venv/bin/betterme server            # sobe a GUI
 ```
 
 A GUI abre em **http://127.0.0.1:8080** (localhost apenas, por padrão).
@@ -78,11 +78,11 @@ Opcional — **ditado por voz** (Whisper local):
 
 Opcional — Claude Code como 2º agente: instale a CLI `claude`
 (`curl -fsSL https://claude.ai/install.sh | bash`) e confirme com
-`ollama launch claude --model hermes3:8b`. O Hermes faz a integração com o
+`ollama launch claude --model hermes3:8b`. O Betterme faz a integração com o
 Ollama automaticamente (seção 5).
 
 Instalação permanente (inicia com o sistema): use `install.sh` e as units em
-`systemd/` (`hermes-server.service` para a GUI, `hermes-agent.service` para o
+`systemd/` (`betterme-server.service` para a GUI, `betterme-agent.service` para o
 daemon de tarefas).
 
 ## 3. Arquitetura e fluxo de dados
@@ -93,10 +93,10 @@ daemon de tarefas).
 │  navegador ── GUI (index.html)                                          │
 │      │  fetch/SSE (NDJSON)                                              │
 │      ▼                                                                  │
-│  Flask (hermes/server/app.py)  ── Scheduler (thread, poll 15s)          │
+│  Flask (betterme/server/app.py)  ── Scheduler (thread, poll 15s)          │
 │      │                        ── ACTIVE_PULLS (downloads canceláveis)   │
 │      ▼                                                                  │
-│  Agent (hermes/agent.py)  ──ou──  claude_agent.py (CLI `claude`)        │
+│  Agent (betterme/agent.py)  ──ou──  claude_agent.py (CLI `claude`)        │
 │      │                                  │                               │
 │      ├── tools.py      (run_command, arquivos, sys_info, lembrar…)      │
 │      ├── skills.py     (catálogo SKILL.md → prompt)                     │
@@ -109,7 +109,7 @@ daemon de tarefas).
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-Módulos (`hermes/`):
+Módulos (`betterme/`):
 
 | Módulo | Responsabilidade |
 |---|---|
@@ -126,7 +126,7 @@ Módulos (`hermes/`):
 | `scheduler.py` | Tarefas agendadas + buffer de execução ao vivo |
 | `daemon.py` | Fila de tarefas em segundo plano |
 | `server/app.py` | API REST + GUI (Flask) |
-| `cli.py` / `tui.py` | Comando `hermes` e TUI de terminal |
+| `cli.py` / `tui.py` | Comando `betterme` e TUI de terminal |
 
 ## 4. A GUI (abas)
 
@@ -144,9 +144,9 @@ Módulos (`hermes/`):
 A GUI pode ser protegida por **token de acesso** (Ajustes → `auth_token`);
 sem token, só aceite em localhost.
 
-## 5. Os dois agentes: Hermes e Claude Code
+## 5. Os dois agentes: Betterme e Claude Code
 
-### ◈ Hermes (padrão)
+### ◈ Betterme (padrão)
 
 Loop agente próprio sobre o Ollama: o modelo recebe o prompt de sistema
 (identidade + ferramentas + skills + memória) e pode chamar ferramentas
@@ -157,12 +157,12 @@ Limite de `max_steps` ciclos por mensagem.
 
 O chat e as tarefas agendadas podem escolher o agente **Claude Code**: a GUI
 executa a CLI `claude` já instalada na sua máquina, dentro do workspace do
-Hermes, com as funções padrão do Claude (bash, leitura/edição de arquivos,
+Betterme, com as funções padrão do Claude (bash, leitura/edição de arquivos,
 busca…). A saída em `stream-json` é traduzida para os mesmos eventos do chat —
 você vê passos e ferramentas na hora, e a resposta fica gravada na conversa
 com a etiqueta "🔌 Claude Code".
 
-**Instalação** (uma vez, fora do Hermes):
+**Instalação** (uma vez, fora do Betterme):
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash    # ou: npm install -g @anthropic-ai/claude-code
@@ -170,38 +170,38 @@ ollama launch claude --model hermes3:8b           # teste rodando via Ollama
 ```
 
 **Integração automática com o Ollama** — como o Claude Code roda sobre o
-Ollama, o Hermes lança a CLI `claude` apontada para o **mesmo servidor
-Ollama** do agente Hermes: as variáveis (`ANTHROPIC_BASE_URL`,
+Ollama, o Betterme lança a CLI `claude` apontada para o **mesmo servidor
+Ollama** do agente Betterme: as variáveis (`ANTHROPIC_BASE_URL`,
 `ANTHROPIC_AUTH_TOKEN=ollama`, `ANTHROPIC_API_KEY=""`) são aplicadas
 automaticamente em cada execução — **não é preciso exportar nada** no
-terminal onde o `hermes server` roda.
+terminal onde o `betterme server` roda.
 
 **Modo leve (automático via Ollama)** — no modo padrão o Claude Code envia
 ao modelo **21 ferramentas com ~58 mil caracteres de schemas** (Workflow,
 Task, Agent, Cron…): modelos locais 7B–8B se perdem e passam a ecoar esses
 schemas — daí as respostas com JSON/XML "de workflow" sem sentido. Via
-Ollama o Hermes lança a CLI em modo leve: `--bare` + diretiva curta em
+Ollama o Betterme lança a CLI em modo leve: `--bare` + diretiva curta em
 português (proibido escrever schemas/exemplos; dados reais via Bash) +
 máximo de 4 turnos. Medido com a CLI real: **3 ferramentas (Bash, Read,
 Edit), 3,5 mil chars — payload ~16× menor**. CLIs antigas sem `--bare`
 caem no modo completo automaticamente, com aviso para atualizar.
 **Guard de execução** (v3.0.2): se a resposta vier SEM chamadas de
 ferramenta mas COM comandos em blocos de código (ou instruções para o
-usuário executar), o Hermes repete a chamada com ordem direta; persistindo,
+usuário executar), o Betterme repete a chamada com ordem direta; persistindo,
 executa os comandos ele mesmo (denylist + auditoria) e entrega a saída
-real — marcada como "⚙ guard de execução do Hermes".
+real — marcada como "⚙ guard de execução do Betterme".
 **Autodiagnóstico**: toda resposta do agente 🔌 termina com um rodapé como
 "*🔌 Claude Code · modo leve · CLI 2.1.301*" — se o rodapé não aparecer,
-o `hermes server` em execução é antigo (reinicie após atualizar).
+o `betterme server` em execução é antigo (reinicie após atualizar).
 Observação de segurança: os comandos Bash do Claude Code seguem as
-permissões DELE (a denylist do Hermes não se aplica a esse agente).
+permissões DELE (a denylist do Betterme não se aplica a esse agente).
 
 Ajustes opcionais (aba ⚙ Ajustes ou `config.yaml`):
 
 | Chave | Padrão | Efeito |
 |---|---|---|
 | `claude_use_ollama` | `true` | Claude Code fala com o Ollama local (automático) |
-| `claude_model` | vazio | modelo do Claude Code (ex.: `qwen2.5-coder:7b`, `llama3.2:3b`); vazio = o mesmo modelo do Hermes (o padrão do Claude Code, `claude-opus-*`, não existe no Ollama) |
+| `claude_model` | vazio | modelo do Claude Code (ex.: `qwen2.5-coder:7b`, `llama3.2:3b`); vazio = o mesmo modelo do Betterme (o padrão do Claude Code, `claude-opus-*`, não existe no Ollama) |
 
 Use `claude_use_ollama: false` se o seu Claude Code falar com a API real da
 Anthropic (login/assinatura) — nesse caso as variáveis não são aplicadas.
@@ -266,11 +266,11 @@ qualquer mensagem: dite *"liste os arquivos do workspace"* e veja acontecer.
 
 Mensagens enfileiradas ("verifique uso de disco…") rodam em sequência no
 daemon; resultados aparecem na aba Tarefas (entrada `data/tasks/done/`).
-Comando equivalente: `hermes tasks`.
+Comando equivalente: `betterme tasks`.
 
 ### Tarefas agendadas (v1.4.0+)
 
-O agendador **vive dentro do processo `hermes server`** (thread que verifica a
+O agendador **vive dentro do processo `betterme server`** (thread que verifica a
 cada 15 s) — o PC precisa estar ligado com o server aberto no horário.
 
 **Formatos aceitos em português** (campo "quando" ou CLI):
@@ -298,7 +298,7 @@ interativa** — nada as barra; apenas a denylist de segurança continua (seçã
 
 **Por tarefa**: ▶ rodar agora (força, mesmo pausada), ⏸ pausar/ativar, 🗑
 apagar, contagem de execuções, última execução com duração, próxima execução,
-e escolha do **agente** (Hermes ou Claude Code).
+e escolha do **agente** (Betterme ou Claude Code).
 
 **👁 Ao vivo**: cada execução alimenta um buffer (passos, ferramentas com
 saída, contagem de tokens, resposta final). O modal abre sozinho no "▶ agora"
@@ -306,7 +306,7 @@ ou pelo botão "👁 ao vivo" enquanto roda; a última execução fica disponív
 para reabrir. O resultado completo também vai para o histórico da aba Tarefas
 com o prefixo `⏰ [agendada]`.
 
-CLI: `hermes schedule list | add "tarefa" "diário 08:30" | del <id> | run <id>`.
+CLI: `betterme schedule list | add "tarefa" "diário 08:30" | del <id> | run <id>`.
 
 ### v3.0 — gatilhos, retry, histórico e receitas
 
@@ -437,7 +437,7 @@ quando precisar).
 - **⏹ Cancelar** o download em andamento;
 - **🗑 Apagar** modelos instalados; lista mostra o que já está na máquina.
 
-CLI: `hermes models` (listar), `hermes ollama start|stop|status|test|pull <modelo>`, `hermes doctor` (diagnóstico).
+CLI: `betterme models` (listar), `betterme ollama start|stop|status|test|pull <modelo>`, `betterme doctor` (diagnóstico).
 
 ### ⚡ Deixando as respostas mais rápidas (sem trocar de modelo)
 
@@ -491,7 +491,7 @@ estruturada (args completos) continua na aba 🧾 Auditoria.
   `GET /api/recipes` · `GET /api/doctor` · `POST /api/hooks/<id>` (webhook) ·
   `GET /api/conversations/<id>/export?fmt=md|json` · `POST /api/mcp/add` ·
   `POST /api/mcp/test`
-- **Servidor de produção**: o `hermes server` agora usa **waitress**
+- **Servidor de produção**: o `betterme server` agora usa **waitress**
   (threads=8) em vez do dev server do Flask.
 - **Markdown rico** nas respostas (títulos, listas, links, código com
   botão copiar) · **tema claro/escuro** 🌙/☀ · **exportar conversa** ⬇ ·
@@ -549,24 +549,24 @@ Autenticação: se `auth_token` estiver definido, envie header
 ## 13. CLI (referência)
 
 ```bash
-hermes server [--host 0.0.0.0] [--port 8080]   # GUI + agendador (modo de uso)
-hermes chat                                     # TUI de terminal
-hermes run "verifique uso de disco"             # uma tarefa direto
-hermes agent start|stop|restart                 # daemon de tarefas
-hermes tasks                                    # fila + resultados
-hermes schedule list                            # tarefas agendadas
-hermes schedule add "resumo dos e-mails" "diário 07:30"
-hermes schedule del <id> · hermes schedule run <id>
-hermes ollama start|stop|status|test|pull      # servidor Ollama e modelos
-hermes models                                   # modelos instalados
-hermes config set model hermes3:8b              # ajustes persistentes
-hermes status · hermes doctor                   # visão geral · diagnóstico
+betterme server [--host 0.0.0.0] [--port 8080]   # GUI + agendador (modo de uso)
+betterme chat                                     # TUI de terminal
+betterme run "verifique uso de disco"             # uma tarefa direto
+betterme agent start|stop|restart                 # daemon de tarefas
+betterme tasks                                    # fila + resultados
+betterme schedule list                            # tarefas agendadas
+betterme schedule add "resumo dos e-mails" "diário 07:30"
+betterme schedule del <id> · betterme schedule run <id>
+betterme ollama start|stop|status|test|pull      # servidor Ollama e modelos
+betterme models                                   # modelos instalados
+betterme config set model hermes3:8b              # ajustes persistentes
+betterme status · betterme doctor                   # visão geral · diagnóstico
 ```
 
 ## 14. Configuração (config.yaml)
 
 Prioridade: **defaults ← `data/config.yaml` ← flags/env**. Variáveis de
-ambiente: `HERMES_DATA_DIR` (pasta de dados) e `HERMES_MOCK=1` (demo).
+ambiente: `BETTERME_DATA_DIR` (pasta de dados) e `BETTERME_MOCK=1` (demo).
 
 | Chave | Padrão | Descrição |
 |---|---|---|
@@ -608,7 +608,7 @@ mcp_servers:
 ## 15. Estrutura de dados (data/)
 
 ```
-data/                          (padrão: ~/.hermes — na demo: hermes-agent/data)
+data/                          (padrão: ~/.betterme — na demo: betterme-agent/data)
 ├── config.yaml                configuração persistida
 ├── memory.json                📔 fatos da memória do agente
 ├── conversations/
@@ -646,13 +646,13 @@ agendamentos, configuração).
 **Setup (uma vez, no terminal do servidor):**
 
 ```bash
-hermes email setup
+betterme email setup
 # informe: seu.usuario@gmail.com + senha de app (não a senha normal)
 # informe: conta@instituicao.org.br + a senha do webmail institucional
-hermes email oauth     # contas Microsoft/Google (2FA via navegador)
-hermes email test      # valida os logins
-hermes email modo <conta> envio   # libera o ENVIO (padrão: somente leitura)
-# reinicie o hermes server
+betterme email oauth     # contas Microsoft/Google (2FA via navegador)
+betterme email test      # valida os logins
+betterme email modo <conta> envio   # libera o ENVIO (padrão: somente leitura)
+# reinicie o betterme server
 ```
 
 - **Gmail**: exige 2FA ativado → crie a senha de app em
@@ -671,8 +671,8 @@ automaticamente (e o seletor v3.0 injeta só as relevantes à pergunta).
 
 | Provedor | Senha direta no IMAP? | O que fazer |
 |---|---|---|
-| **Gmail** (e Google Workspace) | ❌ a normal; ✅ com **senha de app** | ative a verificação em 2 etapas → crie a senha de app em `myaccount.google.com/apppasswords` (16 caracteres) → use ELA no `hermes email setup` |
-| **Microsoft 365 / Outlook / Hotmail** | ❌ desativada pela Microsoft | `hermes email oauth` (fluxo device code com seu 2FA normal; precisa de um client_id próprio — instruções no comando) |
+| **Gmail** (e Google Workspace) | ❌ a normal; ✅ com **senha de app** | ative a verificação em 2 etapas → crie a senha de app em `myaccount.google.com/apppasswords` (16 caracteres) → use ELA no `betterme email setup` |
+| **Microsoft 365 / Outlook / Hotmail** | ❌ desativada pela Microsoft | `betterme email oauth` (fluxo device code com seu 2FA normal; precisa de um client_id próprio — instruções no comando) |
 | **Yahoo / iCloud** | ✅ com senha de app | setup normal usando a senha de app do provedor |
 | **ProtonMail** | ❌ IMAP só via Proton Bridge | instale o Bridge e aponte `imap_host`/`smtp_host` para `127.0.0.1` |
 | **Servidor próprio / Zimbra / institucional** | geralmente ✅ | setup normal; se o domínio for Microsoft 365 por trás, use OAuth |
@@ -681,7 +681,7 @@ automaticamente (e o seletor v3.0 injeta só as relevantes à pergunta).
 1. um client_id (uma vez): Azure → "Registros de aplicativo" → app de
    cliente público com fluxo de dispositivo (Microsoft); ou Google Cloud
    → credenciais OAuth → "App para TV e dispositivos de entrada limitada";
-2. `hermes email oauth` → escolha o provedor, informe e-mail + client_id
+2. `betterme email oauth` → escolha o provedor, informe e-mail + client_id
    → abre o link, digite o código mostrado, autorize com seu 2FA. Pronto:
    o refresh token fica guardado junto das demais credenciais (600).
 
@@ -761,7 +761,7 @@ zero extra). Desligue em Ajustes ("🎯 Orquestrador" / "🔍 Revisor"). Skills 
 (aba Skills) são aplicadas automaticamente quando a task combina com a
 descrição delas — a nota "✦ skills aplicadas" mostra quando isso
 aconteceu.
-Histórico: `hermes` não tem CLI para isso — use `GET
+Histórico: `betterme` não tem CLI para isso — use `GET
 /api/orchestrator/tasks` ou o arquivo `data/orchestrator_tasks.jsonl`.
 
 **📱 Pelo celular (v3.2.0 — GUI responsiva + PWA):** a GUI se adapta a
@@ -769,7 +769,7 @@ qualquer tela (barra de navegação inferior no celular, teclado respeitado
 no chat, alvos de toque grandes). Para usar no celular:
 1. no PC, descubra o IP na rede local (`ip a` — ex.: `192.168.0.20`);
 2. no celular, no **mesmo Wi-Fi**, abra `http://192.168.0.20:8080`;
-3. use "Adicionar à tela inicial" — o Hermes abre como **app** (tela
+3. use "Adicionar à tela inicial" — o Betterme abre como **app** (tela
    cheia, ícone próprio), com o log e o chat ao vivo no bolso.
    *Nota:* o service worker (modo offline do shell) só ativa em contexto
    seguro — HTTPS ou localhost. Na rede local via http o app funciona
@@ -779,16 +779,16 @@ no chat, alvos de toque grandes). Para usar no celular:
 **🔎 Somente leitura por padrão (v3.1.3):** toda conta de e-mail fica em
 modo VISUALIZAÇÃO — o agente lista, lê e busca, mas **não envia** (leitura
 via IMAP EXAMINE: nem marca como lida). Quando você decidir liberar:
-`hermes email modo <conta> envio`; para voltar: `hermes email modo <conta>
+`betterme email modo <conta> envio`; para voltar: `betterme email modo <conta>
 leitura`.
 
-**🗓 Agenda (Google Calendar) — somente leitura:** `hermes agenda oauth`
+**🗓 Agenda (Google Calendar) — somente leitura:** `betterme agenda oauth`
 conecta uma conta Google pelo fluxo device code (seu 2FA, sem senha; o
 mesmo client_id do e-mail serve) com escopo ÚNICO `calendar.readonly`.
 O servidor MCP (`agenda_hoje`, `agenda_listar`, `agenda_proximo`) só faz
 GET na API do Calendar — não existe ferramenta de escrita em lugar nenhum.
 Depois de conectar e reiniciar o server, peça ao agente: *"o que tenho na
-agenda hoje?"*, *"qual meu próximo compromisso?"*. `hermes agenda test`
+agenda hoje?"*, *"qual meu próximo compromisso?"*. `betterme agenda test`
 lista os eventos de hoje direto no terminal (validação real).
 
 **Onde ficam as senhas/tokens (e por que não vazam):**
@@ -800,8 +800,8 @@ na validação, a conta fica em modo somente leitura (não envia).
 
 ## 17. Modo demonstração vs modo real
 
-- **Modo real** (uso): `hermes server` com Ollama verdadeiro;
-- **Modo demo** (`HERMES_MOCK=1` ou `--mock`, usado por `demo.sh`): IA
+- **Modo real** (uso): `betterme server` com Ollama verdadeiro;
+- **Modo demo** (`BETTERME_MOCK=1` ou `--mock`, usado por `demo.sh`): IA
   simulada para testar a interface sem Ollama — o server imprime o banner
   gigante "MODO DEMONSTRAÇÃO — IA SIMULADA". Ferramentas, tarefas, memória,
   conversas e downloads simulados funcionam de verdade; o Claude Code
@@ -828,20 +828,20 @@ na validação, a conta fica em modo somente leitura (não envia).
 | E-mail: login recusado no Gmail | ative a 2FA e use **senha de app** (myaccount.google.com/apppasswords) — a senha normal não funciona via IMAP |
 | E-mail: "SMTP indisponível" no setup | a conta fica em modo somente leitura (leitura ✔, envio ✖); verifique se a senha de app tem permissão de SMTP |
 | Log ao vivo não mostrava as atividades | v3.1.1: toda a atividade do servidor agora é registrada (chat, ferramentas, agendador, MCP, painel) com rotação em 5 MB |
-| E-mail: ferramentas não aparecem no agente | rode `hermes email setup` (auto-registra o MCP) e reinicie o `hermes server`; confira o card MCP no Painel |
+| E-mail: ferramentas não aparecem no agente | rode `betterme email setup` (auto-registra o MCP) e reinicie o `betterme server`; confira o card MCP no Painel |
 
 | Sintoma | Causa/procedimento |
 |---|---|
-| "O servidor Ollama está desligado" | Ligue na aba Ollama ou `hermes ollama start`; ou ative "ligar automaticamente" |
+| "O servidor Ollama está desligado" | Ligue na aba Ollama ou `betterme ollama start`; ou ative "ligar automaticamente" |
 | `invalid model name` | Modelo sem `:tag` — use `hermes3:8b` (Ajustes → modelo) |
 | Modelo não encontrado | `ollama pull <modelo>` ou aba Ollama → Models |
 | Resposta lenta na 1ª msg | modelo carregando na memória (normal; aguarde o `ping`) |
 | Modelo repetiu a mesma resposta/ferramenta e a saída cortou | guard anti-loop da v2.2.7: chamada idêntica não é re-executada — o modelo é avisado para responder; se insistir, o agente encerra e entrega o resultado já obtido. Com um modelo melhor (`qwen2.5:3b`) o loop nem começa |
 | Modelo respondeu com um JSON em vez de executar a ferramenta (ou "dados" errados) | corrigido na v2.2.5: o agente intercepta o JSON solto e executa a ferramenta REAL; se persistir, troque para um modelo melhor com ferramentas (`qwen2.5:3b`, `hermes3:8b`) — `llama3.2:3b` é rápido mas confunde o formato |
-| Claude Code escreve os comandos mas NÃO executa (ou diz "você pode verificar com…") | v3.0.2: o guard de execução detecta resposta sem chamadas de ferramenta + blocos de código e (1) repete a chamada com ordem direta de usar Bash; (2) em último caso executa os comandos no lugar (saída REAL, marcada e auditada). Se persistir, prefira o agente ◈ Hermes para tarefas do sistema |
-| Claude Code gerando respostas sem sentido (templates, códigos soltos) | 1) confira o rodapé da resposta: **sem rodapé = server antigo** (reinicie o `hermes server` após atualizar); rodapé "CLI antiga" = rode `claude update`; 2) com "modo leve" ativo, use `qwen2.5-coder:7b` no campo do Claude Code; 3) persistindo, prefira o agente ◈ Hermes — com 10 GB de RAM o Claude Code fica limitado |
+| Claude Code escreve os comandos mas NÃO executa (ou diz "você pode verificar com…") | v3.0.2: o guard de execução detecta resposta sem chamadas de ferramenta + blocos de código e (1) repete a chamada com ordem direta de usar Bash; (2) em último caso executa os comandos no lugar (saída REAL, marcada e auditada). Se persistir, prefira o agente ◈ Betterme para tarefas do sistema |
+| Claude Code gerando respostas sem sentido (templates, códigos soltos) | 1) confira o rodapé da resposta: **sem rodapé = server antigo** (reinicie o `betterme server` após atualizar); rodapé "CLI antiga" = rode `claude update`; 2) com "modo leve" ativo, use `qwen2.5-coder:7b` no campo do Claude Code; 3) persistindo, prefira o agente ◈ Betterme — com 10 GB de RAM o Claude Code fica limitado |
 | **>100s para coisas simples** | modelo grande na CPU: rode `ollama ps` DURANTE uma resposta (PROCESSOR `100% CPU` → troque para um 3B); veja o tok/s no badge do chat (< 5 tok/s = pesado); confira `nvidia-smi` (GPU disponível/VRAM) e `free -h` (swap?) |
-| Claude Code "não encontrado" | instale com `curl -fsSL https://claude.ai/install.sh \| bash` (ou npm) e reinicie o `hermes server` |
+| Claude Code "não encontrado" | instale com `curl -fsSL https://claude.ai/install.sh \| bash` (ou npm) e reinicie o `betterme server` |
 | Claude Code vazio/erro | já aponta para o Ollama por padrão; confira o `claude_model` (use um modelo instalado) ou, se usa a API real, desative `claude_use_ollama` |
 | ⚠ "There's an issue with the selected model (claude-opus-…)" | o Claude Code tentou o modelo padrão da nuvem Anthropic, que não existe no Ollama — rode com `--model <modelo local>` (ex.: `claude --model llama3.2:3b`) ou defina o modelo na GUI (⚙ Ajustes); pelo Ollama: `ollama launch claude --model llama3.2:3b` |
 | PyYAML com erro no pip (Windows/NTFS) | `pip install --force-reinstall --no-cache-dir PyYAML` |
@@ -872,5 +872,5 @@ Detalhes por versão em `CHANGELOG.md`.
 
 ---
 
-*Hermes Agent — roda 100% local: seus dados, conversas e memória ficam na
+*Betterme Agent — roda 100% local: seus dados, conversas e memória ficam na
 sua máquina.*

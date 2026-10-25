@@ -1,13 +1,13 @@
-# 📘 Hermes Agent — Documentação viva: uso, evolução e funções
+# 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
-**Versão 4.0.0** · gerado em 25/10/2026 · este documento é extraído do
+**Versão 4.1.0** · gerado em 25/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
 
 ---
 
-## 1. O que é o Hermes Agent
+## 1. O que é o Betterme Agent
 
 Um **agente pessoal que roda na SUA máquina** (Linux, local-first):
 conversa por chat, executa tarefas de verdade (shell, arquivos, web,
@@ -16,7 +16,7 @@ de controle em `localhost:8080` — zero nuvem, zero dado saindo do
 computador. O Claude Code entra como 2º agente opcional.
 
 **Princípios que não negociam:**
-- 🏠 **local-first**: tudo em `~/.hermes`; funciona offline;
+- 🏠 **local-first**: tudo em `~/.betterme`; funciona offline;
 - 🎯 **pipeline padrão**: conversa comum responde direto; pedido de
   tarefa → 🎯 orquestrador → [🔒 aprovação] → ⚡ executor → 🔍 revisor
   → [📦 entrega] → done;
@@ -33,20 +33,20 @@ computador. O Claude Code entra como 2º agente opcional.
 ### 2.1 Instalar e atualizar
 ```bash
 ./install.sh                  # instalação completa (Debian/Ubuntu/Fedora/Arch)
-hermes update                 # ⬇ atualiza em 1 comando (tags do GitHub)
-hermes update --check         # só verifica se há versão nova
+betterme update                 # ⬇ atualiza em 1 comando (tags do GitHub)
+betterme update --check         # só verifica se há versão nova
 ```
 O `update` preserva `data/` (suas conversas, memória, config), `.venv`
 e `.git`.
 
 ### 2.2 Ligar e desligar (ciclo de vida)
 ```bash
-hermes server                 # ▶ liga a GUI — http://localhost:8080
+betterme server                 # ▶ liga a GUI — http://localhost:8080
 # Ctrl+C desliga. Não existe serviço no boot por padrão.
 ```
 - Instalação com `install.sh --with-systemd` cria os services
-  (`hermes-server`, `hermes-agent`) — `sudo systemctl disable --now
-  hermes-server hermes-agent` remove.
+  (`betterme-server`, `betterme-agent`) — `sudo systemctl disable --now
+  betterme-server betterme-agent` remove.
 - **O "fantasma do cache"**: com o servidor desligado o navegador ainda
   pode abrir a página (service worker guarda a casca). Desde a v3.11.1
   ela exibe um **banner vermelho "server OFFLINE"**. Para limpar de
@@ -59,7 +59,7 @@ hermes server                 # ▶ liga a GUI — http://localhost:8080
 | **Painel** | status do agente/Ollama, desempenho (tok/s) e **🎯 Saúde do pipeline**: aprovação na 1ª tentativa (%), tentativas médias, duração média, suas edições, skills top, tasks por dia (v3.10) |
 | **Chat** | conversa + pipeline; 🔒 aprovação de plano (só criação), 📦 entrega editável; 🔬 por baixo dos panos; `/comandos`; `goal` de sessão; pendências de antes de um restart reaparecem no topo (v3.11) |
 | **Ollama** | TODOS os modelos instalados + **papel de cada um** (💬 chat · 🎯 orquestrador · 🔍 revisor · ⚡ executor · 🔌 claude) com atribuição em 1 clique; funciona com servidor desligado (cache) (v3.9) |
-| **Skills** | catálogo (18 embutidas), ativar/desativar, criar com `criar-skill`, auditar com `hermes skills audit` (v3.11) |
+| **Skills** | catálogo (18 embutidas), ativar/desativar, criar com `criar-skill`, auditar com `betterme skills audit` (v3.11) |
 | **Tarefas** | fila do daemon + ⏰ agendadas |
 | **Auditoria / Memória / Ferramentas / Ajustes** | rastro de ações, fatos lembrados, toggles e modelos por papel ao vivo |
 
@@ -78,49 +78,49 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | Comando | O que faz |
 |---|---|
 
-| `hermes update` | atualiza o agente a partir do GitHub |
-| `hermes memory` | memória de longo prazo do agente |
-| `hermes import` | importa fatos para a memória (JSON lista ou  |
-| `hermes list` | lista os fatos da memória do agente |
-| `hermes clear` | apaga TODOS os fatos da memória (reimporte um pacote limpo depois) |
-| `hermes skills` | catálogo de skills |
-| `hermes import` | importa skills: pasta local, .zip, URL git ou owner/repo |
-| `hermes aprender` | transforma arquivo/URL/texto em rascunho de skill (M6.5) |
-| `hermes scan` | varre pastas assistidas (ex.: ~/Downloads) e importa skills novas |
-| `hermes audit` | audita todas as skills: estrutura, tamanho,  |
-| `hermes chat` | chat interativo no terminal |
-| `hermes selftest` | 🧪 bateria de aceitação com o LLM real: sem  |
-| `hermes provider` | provedores LLM externos gratuitos (memória nunca sai) |
-| `hermes list` | lista provedores gratuitos e o atual |
-| `hermes set` | ativa um provedor (pede a chave com segurança) |
-| `hermes test` | ping + 1 completion real do provedor ativo |
-| `hermes off` | volta ao Ollama local |
-| `hermes varredura` | varre segredos/dados pessoais antes de expor código (pré-push) |
-| `hermes init` | cria HERMES.md (instruções duráveis do projeto) |
-| `hermes autonomia` | nível de autonomia do agente (cauteloso|padrao|autonomo) |
-| `hermes gerente` | gerente de código (Claude Code) — opt-in consciente |
-| `hermes aprendidos` | rascunhos de skills/lições esperando sua aprovação |
-| `hermes conversas` | conversas passadas do agente |
-| `hermes rag` | biblioteca de livros (RAG local): indexa ou consulta |
-| `hermes doctor` | diagnostica a conexão Ollama↔Python (com geração de teste) |
-| `hermes email` | configura contas de e-mail (MCP email_*) |
-| `hermes agenda` | agenda Google Calendar — somente leitura (MCP agenda_*) |
-| `hermes status` | status do agente e do Ollama |
-| `hermes run` | executa uma tarefa única |
-| `hermes daemon` | roda o daemon em primeiro plano |
-| `hermes server` | sobe a GUI web de controle |
-| `hermes agent` | controla o agente (ligar/desligar) |
-| `hermes ollama` | controla o servidor Ollama |
-| `hermes tasks` | lista tarefas da fila e resultados |
-| `hermes schedule` | tarefas agendadas (⏰) |
-| `hermes config` | configuração |
-| `hermes models` | lista modelos locais do Ollama |
-| `hermes auto` | ✨ auto-atribui o melhor modelo instalado  |
+| `betterme update` | atualiza o agente a partir do GitHub |
+| `betterme memory` | memória de longo prazo do agente |
+| `betterme import` | importa fatos para a memória (JSON lista ou  |
+| `betterme list` | lista os fatos da memória do agente |
+| `betterme clear` | apaga TODOS os fatos da memória (reimporte um pacote limpo depois) |
+| `betterme skills` | catálogo de skills |
+| `betterme import` | importa skills: pasta local, .zip, URL git ou owner/repo |
+| `betterme aprender` | transforma arquivo/URL/texto em rascunho de skill (M6.5) |
+| `betterme scan` | varre pastas assistidas (ex.: ~/Downloads) e importa skills novas |
+| `betterme audit` | audita todas as skills: estrutura, tamanho,  |
+| `betterme chat` | chat interativo no terminal |
+| `betterme selftest` | 🧪 bateria de aceitação com o LLM real: sem  |
+| `betterme provider` | provedores LLM externos gratuitos (memória nunca sai) |
+| `betterme list` | lista provedores gratuitos e o atual |
+| `betterme set` | ativa um provedor (pede a chave com segurança) |
+| `betterme test` | ping + 1 completion real do provedor ativo |
+| `betterme off` | volta ao Ollama local |
+| `betterme varredura` | varre segredos/dados pessoais antes de expor código (pré-push) |
+| `betterme init` | cria HERMES.md (instruções duráveis do projeto) |
+| `betterme autonomia` | nível de autonomia do agente (cauteloso|padrao|autonomo) |
+| `betterme gerente` | gerente de código (Claude Code) — opt-in consciente |
+| `betterme aprendidos` | rascunhos de skills/lições esperando sua aprovação |
+| `betterme conversas` | conversas passadas do agente |
+| `betterme rag` | biblioteca de livros (RAG local): indexa ou consulta |
+| `betterme doctor` | diagnostica a conexão Ollama↔Python (com geração de teste) |
+| `betterme email` | configura contas de e-mail (MCP email_*) |
+| `betterme agenda` | agenda Google Calendar — somente leitura (MCP agenda_*) |
+| `betterme status` | status do agente e do Ollama |
+| `betterme run` | executa uma tarefa única |
+| `betterme daemon` | roda o daemon em primeiro plano |
+| `betterme server` | sobe a GUI web de controle |
+| `betterme agent` | controla o agente (ligar/desligar) |
+| `betterme ollama` | controla o servidor Ollama |
+| `betterme tasks` | lista tarefas da fila e resultados |
+| `betterme schedule` | tarefas agendadas (⏰) |
+| `betterme config` | configuração |
+| `betterme models` | lista modelos locais do Ollama |
+| `betterme auto` | ✨ auto-atribui o melhor modelo instalado  |
 
-Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
+Subcomandos: `betterme skills audit` (auditar o catálogo), `betterme config set/get`, `betterme server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v4.0.0)
+## 3. Modificações — o que foi feito (v1.0.0 → v4.1.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -128,6 +128,8 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v4.1.0** | 🏷️ BETTERME: o agente muda de nome (PR #4 do roadmap) |
+| **v4.0.0** | 🚀 A ENTRADA NO MODELO COMPLETO DE AGENTES DE IA |
 | **v4.0.0** | 🚀 A ENTRADA NO MODELO COMPLETO DE AGENTES DE IA |
 | **v3.17.1** | 🩹 hotfix: provedor externo nunca atendia (modelo errado no payload) |
 | **v3.17.0** | 🔌 provedores LLM externos GRATUITOS, com privacidade dura |
@@ -231,7 +233,7 @@ de todo push.
 navegador ─ GUI (index.html, vanilla JS)
    │  HTTP/SSE
    ▼
-hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
+betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
    │                          │
    ▼                          ▼
 🎯 orchestrator ────────── ⚡ agent.py ──🔧 tools (shell/web/arquivos)
@@ -240,10 +242,10 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 🔍 revisão ──► entrega      Ollama (localhost:11434) · Claude Code
    │
    ▼  registro/aprendizado
-~/.hermes/ (dados — tabela abaixo)
+~/.betterme/ (dados — tabela abaixo)
 ```
 
-**Arquivos em `~/.hermes/` (data_dir):**
+**Arquivos em `~/.betterme/` (data_dir):**
 
 | Caminho | O que guarda |
 |---|---|
@@ -270,7 +272,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 
 ## 6. Referência de funções (gerada do código-fonte)
 
-### hermes/orchestrator.py — 🎯 o coração do pipeline: planeja (lendo a conversa, a experiência e o goal), aplica skills, submete aos portões de aprovação, executa, revisa, registra cada task e aprende com as edições do operador
+### betterme/orchestrator.py — 🎯 o coração do pipeline: planeja (lendo a conversa, a experiência e o goal), aplica skills, submete aos portões de aprovação, executa, revisa, registra cada task e aprende com as edições do operador
 
 | Função | O que faz |
 |---|---|
@@ -310,7 +312,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `_quer_projeto_sem_caminho(cfg, message, resume_plan)` | v3.15.1: task de código/projeto para INICIAR, sem pasta no pedido. |
 | `run_pipeline(agent, cfg, message, history, on_event, cancel, max_tentativas, goal, session_id, resume_plan, resume_tid, extra_criterios, resultado_meta)` | Conversa → 🎯 plano → [🔒 aprovação p/ criação] → ⚡ execução → 🔍 revisão → [🔒 entrega editável p/ criação] → done. Emite … |
 
-### hermes/agent.py — 💬 o executor: conversa com o Ollama com streaming de tokens e uso das ferramentas
+### betterme/agent.py — 💬 o executor: conversa com o Ollama com streaming de tokens e uso das ferramentas
 
 **classe `Agent`** — —
 
@@ -332,7 +334,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `_bare_tool_call(text)` | Detecta chamada de ferramenta em JSON SEM cercas de código. Modelos pequenos às vezes respondem com o JSON cru (com ou … |
 | `_as_tool_calls(block)` | Normaliza {"tool":..,"args":..} / {"name":..,"arguments":..} para o formato da API. |
 
-### hermes/server/app.py — 🌐 a API REST + GUI web (Flask/waitress): todos os endpoints, streaming do chat, aprovações, painel e páginas
+### betterme/server/app.py — 🌐 a API REST + GUI web (Flask/waitress): todos os endpoints, streaming do chat, aprovações, painel e páginas
 
 **82 endpoints HTTP:**
 
@@ -428,7 +430,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `create_app(cfg)` | — |
 | `serve(cfg, host, port)` | — |
 
-### hermes/cli.py — ⌨️ todos os comandos `hermes` do terminal
+### betterme/cli.py — ⌨️ todos os comandos `betterme` do terminal
 
 | Função | O que faz |
 |---|---|
@@ -471,7 +473,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `build_parser()` | — |
 | `main(argv)` | — |
 
-### hermes/tools.py — 🔧 ferramentas do agente: shell, arquivos, web, lembrar… (com denylist de segurança)
+### betterme/tools.py — 🔧 ferramentas do agente: shell, arquivos, web, lembrar… (com denylist de segurança)
 
 **classe `ToolError`** — —
 
@@ -502,14 +504,14 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `esquecer(args, cfg)` | — |
 | `_backups_tool(args, cfg)` | — |
 | `git_run(args, cfg)` | v3.15.0 (PR#2): git com subcomandos permitidos, no projeto da task. |
-| `gerente_codigo_tool(args, cfg)` | v4.0.0 (M7, D5): delega uma task de CÓDIGO ao gerente Claude (só se o operador ativou com `hermes gerente on --yes`). |
+| `gerente_codigo_tool(args, cfg)` | v4.0.0 (M7, D5): delega uma task de CÓDIGO ao gerente Claude (só se o operador ativou com `betterme gerente on --yes`). |
 | `conversas_buscar(args, cfg)` | v4.0.0 (M6.5): busca nas conversas passadas (decisões antigas). |
 | `especialista_tool(args, cfg)` | v4.0.0 (M6): o cérebro invoca um especialista (revisor, debugger, pesquisador, seguranca) para um caso pontual — veredi… |
 | `knowledge_search(args, cfg)` | v3.15.0 (PR#2): RAG local — trechos verbatim com fonte. |
 | `execute_tool(name, arguments, cfg, source, agent)` | Executa uma ferramenta e devolve {'ok': bool, 'output': str}. v3.0: toda execução vai para a trilha de auditoria (data/… |
 | `tool_summary()` | — |
 
-### hermes/skills.py — ✦ carregador de skills: frontmatter, gatilhos, ativação e instalação
+### betterme/skills.py — ✦ carregador de skills: frontmatter, gatilhos, ativação e instalação
 
 **classe `SkillLoader`** — —
 
@@ -530,13 +532,13 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 |---|---|
 | `_slug(nome, fallback)` | — |
 | `find_skill_dirs(root, depth)` | Pastas com SKILL.md válido (name+description) sob `root`. |
-| `import_skill_dir(src_dir, cfg)` | Copia UMA pasta de skill para ~/.hermes/skills/<nome>. |
+| `import_skill_dir(src_dir, cfg)` | Copia UMA pasta de skill para ~/.betterme/skills/<nome>. |
 | `_importar_todas(dirs, cfg)` | — |
 | `import_from(src, cfg)` | Importa skills de QUALQUER fonte: pasta local, arquivo .zip, URL git/GitHub ou owner/repo (delega no install_from_githu… |
 | `autoscan(cfg)` | Varre as pastas assistidas (default ~/Downloads) e importa skills novas — o 'baixei do GitHub, agora é nativa' sem coma… |
 | `parse_skill_md(text)` | Separa frontmatter YAML do corpo Markdown. |
 
-### hermes/skills_audit.py — 🛡 auditoria do catálogo: estrutura, tamanho, prompt injection, duplicatas
+### betterme/skills_audit.py — 🛡 auditoria do catálogo: estrutura, tamanho, prompt injection, duplicatas
 
 | Função | O que faz |
 |---|---|
@@ -545,25 +547,26 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `audit_skills(dirs)` | Audita todos os diretórios de skills + duplicatas de nome. |
 | `run_audit(cfg, print_fn)` | Roda a auditoria no catálogo configurado; devolve exit code. |
 
-### hermes/update.py — ⬇ autoatualização: consulta tags no GitHub, baixa o zip e aplica preservando data/.venv/.git
+### betterme/update.py — ⬇ autoatualização: consulta tags no GitHub, baixa o zip e aplica preservando data/.venv/.git
 
 | Função | O que faz |
 |---|---|
 | `_parse_version(tag)` | 'v3.10.0' → (3,10,0); tags com sufixo (-beta, -rc) ficam (0,). |
 | `latest_tag(fetch)` | Última tag do repositório (None se não conseguir consultar). `fetch(url) -> str` injetável para testes offline. |
-| `_project_root()` | Raiz da instalação (pasta que contém hermes/ e pyproject.toml). |
+| `_project_root()` | Raiz da instalação (pasta que contém betterme/ e pyproject.toml). |
 | `_assert_zip_seguro(zf, dest_dir)` | v3.14.2: defesa zip-slip — nenhum membro do zip pode escapar do diretório de destino (caminho absoluto ou com '..' é re… |
 | `download(tag, dest_dir)` | Baixa e extrai o zip da tag; devolve a raiz extraída. |
 | `apply_update(src_root, dest_root, log)` | Copia a nova versão sobre a instalação — preserva data/, .venv e .git. Devolve a lista de itens atualizados. |
 | `run(check_only, assume_yes, print_fn)` | Executa o update; devolve código de saída (0 = ok/atualizado). |
 
-### hermes/config.py — ⚙️ Config: defaults, leitura/escrita do config.yaml, skills_dirs, chaves tipadas
+### betterme/config.py — ⚙️ Config: defaults, leitura/escrita do config.yaml, skills_dirs, chaves tipadas
 
 **classe `Config`** — Acesso por atributos: cfg.model, cfg.max_steps, ...
 
 | Método | O que faz |
 |---|---|
 | `__init__` | — |
+| `_migrar_legado` | — |
 | `_load_file` | — |
 | `save` | — |
 | `update` | — |
@@ -583,7 +586,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `_env_flag(name)` | — |
 | `_coerce(key, value)` | — |
 
-### hermes/memory.py — 🧠 memória de longo prazo (fatos guardados com `lembrar`)
+### betterme/memory.py — 🧠 memória de longo prazo (fatos guardados com `lembrar`)
 
 **classe `MemoryStore`** — —
 
@@ -602,7 +605,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `prompt_section` | Seção pronta para o prompt de sistema ('' se não houver fatos). v3.0:… |
 
 
-### hermes/conversations.py — 🗂 conversas: sessões, histórico, títulos
+### betterme/conversations.py — 🗂 conversas: sessões, histórico, títulos
 
 **classe `ConversationStore`** — —
 
@@ -622,7 +625,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `get_current` | — |
 
 
-### hermes/scheduler.py — ⏰ agendador de tarefas periódicas/pontuais
+### betterme/scheduler.py — ⏰ agendador de tarefas periódicas/pontuais
 
 **classe `ScheduleStore`** — —
 
@@ -638,7 +641,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `public_list` | — |
 | `delete` | — |
 
-**classe `Scheduler`** — Loop que dispara as tarefas agendadas (roda dentro do `hermes server`).
+**classe `Scheduler`** — Loop que dispara as tarefas agendadas (roda dentro do `betterme server`).
 
 | Método | O que faz |
 |---|---|
@@ -666,7 +669,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `live_status(sid)` | Snapshot do console ao vivo da tarefa (None se nunca rodou neste server). |
 | `_system_busy(threshold)` | True se a máquina estiver ocupada (para tarefas 'only_idle'). v3.0.1: o load é comparado RELATIVO ao número de núcleos … |
 
-### hermes/daemon.py — 🔄 daemon: fila de tarefas em segundo plano
+### betterme/daemon.py — 🔄 daemon: fila de tarefas em segundo plano
 
 | Função | O que faz |
 |---|---|
@@ -676,7 +679,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `list_tasks(cfg)` | — |
 | `run_daemon(cfg)` | — |
 
-### hermes/manager.py — 🖥 liga/desliga Ollama e daemon, boot systemd, diagnóstico
+### betterme/manager.py — 🖥 liga/desliga Ollama e daemon, boot systemd, diagnóstico
 
 **classe `DaemonManager`** — Controla o processo do agente (o 'coração' que executa tarefas).
 
@@ -712,7 +715,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `_run(cmd, timeout)` | — |
 | `python_env_check()` | Confere se as dependências Python estão íntegras. Detecta o caso do PyYAML 'quebrado': `import yaml` funciona mas o pac… |
 
-### hermes/ollama_client.py — 📡 cliente HTTP do Ollama (chat, tags, ps)
+### betterme/ollama_client.py — 📡 cliente HTTP do Ollama (chat, tags, ps)
 
 **classe `OllamaError`** — Erro de comunicação/execução no Ollama.
 
@@ -746,24 +749,24 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 |---|---|
 | `get_client(cfg)` | Fábrica: devolve o cliente mock quando cfg.mock for verdadeiro. v3.17.0: com llm_provider externo configurado, devolve … |
 
-### hermes/claude_agent.py — 🔌 agente Claude Code (2º cérebro, modo leve)
+### betterme/claude_agent.py — 🔌 agente Claude Code (2º cérebro, modo leve)
 
 | Função | O que faz |
 |---|---|
 | `_claude_env(cfg)` | Ambiente do subprocesso `claude` — Ollama por padrão. Com claude_use_ollama=True (padrão), o Claude Code é apontado par… |
 | `_extract_commands(text)` | Comandos dos blocos ```bash (sem comentários, até 4, ≤500 chars). |
-| `_guard_execute(cfg, commands, ev)` | Último recurso: executa os comandos com as ferramentas do HERMES (denylist + timeout + auditoria) e devolve a saída REA… |
+| `_guard_execute(cfg, commands, ev)` | Último recurso: executa os comandos com as ferramentas do Betterme (denylist + timeout + auditoria) e devolve a saída R… |
 | `_strip_loops(text)` | Corta runs de linhas idênticas consecutivas → (texto limpo, cortes). |
 | `_cli_version(exe)` | Versão da CLI claude (cacheada; '?' se não conseguir ler). |
 | `_claude_cmd(exe, cfg, prompt, light)` | Linha de comando do Claude Code (headless, stream JSON). MODO LEVE (Ollama): --bare — o payload enviado ao modelo cai d… |
 | `claude_path()` | Caminho do binário `claude` (None se não estiver instalado). |
-| `_enrich_prompt(cfg, message, goal)` | v3.14.1: o Claude Code ganha o CONTEXTO do Hermes — a skill que casa com o pedido (CONTEÚDO, não só o nome) e o objetiv… |
+| `_enrich_prompt(cfg, message, goal)` | v3.14.1: o Claude Code ganha o CONTEXTO do Betterme — a skill que casa com o pedido (CONTEÚDO, não só o nome) e o objet… |
 | `_build_prompt(message, history)` | Serializa a conversa anterior + a mensagem nova em um único prompt. |
 | `_simulate(message, ev, cancel)` | Resposta simulada (modo demonstração) — mesmo formato de eventos. |
 | `run_claude(cfg, message, history, on_event, cancel, goal)` | Executa o Claude Code e devolve a resposta final (texto). Emite os mesmos eventos do chat: step, note, token, tool_star… |
 | `_run_impl(cfg, message, history, on_event, cancel, _light, _guard, goal)` | — |
 
-### hermes/mcp_client.py — 🔌 cliente MCP: e-mail, agenda, Figma…
+### betterme/mcp_client.py — 🔌 cliente MCP: e-mail, agenda, Figma…
 
 **classe `MCPError`** — —
 
@@ -830,14 +833,14 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `get_manager(cfg)` | — |
 | `_shutdown_all()` | — |
 
-### hermes/doctor.py — 🩺 diagnóstico passo a passo Ollama↔Python
+### betterme/doctor.py — 🩺 diagnóstico passo a passo Ollama↔Python
 
 | Função | O que faz |
 |---|---|
 | `run_checks(cfg)` | — |
 | `summary(checks)` | — |
 
-### hermes/emailcfg.py — 🔑 OAuth do e-mail (XOAUTH2 + device code)
+### betterme/emailcfg.py — 🔑 OAuth do e-mail (XOAUTH2 + device code)
 
 | Função | O que faz |
 |---|---|
@@ -857,10 +860,10 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `add_oauth_account(cfg, user, provider, client_id, client_secret, print_fn, readonly)` | Cria conta via OAuth (device code), valida IMAP/SMTP e salva. |
 | `set_modo(cfg, conta, envio)` | Alterna o modo da conta: envio=True libera ENVIO (e exige SMTP válido); envio=False volta para SOMENTE LEITURA (visuali… |
 | `status(cfg)` | — |
-| `setup_interactive(cfg)` | `hermes email setup` — pergunta contas, testa, salva e registra. |
-| `_oauth_wizard(cfg)` | Assistente OAuth dentro do `hermes email setup` (opção 'o'). |
+| `setup_interactive(cfg)` | `betterme email setup` — pergunta contas, testa, salva e registra. |
+| `_oauth_wizard(cfg)` | Assistente OAuth dentro do `betterme email setup` (opção 'o'). |
 
-### hermes/agendacfg.py — 🔑 OAuth da agenda Google
+### betterme/agendacfg.py — 🔑 OAuth da agenda Google
 
 | Função | O que faz |
 |---|---|
@@ -873,15 +876,15 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `add_account(cfg, user, client_id, client_secret, print_fn)` | Adiciona a agenda de uma conta Google via device code (2FA do provedor, sem senha) e valida o acesso somente leitura. |
 | `register_mcp(cfg)` | Registra o servidor MCP 'agenda' (secrets via env — nada no config). |
 | `status(cfg)` | — |
-| `setup_interactive(cfg)` | `hermes agenda oauth` — assistente device code (uma vez por conta). |
+| `setup_interactive(cfg)` | `betterme agenda oauth` — assistente device code (uma vez por conta). |
 
-### hermes/activity.py — 📝 registro de atividade (o que aconteceu e quando)
+### betterme/activity.py — 📝 registro de atividade (o que aconteceu e quando)
 
 | Função | O que faz |
 |---|---|
 | `log(cfg, source, message, max_bytes)` | Anexa uma linha de atividade ao agent.log (best-effort). |
 
-### hermes/audit.py — 🧾 auditoria de ações do agente
+### betterme/audit.py — 🧾 auditoria de ações do agente
 
 | Função | O que faz |
 |---|---|
@@ -890,7 +893,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `query(cfg, agent, tool, limit, day, month)` | Lê os registros mais recentes (filtros opcionais). |
 | `tools_summary(cfg)` | Contagem por ferramenta no mês (para o topo da página Auditoria). |
 
-### hermes/backups.py — 💾 backups automáticos dos dados
+### betterme/backups.py — 💾 backups automáticos dos dados
 
 | Função | O que faz |
 |---|---|
@@ -903,7 +906,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `prune(cfg, origin, keep)` | Mantém apenas os N backups mais recentes de `origin`; devolve os apagados. |
 | `tool_backups(args, cfg)` | — |
 
-### hermes/metrics.py — 📊 métricas de uso (jsonl)
+### betterme/metrics.py — 📊 métricas de uso (jsonl)
 
 | Função | O que faz |
 |---|---|
@@ -911,7 +914,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `recent(cfg, limit, agent)` | — |
 | `summary(cfg)` | Médias das últimas N respostas (para o painel). |
 
-### hermes/notify.py — 🔔 notificações ao operador
+### betterme/notify.py — 🔔 notificações ao operador
 
 | Função | O que faz |
 |---|---|
@@ -920,10 +923,10 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `unread_count(cfg)` | — |
 | `mark_all_read(cfg)` | — |
 
-### hermes/recipes.py — 📋 receitas: fluxos prontos de uso
+### betterme/recipes.py — 📋 receitas: fluxos prontos de uso
 
 
-### hermes/stt.py — 🎤 ditado por voz (Whisper local)
+### betterme/stt.py — 🎤 ditado por voz (Whisper local)
 
 | Função | O que faz |
 |---|---|
@@ -931,7 +934,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `_get_model(name)` | Carrega (e cacheia) o modelo Whisper — download no primeiro uso. |
 | `transcribe(cfg, data)` | Transcreve o áudio (bytes webm/ogg/wav/mp3…) e devolve {ok, text}. |
 
-### hermes/supervisor.py — 👁 supervisor: vigia e reinicia processos
+### betterme/supervisor.py — 👁 supervisor: vigia e reinicia processos
 
 **classe `McpSupervisor`** — —
 
@@ -952,7 +955,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `checkOnline()` | v3.11.1 — detecta servidor offline e exibe o banner vermelho (casca em cache) |
 | `store()` | persistência leve no localStorage (preferências da GUI) |
 | `toast()` | aviso flutuante |
-| `api()` | fetch com token X-Hermes-Token embutido |
+| `api()` | fetch com token X-Betterme-Token embutido |
 | `esc()` | escape de HTML (anti-injeção na renderização) |
 | `mdFmt()` | renderização markdown leve das respostas |
 | `copyCode()` | copiar bloco de código |
@@ -995,14 +998,14 @@ renderização e utilidade (`mdFmt`, `bubble`, `toolBlock`, `fmtUp`…).*
 
 ## 7. Segurança
 
-- **token** opcional (`hermes server --token` / `auth_token`) — header
-  `X-Hermes-Token`; **anti-CSRF**: POST cross-origin sem token é 403;
+- **token** opcional (`betterme server --token` / `auth_token`) — header
+  `X-Betterme-Token`; **anti-CSRF**: POST cross-origin sem token é 403;
 - **denylist** de comandos perigosos no `tools.py` (shutdown, dd em
   disco, /dev/sd*, fork bomb…);
 - **secrets/** com chmod 600 — credenciais NUNCA passam pelo modelo,
   config versionado, logs ou auditoria;
 - e-mail e agenda **somente leitura** por padrão;
-- `hermes skills audit` — anti-prompt-injection no catálogo;
+- `betterme skills audit` — anti-prompt-injection no catálogo;
 - `git grep` anti-segredo antes de todo push; repo sem dados pessoais.
 
 ## 8. Solução de problemas
@@ -1013,7 +1016,7 @@ renderização e utilidade (`mdFmt`, `bubble`, `toolBlock`, `fmtUp`…).*
 | GUI "abre" com servidor desligado | casca em cache do service worker | banner vermelho acusa (v3.11.1); F12 → Application → Unregister + Clear site data |
 | aba Ollama vazia com servidor off | normal — cache expira | ligue o Ollama (aba Ollama ▶) e recarregue |
 | "não recebo a resposta do agente" | era bug v3.4, corrigido v3.5 | se voltar, reporte (garantidor do done ativo) |
-| update falha (sem internet) | GitHub inacessível | `hermes update --check`; ou unzip manual do zip da release |
+| update falha (sem internet) | GitHub inacessível | `betterme update --check`; ou unzip manual do zip da release |
 | Ollama lento | modelo pesado p/ a máquina | aba Ollama → ver tok/s no Painel; troque por modelo menor |
 
 ---

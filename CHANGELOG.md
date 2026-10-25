@@ -1,5 +1,43 @@
 # Changelog
 
+## v4.1.0 — 🏷️ BETTERME: o agente muda de nome (PR #4 do roadmap)
+
+O Hermes Agent passa a se chamar **Betterme**. Renome completo, com
+transição suave — nada quebra na máquina do operador.
+
+**O que mudou:**
+- Pacote `hermes/` → `betterme/`; CLI **`betterme`** (com alias legado
+  `hermes` mantido instalado para scripts/músculo memorizado);
+  `betterme-agent` no pyproject; zips `betterme-agent-*.zip`.
+- Identidade: o prompt de sistema apresenta "Você é o Betterme"; GUI,
+  TUI e mensagens seguem o novo nome.
+- **Migração automática do data-dir**: no primeiro uso com caminho
+  default, `~/.hermes` é movido para `~/.betterme` (memória, biblioteca,
+  secrets, conversas — tudo junto). Data-dirs explícitos nunca são
+  tocados.
+- Env vars: `BETTERME_MOCK`/`BETTERME_DATA_DIR` (novas) com fallback
+  legado `HERMES_*`; variáveis internas de processos renomeadas com
+  fallback nos servidores MCP.
+- Instruções de projeto: **`BETTERME.md`** (novo nome), com fallback
+  legado `HERMES.md` e compatibilidade `AGENTS.md` — precedência
+  BETTERME.md > HERMES.md > AGENTS.md.
+- systemd: unidades `betterme-agent.service`/`betterme-server.service`
+  (re-registre com `betterme daemon boot`).
+- `betterme update` continua funcionando: o mecanismo usa o archive
+  oficial do GitHub (independente de nome; redirect cobre futuro rename
+  do repositório).
+
+**Bugs de renome pegos pela suíte antes da release:** env dos servidores
+MCP fora da leva principal (email/agenda "sem conta configurada") e a
+regex de modelos gerais em `autoselect` — `hermes3:8b` (nome do MODELO
+Ollama, que não muda) tinha parado de casar, o que desordenaria a
+auto-atribuição de papéis.
+
+**Testes:** T141 (identidade, alias, env legado, migração com HOME
+falso, data-dir explícito intocado) + T129 estendido (precedência
+BETTERME.md). **141/141.**
+
+## v4.0.0 — 🚀 A ENTRADA NO MODELO COMPLETO DE AGENTES DE IA
 ## v4.0.0 — 🚀 A ENTRADA NO MODELO COMPLETO DE AGENTES DE IA
 
 A virada de filosofia (ADR-001): o Hermes deixa de ser "1 cérebro +

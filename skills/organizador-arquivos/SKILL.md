@@ -23,7 +23,7 @@ Nunca mova às cegas.
 
 ## Zonas intocáveis (JAMAIS mover/apagar)
 
-- `~/.hermes/` (dados do agente) e `~/.hermes/secrets/`
+- `~/.betterme/` (dados do agente) e `~/.betterme/secrets/`
 - `~/.ssh/`, `~/.config/`, `~/.gnupg/`
 - qualquer pasta de sistema (`/etc`, `/usr`, `/var`, `/boot`)
 

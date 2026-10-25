@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hermes-agent"
-version = "3.17.0"
-description = "Agente Linux via terminal com Ollama (Hermes) e GUI web para ligar/desligar"
+name = "betterme-agent"
+version = "4.1.0"
+description = "Agente Linux via terminal com Ollama (Betterme) e GUI web para ligar/desligar"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -18,10 +18,11 @@ dependencies = [
 ]
 
 [project.scripts]
-hermes = "hermes.cli:main"
+betterme = "betterme.cli:main"
+hermes = "betterme.cli:main"        # alias legado (v4.0 e anteriores)
 
 [tool.setuptools.packages.find]
-include = ["hermes*"]
+include = ["betterme*"]
 
 [tool.setuptools.package-data]
-"hermes.server" = ["templates/*.html"]
+"betterme.server" = ["templates/*.html"]

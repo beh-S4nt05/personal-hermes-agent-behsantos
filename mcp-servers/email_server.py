@@ -8,7 +8,7 @@ Ferramentas expostas ao agente (nomes mapeados como mcp_email_*):
   email_send     — envia e-mail (to, subject, body)
   email_accounts — contas configuradas (sem credenciais)
 
-SEGURANÇA: as credenciais vêm de $HERMES_EMAIL_SECRETS (arquivo 600,
+SEGURANÇA: as credenciais vêm de $BETTERME_EMAIL_SECRETS (arquivo 600,
 fora do workspace), lidas DIRETO por este processo — nunca passam pelo
 modelo, nunca aparecem em respostas, logs ou auditoria. Só o conteúdo
 dos e-mails trafega pelas ferramentas.
@@ -107,8 +107,8 @@ _ACC_CACHE: dict = {"mtime": None, "accs": None, "loaded": 0.0}
 def _load_accounts() -> list[dict]:
     """Contas do arquivo de segredos — em CACHE por mtime (o access_token
     renovado fica vivo entre chamadas, sem regravar nada em disco)."""
-    path = os.environ.get("HERMES_EMAIL_SECRETS") or \
-        str(Path.home() / ".hermes" / "secrets" / "email.json")
+    path = os.environ.get("BETTERME_EMAIL_SECRETS") or os.environ.get("HERMES_EMAIL_SECRETS") or \
+        str(Path.home() / ".betterme" / "secrets" / "email.json")
     try:
         mtime = os.path.getmtime(path)
         if (_ACC_CACHE["accs"] is not None
@@ -127,7 +127,7 @@ def _load_accounts() -> list[dict]:
 def _pick(args: dict) -> dict | None:
     accs = _load_accounts()
     if not accs:
-        raise RuntimeError("nenhuma conta configurada — rode: hermes email setup")
+        raise RuntimeError("nenhuma conta configurada — rode: betterme email setup")
     want = str(args.get("account") or "").strip()
     if not want:
         # padrão: primeira conta
@@ -351,7 +351,7 @@ def tool_send(args: dict) -> str:
         raise RuntimeError(
             f"a conta {acc.get('id')} ({acc.get('user')}) está em modo SOMENTE "
             "LEITURA — o agente apenas visualiza e-mails. Para liberar o envio "
-            f"rode no terminal: hermes email modo {acc.get('id')} envio")
+            f"rode no terminal: betterme email modo {acc.get('id')} envio")
     if not acc.get("smtp_ok", True):
         raise RuntimeError(f"a conta {acc.get('id')} está em modo somente leitura "
                            "(SMTP não validado no setup)")
@@ -395,7 +395,7 @@ def tool_send(args: dict) -> str:
 def tool_accounts(_args: dict) -> str:
     accs = _load_accounts()
     if not accs:
-        return ("nenhuma conta configurada — rode `hermes email setup` no terminal "
+        return ("nenhuma conta configurada — rode `betterme email setup` no terminal "
                 "e reinicie o server")
     linhas = []
     for a in accs:

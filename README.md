@@ -1,11 +1,11 @@
-# ◈ Hermes Agent
+# ◈ Betterme Agent
 
-**Agente Linux via terminal com Ollama (modelo Hermes) + GUI web para controle e
+**Agente Linux via terminal com Ollama (modelo Betterme) + GUI web para controle e
 gerenciamento de ligado/desligado.**
 
-O Hermes é um agente local que conversa, diagnostica e opera sua máquina Linux
+O Betterme é um agente local que conversa, diagnostica e opera sua máquina Linux
 executando comandos shell, lendo/gravando arquivos e inspecionando o sistema —
-com o cérebro rodando no **Ollama** com o modelo **Hermes** (Nous Research),
+com o cérebro rodando no **Ollama** com o modelo **Betterme** (Nous Research),
 100% local, sem nuvem.
 
 A **GUI web** permite ligar/desligar o agente e o servidor Ollama com um clique,
@@ -24,8 +24,8 @@ a configuração.
               ▼                    ▼                    ▼
    ┌────────────────────┐ ┌──────────────────┐ ┌─────────────────┐
    │ agent daemon       │ │ CLI terminal     │ │ Ollama          │
-   │ ▸ fila de tarefas  │ │ hermes chat/run  │ │ ollama serve    │
-   │ ▸ heartbeat+log    │ │ hermes agent …   │ │ modelo: hermes3 │
+   │ ▸ fila de tarefas  │ │ betterme chat/run  │ │ ollama serve    │
+   │ ▸ heartbeat+log    │ │ betterme agent …   │ │ modelo: hermes3 │
    └─────────┬──────────┘ └────────┬─────────┘ └────────▲────────┘
              │      ferramentas (bash, arquivos, diagnóstico)
              └──────────────► Linux ◄────────────────────┘
@@ -36,24 +36,24 @@ a configuração.
 ## ⚡ Início rápido
 
 ```bash
-cd hermes-agent
+cd betterme-agent
 chmod +x install.sh
 ./install.sh                       # instala Ollama + modelo hermes3:8b + CLI
 
-hermes status                      # conferir tudo
-hermes server                      # abrir a GUI em http://localhost:8080
+betterme status                      # conferir tudo
+betterme server                      # abrir a GUI em http://localhost:8080
 ```
 
 Acesso de outros aparelhos na rede (**sempre com senha!**):
 
 ```bash
-hermes server --host 0.0.0.0 --port 8080 --token minha-senha-segura
+betterme server --host 0.0.0.0 --port 8080 --token minha-senha-segura
 ```
 
 Para instalar como serviço que sobe junto do sistema:
 
 ```bash
-./install.sh --with-systemd        # hermes-server + hermes-agent no systemd
+./install.sh --with-systemd        # betterme-server + betterme-agent no systemd
 ```
 
 ### Requisitos
@@ -63,7 +63,7 @@ Para instalar como serviço que sobe junto do sistema:
 | SO | Linux (testado em Debian/Ubuntu; usa systemd quando disponível) |
 | Python | 3.9+ |
 | RAM | 8 GB (`hermes3:3b`) · 12 GB+ (`hermes3:8b`) · 64 GB+ (`hermes3:70b`) |
-| Disco | ~5 GB (modelo 8b) + 1 GB (Hermes) |
+| Disco | ~5 GB (modelo 8b) + 1 GB (Betterme) |
 
 ### Instalação manual (sem install.sh)
 
@@ -72,12 +72,12 @@ Para instalar como serviço que sobe junto do sistema:
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull hermes3:8b
 
-# 2. Hermes Agent
+# 2. Betterme Agent
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e .
 
 # 3. Use
-hermes server
+betterme server
 ```
 
 ---
@@ -86,19 +86,19 @@ hermes server
 
 | Comando | O que faz |
 |---|---|
-| `hermes chat` | chat interativo com o agente no terminal |
-| `hermes run "tarefa"` | executa uma tarefa única (ex.: `hermes run "mostre uso de disco"`) |
-| `hermes server` | sobe a GUI web (`--host --port --token`) |
-| `hermes daemon` | roda o daemon do agente em primeiro plano |
-| `hermes status` | status do agente + Ollama |
-| `hermes agent start\|stop\|restart\|status` | **liga/desliga** o agente |
-| `hermes ollama start\|stop\|status` | **liga/desliga** o servidor Ollama |
-| `hermes ollama pull [modelo]` | baixa um modelo |
-| `hermes models` | lista modelos locais |
-| `hermes tasks` | fila de tarefas e resultados |
-| `hermes config show\|set\|edit` | configuração |
+| `betterme chat` | chat interativo com o agente no terminal |
+| `betterme run "tarefa"` | executa uma tarefa única (ex.: `betterme run "mostre uso de disco"`) |
+| `betterme server` | sobe a GUI web (`--host --port --token`) |
+| `betterme daemon` | roda o daemon do agente em primeiro plano |
+| `betterme status` | status do agente + Ollama |
+| `betterme agent start\|stop\|restart\|status` | **liga/desliga** o agente |
+| `betterme ollama start\|stop\|status` | **liga/desliga** o servidor Ollama |
+| `betterme ollama pull [modelo]` | baixa um modelo |
+| `betterme models` | lista modelos locais |
+| `betterme tasks` | fila de tarefas e resultados |
+| `betterme config show\|set\|edit` | configuração |
 
-Flags globais: `--data-dir DIR` (diretório de dados, padrão `~/.hermes`) e
+Flags globais: `--data-dir DIR` (diretório de dados, padrão `~/.betterme`) e
 `--mock` (modo demonstração com Ollama simulado).
 
 ## 🌐 GUI web
@@ -112,7 +112,7 @@ Abra `http://localhost:8080` (ou `host:porta` que você escolheu).
 - **☑ Tarefas** — enfileira tarefas para o daemon executar em sequência
   (funciona até com o chat fechado; histórico com resultados).
 - **⚙ Ajustes** — troca de modelo, prompt de sistema, limites, sandbox e token
-  de acesso, salvos em `~/.hermes/config.yaml`.
+  de acesso, salvos em `~/.betterme/config.yaml`.
 
 ## 🔌 API REST (usada pela GUI)
 
@@ -127,7 +127,7 @@ Abra `http://localhost:8080` (ou `host:porta` que você escolheu).
 | GET/POST | `/api/tasks` (+`/clear`) | fila de tarefas |
 | GET/POST | `/api/settings` | configuração |
 
-Autenticação (quando houver token): header `X-Hermes-Token: <token>` ou
+Autenticação (quando houver token): header `X-Betterme-Token: <token>` ou
 `?token=<token>`.
 
 Exemplo:
@@ -140,13 +140,13 @@ curl -N localhost:8080/api/logs/stream          # log ao vivo no terminal
 ## ⏰ Tarefas agendadas
 
 Deixe pedidos para executarem sozinhos em horários específicos — o
-agendador roda **dentro do `hermes server`** (mantenha a GUI aberta):
+agendador roda **dentro do `betterme server`** (mantenha a GUI aberta):
 
 ```bash
-hermes schedule add "resuma meus e-mails e as atividades do classroom" "diário 07:30"
-hermes schedule add "relatório de uso de disco" "seg,sex 18:00"
-hermes schedule add "limpeza de backups antigos" "domingo 03:00"
-hermes schedule list
+betterme schedule add "resuma meus e-mails e as atividades do classroom" "diário 07:30"
+betterme schedule add "relatório de uso de disco" "seg,sex 18:00"
+betterme schedule add "limpeza de backups antigos" "domingo 03:00"
+betterme schedule list
 ```
 
 Ou pela GUI → aba **Tarefas → ⏰ Tarefas agendadas**. Formatos aceitos:
@@ -173,14 +173,14 @@ terminal rápido (com a mesma denylist de segurança), arquivos do workspace
 (listar/ler/gravar), diagnóstico da máquina e o catálogo de funções
 (nativas + MCP). Use sem passar pelo chat.
 
-## 🔌 Dois agentes: Hermes e Claude Code
+## 🔌 Dois agentes: Betterme e Claude Code
 
 No chat, o seletor no topo escolhe quem responde:
 
-- **◈ Hermes (Ollama)** — o agente padrão deste projeto;
+- **◈ Betterme (Ollama)** — o agente padrão deste projeto;
 - **🔌 Claude Code** — a CLI `claude` da sua máquina, com as funções padrão
   do Claude (bash, leitura/edição de arquivos, busca…), **integrada ao
-  Ollama automaticamente**: o Hermes lança o `claude` apontando para o mesmo
+  Ollama automaticamente**: o Betterme lança o `claude` apontando para o mesmo
   servidor Ollama (variáveis `ANTHROPIC_*` aplicadas sozinhas — não é
   preciso exportar nada). Ajustável em ⚙ Ajustes (`claude_use_ollama`,
   `claude_model`).
@@ -191,7 +191,7 @@ No chat, o seletor no topo escolhe quem responde:
   # ⚠ sem --model ele tenta "claude-opus-…", que NÃO existe no Ollama
   ```
 
-As tarefas agendadas também têm seletor de agente (Hermes ou Claude Code).
+As tarefas agendadas também têm seletor de agente (Betterme ou Claude Code).
 
 ## 🎤 Ditar pelo microfone (Whisper local)
 
@@ -244,7 +244,7 @@ no horário agendado.
 
 ## 📔 Memória do agente
 
-O Hermes lembra de você entre conversas, reinícios e tarefas agendadas.
+O Betterme lembra de você entre conversas, reinícios e tarefas agendadas.
 Na prática:
 
 - No chat, conte algo ("lembre que meu curso é X") e o agente salva com a
@@ -261,7 +261,7 @@ resto do `data/`.
 A aba **Ollama** dá a visibilidade de processo que no Windows fica na bandeja:
 
 - **Servidor**: estado, versão, **PID, tempo ligado, memória RSS**, quem gerencia
-  (systemd/Hermes/externo), modelos carregados em memória/VRAM e botões
+  (systemd/Betterme/externo), modelos carregados em memória/VRAM e botões
   ▶ Ligar / ■ Desligar / ⟳ Reiniciar / ⚙ **iniciar com o sistema** (systemd).
 - **Conexão**: edite o endereço da API (`ollama_url`), ative o **arranjo
   automático** (o agente sobe o Ollama sozinho quando precisar) e rode o
@@ -277,7 +277,7 @@ A aba **Ollama** dá a visibilidade de processo que no Windows fica na bandeja:
 
 ## 🔌 Conectores MCP
 
-O Hermes é um **cliente MCP** (Model Context Protocol): servidores externos
+O Betterme é um **cliente MCP** (Model Context Protocol): servidores externos
 (Figma, GitHub, bancos, automação) aparecem para o agente como ferramentas
 extras `mcp_<servidor>_<ferramenta>`. Configure em `config.yaml`:
 
@@ -323,7 +323,7 @@ curl -X POST localhost:8080/api/skills/install \
 ```
 
 **Criar suas próprias**: pasta com `SKILL.md` (frontmatter `name` +
-`description` + instruções em Markdown) em `~/.hermes/skills/` — o próprio
+`description` + instruções em Markdown) em `~/.betterme/skills/` — o próprio
 agente pode criar skills com a ferramenta `write_file`.
 
 ## 🛡 Segurança
@@ -335,16 +335,16 @@ O agente executa comandos na máquina — trate-o como um shell com assistência
 - Comandos destrutivos (`rm -rf /`, `mkfs`, `dd` para disco, `shutdown`,
   `curl … | sh`, fork bomb…) são **bloqueados por denylist** em qualquer modo.
 - `sandbox: true` restringe leitura/escrita de arquivos ao workspace
-  (`~/.hermes/workspace`).
+  (`~/.betterme/workspace`).
 - No terminal, comandos arriscados pedem confirmação
   (`confirm_dangerous: true`).
 - Todo comando tem timeout (`cmd_timeout`) e saída truncada.
 - Prefira manter a GUI em `127.0.0.1` e acessar via SSH/túnel quando possível.
 
-## 📁 Onde ficam os dados (`~/.hermes`)
+## 📁 Onde ficam os dados (`~/.betterme`)
 
 ```
-~/.hermes/
+~/.betterme/
 ├── config.yaml          configuração (editável pela GUI/CLI)
 ├── heartbeat.json       estado do agente (pid, status) — usado pelo ligar/desligar
 ├── workspace/           sandbox de arquivos do agente
@@ -355,35 +355,35 @@ O agente executa comandos na máquina — trate-o como um shell com assistência
 
 ## 🧪 Modo demonstração (sem Ollama)
 
-Sem Ollama instalado (ou com `--mock`), o Hermes entra em **modo demonstração**:
+Sem Ollama instalado (ou com `--mock`), o Betterme entra em **modo demonstração**:
 um Ollama simulado responde localmente, o loop de ferramentas é real e a GUI
 funciona por completo — útil para avaliar antes de baixar modelos. As respostas
 deixam claro que são simuladas.
 
 ## 🧩 Modelos
 
-Qualquer tag do Ollama funciona; o padrão é o Hermes:
+Qualquer tag do Ollama funciona; o padrão é o Betterme:
 
 ```bash
 ollama pull hermes3:3b     # leve (~2 GB, 8 GB RAM)
 ollama pull hermes3:8b     # padrão (~4,7 GB, 12 GB RAM) — recomendado
 ollama pull hermes3:70b    # servidor (~40 GB)
-hermes config set model hermes3:3b
+betterme config set model hermes3:3b
 ```
 
 ## ❓ Problemas comuns
 
 | Sintoma | Solução |
 |---|---|
-| “não consegui falar com o Ollama” | `hermes ollama status` → `hermes ollama start` |
-| “modelo não encontrado” | `hermes ollama pull` (baixa o modelo da config) |
+| “não consegui falar com o Ollama” | `betterme ollama status` → `betterme ollama start` |
+| “modelo não encontrado” | `betterme ollama pull` (baixa o modelo da config) |
 | GUI não abre de outro aparelho | liberar a porta no firewall e usar `--host 0.0.0.0` |
 | Respostas lentas | use `hermes3:3b` ou reduza `num_ctx` |
-| Agente “sem heartbeat” | processo travado → `hermes agent restart` |
+| Agente “sem heartbeat” | processo travado → `betterme agent restart` |
 
 ---
 
-Feito com ◈ · [Ollama](https://ollama.com) · [Hermes 3 — Nous Research](https://ollama.com/library/hermes3) · Flask
+Feito com ◈ · [Ollama](https://ollama.com) · [Betterme 3 — Nous Research](https://ollama.com/library/hermes3) · Flask
 
 ## 🗺 Versões e branches de fase
 

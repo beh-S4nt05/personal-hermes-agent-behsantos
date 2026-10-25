@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gera DOCUMENTACAO.md do Hermes Agent — uso, evolução e referência por
+"""Gera DOCUMENTACAO.md do Betterme Agent — uso, evolução e referência por
 função, extraída DIRETO do código (AST) e do CHANGELOG. Rode na raiz:
     python3 tools/gen_doc.py
 """
@@ -8,13 +8,13 @@ import re
 from datetime import date
 from pathlib import Path
 
-ROOT = Path("/home/user/hermes-agent")
+ROOT = Path(__file__).resolve().parent.parent   # à prova de rename
 OUT = ROOT / "DOCUMENTACAO.md"
 HOJE = date.today().strftime("%d/%m/%Y")
 
 VERSION = ""
 m = re.search(r'VERSION = "([^"]+)"',
-              (ROOT / "hermes" / "config.py").read_text(encoding="utf-8"))
+              (ROOT / "betterme" / "config.py").read_text(encoding="utf-8"))
 if m:
     VERSION = m.group(1)
 
@@ -27,7 +27,7 @@ PAPEL_MODULO = {
         "tokens e uso das ferramentas"),
     "server/app.py": ("🌐", "a API REST + GUI web (Flask/waitress): todos os "
         "endpoints, streaming do chat, aprovações, painel e páginas"),
-    "cli.py": ("⌨️", "todos os comandos `hermes` do terminal"),
+    "cli.py": ("⌨️", "todos os comandos `betterme` do terminal"),
     "config.py": ("⚙️", "Config: defaults, leitura/escrita do config.yaml, "
         "skills_dirs, chaves tipadas"),
     "update.py": ("⬇", "autoatualização: consulta tags no GitHub, baixa o zip "
@@ -63,7 +63,7 @@ PAPEL_MODULO = {
 
 JS_DESC = {
     "checkOnline": "v3.11.1 — detecta servidor offline e exibe o banner vermelho (casca em cache)",
-    "api": "fetch com token X-Hermes-Token embutido",
+    "api": "fetch com token X-Betterme-Token embutido",
     "esc": "escape de HTML (anti-injeção na renderização)",
     "store": "persistência leve no localStorage (preferências da GUI)",
     "toast": "aviso flutuante",
@@ -214,7 +214,7 @@ def secao_modulo(nome, funcs, classes, icon, papel):
 partes = []
 A = partes.append
 
-A(f"""# 📘 Hermes Agent — Documentação viva: uso, evolução e funções
+A(f"""# 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
 **Versão {VERSION}** · gerado em {HOJE} · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
@@ -223,7 +223,7 @@ versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
 
 ---
 
-## 1. O que é o Hermes Agent
+## 1. O que é o Betterme Agent
 
 Um **agente pessoal que roda na SUA máquina** (Linux, local-first):
 conversa por chat, executa tarefas de verdade (shell, arquivos, web,
@@ -232,7 +232,7 @@ de controle em `localhost:8080` — zero nuvem, zero dado saindo do
 computador. O Claude Code entra como 2º agente opcional.
 
 **Princípios que não negociam:**
-- 🏠 **local-first**: tudo em `~/.hermes`; funciona offline;
+- 🏠 **local-first**: tudo em `~/.betterme`; funciona offline;
 - 🎯 **pipeline padrão**: conversa comum responde direto; pedido de
   tarefa → 🎯 orquestrador → [🔒 aprovação] → ⚡ executor → 🔍 revisor
   → [📦 entrega] → done;
@@ -249,20 +249,20 @@ computador. O Claude Code entra como 2º agente opcional.
 ### 2.1 Instalar e atualizar
 ```bash
 ./install.sh                  # instalação completa (Debian/Ubuntu/Fedora/Arch)
-hermes update                 # ⬇ atualiza em 1 comando (tags do GitHub)
-hermes update --check         # só verifica se há versão nova
+betterme update                 # ⬇ atualiza em 1 comando (tags do GitHub)
+betterme update --check         # só verifica se há versão nova
 ```
 O `update` preserva `data/` (suas conversas, memória, config), `.venv`
 e `.git`.
 
 ### 2.2 Ligar e desligar (ciclo de vida)
 ```bash
-hermes server                 # ▶ liga a GUI — http://localhost:8080
+betterme server                 # ▶ liga a GUI — http://localhost:8080
 # Ctrl+C desliga. Não existe serviço no boot por padrão.
 ```
 - Instalação com `install.sh --with-systemd` cria os services
-  (`hermes-server`, `hermes-agent`) — `sudo systemctl disable --now
-  hermes-server hermes-agent` remove.
+  (`betterme-server`, `betterme-agent`) — `sudo systemctl disable --now
+  betterme-server betterme-agent` remove.
 - **O "fantasma do cache"**: com o servidor desligado o navegador ainda
   pode abrir a página (service worker guarda a casca). Desde a v3.11.1
   ela exibe um **banner vermelho "server OFFLINE"**. Para limpar de
@@ -275,7 +275,7 @@ hermes server                 # ▶ liga a GUI — http://localhost:8080
 | **Painel** | status do agente/Ollama, desempenho (tok/s) e **🎯 Saúde do pipeline**: aprovação na 1ª tentativa (%), tentativas médias, duração média, suas edições, skills top, tasks por dia (v3.10) |
 | **Chat** | conversa + pipeline; 🔒 aprovação de plano (só criação), 📦 entrega editável; 🔬 por baixo dos panos; `/comandos`; `goal` de sessão; pendências de antes de um restart reaparecem no topo (v3.11) |
 | **Ollama** | TODOS os modelos instalados + **papel de cada um** (💬 chat · 🎯 orquestrador · 🔍 revisor · ⚡ executor · 🔌 claude) com atribuição em 1 clique; funciona com servidor desligado (cache) (v3.9) |
-| **Skills** | catálogo (18 embutidas), ativar/desativar, criar com `criar-skill`, auditar com `hermes skills audit` (v3.11) |
+| **Skills** | catálogo (18 embutidas), ativar/desativar, criar com `criar-skill`, auditar com `betterme skills audit` (v3.11) |
 | **Tarefas** | fila do daemon + ⏰ agendadas |
 | **Auditoria / Memória / Ferramentas / Ajustes** | rastro de ações, fatos lembrados, toggles e modelos por papel ao vivo |
 
@@ -291,13 +291,13 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 """)
 
 # ── CLI (tabela gerada) ──
-src_cli = (ROOT / "hermes" / "cli.py").read_text(encoding="utf-8")
+src_cli = (ROOT / "betterme" / "cli.py").read_text(encoding="utf-8")
 cmds = re.findall(r'add_parser\("([^"]+)",\s*help="([^"]+)"', src_cli)
 A("### 2.5 CLI completa\n\n| Comando | O que faz |\n|---|---|\n")
 for nome, help_ in cmds:
-    A(f"| `hermes {nome}` | {help_} |")
-A("\nSubcomandos: `hermes skills audit` (auditar o catálogo), "
-  "`hermes config set/get`, `hermes server --host/--port/--token`.\n")
+    A(f"| `betterme {nome}` | {help_} |")
+A("\nSubcomandos: `betterme skills audit` (auditar o catálogo), "
+  "`betterme config set/get`, `betterme server --host/--port/--token`.\n")
 
 # ── 3. modificações ──
 A(f"""
@@ -360,7 +360,7 @@ A("""
 navegador ─ GUI (index.html, vanilla JS)
    │  HTTP/SSE
    ▼
-hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
+betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
    │                          │
    ▼                          ▼
 🎯 orchestrator ────────── ⚡ agent.py ──🔧 tools (shell/web/arquivos)
@@ -369,10 +369,10 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 🔍 revisão ──► entrega      Ollama (localhost:11434) · Claude Code
    │
    ▼  registro/aprendizado
-~/.hermes/ (dados — tabela abaixo)
+~/.betterme/ (dados — tabela abaixo)
 ```
 
-**Arquivos em `~/.hermes/` (data_dir):**
+**Arquivos em `~/.betterme/` (data_dir):**
 
 | Caminho | O que guarda |
 |---|---|
@@ -400,8 +400,8 @@ ordem = sorted(PAPEL_MODULO.items(),
                             "claude_agent.py", "mcp_client.py", "doctor.py",
                             "emailcfg.py", "agendacfg.py"] else 99)
 for nome, (icon, papel) in ordem:
-    caminho = ROOT / "hermes" / "server" / "app.py" if nome == "server/app.py" \
-        else ROOT / "hermes" / nome
+    caminho = ROOT / "betterme" / "server" / "app.py" if nome == "server/app.py" \
+        else ROOT / "betterme" / nome
     try:
         funcs, classes = parse_modulo(caminho)
     except Exception as exc:  # noqa: BLE001
@@ -411,7 +411,7 @@ for nome, (icon, papel) in ordem:
     if nome == "server/app.py":
         eps = parse_endpoints(caminho)
         total_fn += len(eps)
-        A(f"### hermes/server/app.py — {icon} {papel}\n")
+        A(f"### betterme/server/app.py — {icon} {papel}\n")
         A(f"**{len(eps)} endpoints HTTP:**\n")
         A("| Método e rota | O que faz |")
         A("|---|---|")
@@ -419,7 +419,7 @@ for nome, (icon, papel) in ordem:
             A(f"| `{met} {rota}` | {doc or fnome} |")
         A("")
         funcs = [f for f in funcs]  # helpers de módulo seguem abaixo
-    partes.extend(secao_modulo(f"hermes/{nome}" if nome != "server/app.py"
+    partes.extend(secao_modulo(f"betterme/{nome}" if nome != "server/app.py"
                                else "app.py — helpers", funcs, classes,
                                icon, papel))
 
@@ -429,7 +429,7 @@ A("""### GUI (index.html) — funções JavaScript principais
 | Função | O que faz |
 |---|---|
 """)
-js_src = (ROOT / "hermes" / "server" / "templates" / "index.html"
+js_src = (ROOT / "betterme" / "server" / "templates" / "index.html"
           ).read_text(encoding="utf-8")
 js_nomes = re.findall(r"^(?:async )?function (\w+)\(", js_src, re.M)
 for nome in js_nomes:
@@ -441,14 +441,14 @@ renderização e utilidade (`mdFmt`, `bubble`, `toolBlock`, `fmtUp`…).*
 
 ## 7. Segurança
 
-- **token** opcional (`hermes server --token` / `auth_token`) — header
-  `X-Hermes-Token`; **anti-CSRF**: POST cross-origin sem token é 403;
+- **token** opcional (`betterme server --token` / `auth_token`) — header
+  `X-Betterme-Token`; **anti-CSRF**: POST cross-origin sem token é 403;
 - **denylist** de comandos perigosos no `tools.py` (shutdown, dd em
   disco, /dev/sd*, fork bomb…);
 - **secrets/** com chmod 600 — credenciais NUNCA passam pelo modelo,
   config versionado, logs ou auditoria;
 - e-mail e agenda **somente leitura** por padrão;
-- `hermes skills audit` — anti-prompt-injection no catálogo;
+- `betterme skills audit` — anti-prompt-injection no catálogo;
 - `git grep` anti-segredo antes de todo push; repo sem dados pessoais.
 
 ## 8. Solução de problemas
@@ -459,7 +459,7 @@ renderização e utilidade (`mdFmt`, `bubble`, `toolBlock`, `fmtUp`…).*
 | GUI "abre" com servidor desligado | casca em cache do service worker | banner vermelho acusa (v3.11.1); F12 → Application → Unregister + Clear site data |
 | aba Ollama vazia com servidor off | normal — cache expira | ligue o Ollama (aba Ollama ▶) e recarregue |
 | "não recebo a resposta do agente" | era bug v3.4, corrigido v3.5 | se voltar, reporte (garantidor do done ativo) |
-| update falha (sem internet) | GitHub inacessível | `hermes update --check`; ou unzip manual do zip da release |
+| update falha (sem internet) | GitHub inacessível | `betterme update --check`; ou unzip manual do zip da release |
 | Ollama lento | modelo pesado p/ a máquina | aba Ollama → ver tok/s no Painel; troque por modelo menor |
 
 ---

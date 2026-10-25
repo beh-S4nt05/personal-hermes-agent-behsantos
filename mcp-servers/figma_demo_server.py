@@ -3,7 +3,7 @@
 
 Expõe ferramentas no formato Model Context Protocol para criar/modificar
 designs de aplicações — perfeito para demonstrar e testar o conector MCP do
-Hermes Agent sem precisar de conta Figma nem chave de API.
+Betterme Agent sem precisar de conta Figma nem chave de API.
 
 Também serve como exemplo/commentário de referência de como escrever um
 servidor MCP em Python puro: JSON-RPC 2.0 por linhas no stdin/stdout.

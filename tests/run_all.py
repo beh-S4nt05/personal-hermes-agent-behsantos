@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Suíte de testes do Hermes Agent (v3.0).
+"""Suíte de testes do Betterme Agent (v3.0).
 
 Rode com:
     ./.venv/bin/python tests/run_all.py        # no projeto
     python3 tests/run_all.py                    # se as deps estiverem globais
 
-Cada caso usa um diretório temporário PRÓPRIO (nada toca em ~/.hermes).
+Cada caso usa um diretório temporário PRÓPRIO (nada toca em ~/.betterme).
 Cobre: módulos v3.0 (backups, auditoria, métricas, notificações, memória,
 seletor, orçamento, paralelismo, cache, scheduler, supervisor), endpoints
 da API, regressões das v2.x (JSON solto, anti-loop, modo leve do Claude
@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-os.environ.setdefault("HERMES_MOCK", "1")
+os.environ.setdefault("BETTERME_MOCK", "1")
 
 try:
     import flask  # noqa: F401
@@ -32,7 +32,7 @@ except ImportError:
     print("    ./.venv/bin/python tests/run_all.py")
     sys.exit(2)
 
-from hermes.config import Config  # noqa: E402
+from betterme.config import Config  # noqa: E402
 
 CASES = []
 PASSED: list[str] = []
@@ -46,7 +46,7 @@ def case(fn):
 
 def fresh(**overrides) -> Config:
     """Config isolada em diretório temporário (anti-contaminação)."""
-    cfg = Config(data_dir=tempfile.mkdtemp(prefix="hermes-t-"), mock=True)
+    cfg = Config(data_dir=tempfile.mkdtemp(prefix="betterme-t-"), mock=True)
     for k, v in overrides.items():
         cfg.update({k: v})
     return cfg
@@ -75,8 +75,8 @@ def run_all() -> int:
 
 @case
 def T01_backups_grava_restaura_preserva():
-    from hermes import backups as B
-    from hermes.tools import execute_tool
+    from betterme import backups as B
+    from betterme.tools import execute_tool
 
     cfg = fresh()
     f = cfg.workdir / "relatorio.txt"
@@ -94,7 +94,7 @@ def T01_backups_grava_restaura_preserva():
 
 @case
 def T02_backups_bloqueia_fora_do_workspace():
-    from hermes import backups as B
+    from betterme import backups as B
 
     cfg = fresh()
     outside = Path(tempfile.mkdtemp()) / "alvo.txt"
@@ -112,8 +112,8 @@ def T02_backups_bloqueia_fora_do_workspace():
 
 @case
 def T03_auditoria_registra_e_consulta():
-    from hermes import audit
-    from hermes.tools import execute_tool
+    from betterme import audit
+    from betterme.tools import execute_tool
 
     cfg = fresh()
     execute_tool("list_dir", {"path": "."}, cfg)
@@ -126,10 +126,10 @@ def T03_auditoria_registra_e_consulta():
 
 @case
 def T04_metricas_record_summary_recent():
-    from hermes import metrics
+    from betterme import metrics
 
     cfg = fresh()
-    metrics.record(cfg, "hermes", "modelo-x", 12.0, 240, 20.0, 3)
+    metrics.record(cfg, "betterme", "modelo-x", 12.0, 240, 20.0, 3)
     metrics.record(cfg, "claude", "modelo-x", 8.0, 100, 12.5, 1)
     s = metrics.summary(cfg)
     assert s["n"] == 2 and s["avg_tok_s"] == 16.2 and len(s["spark"]) == 2
@@ -138,7 +138,7 @@ def T04_metricas_record_summary_recent():
 
 @case
 def T05_notificacoes_push_unread_mark():
-    from hermes import notify
+    from betterme import notify
 
     cfg = fresh()
     notify.push(cfg, "task_error", "Falhou", "detalhe")
@@ -151,7 +151,7 @@ def T05_notificacoes_push_unread_mark():
 
 @case
 def T06_memoria_por_relevancia():
-    from hermes.memory import MemoryStore
+    from betterme.memory import MemoryStore
 
     cfg = fresh()
     mem = MemoryStore(cfg)
@@ -169,7 +169,7 @@ def T06_memoria_por_relevancia():
 
 @case
 def T07_seletor_de_ferramentas_mcp():
-    from hermes.agent import Agent
+    from betterme.agent import Agent
 
     cfg = fresh()
     ag = Agent(cfg)
@@ -187,7 +187,7 @@ def T07_seletor_de_ferramentas_mcp():
 
 @case
 def T08_orcamento_corta_cadeia_infinita():
-    from hermes.agent import Agent
+    from betterme.agent import Agent
 
     cfg = fresh(max_tool_calls=3, max_steps=20)
 
@@ -213,7 +213,7 @@ def T08_orcamento_corta_cadeia_infinita():
 
 @case
 def T09_ferramentas_em_paralelo():
-    from hermes.agent import Agent
+    from betterme.agent import Agent
 
     cfg = fresh()
 
@@ -238,8 +238,8 @@ def T09_ferramentas_em_paralelo():
 
 @case
 def T10_cache_do_prompt():
-    from hermes.agent import Agent
-    from hermes.memory import MemoryStore
+    from betterme.agent import Agent
+    from betterme.memory import MemoryStore
 
     cfg = fresh()
 
@@ -269,7 +269,7 @@ def T10_cache_do_prompt():
 
 @case
 def T11_passos_com_duracao():
-    from hermes.agent import Agent
+    from betterme.agent import Agent
 
     cfg = fresh()
 
@@ -292,7 +292,7 @@ def T11_passos_com_duracao():
 
 @case
 def T12_prompt_de_sistema_continua_enxuto():
-    from hermes.agent import Agent
+    from betterme.agent import Agent
 
     cfg = fresh()
     ag = Agent(cfg)
@@ -314,7 +314,7 @@ def T12_prompt_de_sistema_continua_enxuto():
 @case
 def T13_regressao_json_solto_v225():
     """O texto EXATO que o modelo do usuário cuspiu deve virar execução REAL."""
-    from hermes.agent import Agent
+    from betterme.agent import Agent
 
     cfg = fresh()
     texto = ('erton:\n{ "name": "sys_info", "arguments": {}}\n'
@@ -342,7 +342,7 @@ def T13_regressao_json_solto_v225():
 
 @case
 def T14_regressao_anti_loop_v227():
-    from hermes.agent import Agent
+    from betterme.agent import Agent
 
     cfg = fresh()
     call = [{"function": {"name": "list_dir", "arguments": {"path": "."}}}]
@@ -363,7 +363,7 @@ def T14_regressao_anti_loop_v227():
 
 @case
 def T15_regressao_keep_alive_e_options_v221():
-    from hermes.agent import Agent
+    from betterme.agent import Agent
 
     cfg = fresh(keep_alive="1h", num_predict=512)
     visto: dict = {}
@@ -385,7 +385,7 @@ def T15_regressao_keep_alive_e_options_v221():
 
 @case
 def T16_regressao_denylist_seguranca():
-    from hermes.tools import execute_tool, is_dangerous
+    from betterme.tools import execute_tool, is_dangerous
 
     cfg = fresh()
     r = execute_tool("run_command", {"command": "rm -rf / --no-preserve-root"}, cfg)
@@ -399,13 +399,13 @@ def T16_regressao_denylist_seguranca():
 
 @case
 def T17_claude_modo_leve_e_fallback_de_cli_antiga():
-    from hermes.claude_agent import run_claude
+    from betterme.claude_agent import run_claude
 
     # mock=False: precisa executar a CLI de verdade (falsas, abaixo)
-    cfg = Config(data_dir=tempfile.mkdtemp(prefix="hermes-t-"), mock=False)
+    cfg = Config(data_dir=tempfile.mkdtemp(prefix="betterme-t-"), mock=False)
     cfg.update({"model": "qwen2.5-coder:7b", "claude_model": ""})
 
-    # CLI nova: --bare + diretiva PT + ferramentas essenciais + modelo do Hermes
+    # CLI nova: --bare + diretiva PT + ferramentas essenciais + modelo do Betterme
     d = Path(tempfile.mkdtemp())
     nova = d / "claude"
     nova.write_text("#!/bin/bash\n"
@@ -447,7 +447,7 @@ def T17_claude_modo_leve_e_fallback_de_cli_antiga():
 
 @case
 def T18_claude_model_vazio_usa_modelo_do_hermes_v222():
-    from hermes.claude_agent import _claude_cmd
+    from betterme.claude_agent import _claude_cmd
 
     cfg = fresh()
     cfg.update({"model": "hermes3:8b", "claude_model": ""})
@@ -462,7 +462,7 @@ def T18_claude_model_vazio_usa_modelo_do_hermes_v222():
 
 @case
 def T19_historico_de_execucoes():
-    from hermes import scheduler as S
+    from betterme import scheduler as S
 
     cfg = fresh()
     store = S.ScheduleStore(cfg)
@@ -477,8 +477,8 @@ def T19_historico_de_execucoes():
 
 @case
 def T20_retry_com_notificacoes():
-    from hermes import notify, scheduler as S
-    import hermes.agent as A
+    from betterme import notify, scheduler as S
+    import betterme.agent as A
 
     cfg = fresh()
     store = S.ScheduleStore(cfg)
@@ -515,7 +515,7 @@ def T20_retry_com_notificacoes():
 
 @case
 def T21_watcher_dispara_somente_arquivos_novos():
-    from hermes import scheduler as S
+    from betterme import scheduler as S
 
     watch = Path(tempfile.mkdtemp())
     cfg = fresh()
@@ -540,7 +540,7 @@ def T21_watcher_dispara_somente_arquivos_novos():
 
 @case
 def T22_webhook_nunca_dispara_por_tempo():
-    from hermes import scheduler as S
+    from betterme import scheduler as S
 
     cfg = fresh()
     store = S.ScheduleStore(cfg)
@@ -561,7 +561,7 @@ def T22_webhook_nunca_dispara_por_tempo():
 
 @case
 def T23_only_idle_adia_quando_ocupada():
-    from hermes import scheduler as S
+    from betterme import scheduler as S
 
     cfg = fresh()
     store = S.ScheduleStore(cfg)
@@ -592,8 +592,8 @@ def T23_only_idle_adia_quando_ocupada():
 def T24_supervisor_reinicia_mcp_morto():
     from unittest.mock import patch
 
-    from hermes import notify
-    from hermes.supervisor import McpSupervisor
+    from betterme import notify
+    from betterme.supervisor import McpSupervisor
 
     cfg = fresh()
 
@@ -611,7 +611,7 @@ def T24_supervisor_reinicia_mcp_morto():
             self.restarted.append(name)
 
     fake = FakeMgr()
-    with patch("hermes.mcp_client.get_manager", return_value=fake):
+    with patch("betterme.mcp_client.get_manager", return_value=fake):
         evs = McpSupervisor(cfg).check_once()
     assert fake.restarted == ["figma"] and evs[0]["restarted"]
     assert any("reiniciado" in n["title"] for n in notify.list_all(cfg))
@@ -620,11 +620,11 @@ def T24_supervisor_reinicia_mcp_morto():
 # ══════════════════════════════ API (test client) ══════════════════════════════
 
 def _app(cfg):
-    from hermes.scheduler import Scheduler
-    from hermes.server.app import create_app
+    from betterme.scheduler import Scheduler
+    from betterme.server.app import create_app
 
     app = create_app(cfg)
-    app.config["HERMES_SCHEDULER"] = Scheduler(cfg)
+    app.config["BETTERME_SCHEDULER"] = Scheduler(cfg)
     return app.test_client()
 
 
@@ -644,13 +644,13 @@ def T25_endpoints_leitura_v3():
 def T26_chat_gera_metricas_e_auditoria():
     cfg = fresh()
     c = _app(cfg)
-    r = c.post("/api/chat", json={"message": "oi v3", "agent": "hermes"})
+    r = c.post("/api/chat", json={"message": "oi v3", "agent": "betterme"})
     assert r.status_code == 200
     list(r.response)
     assert c.get("/api/metrics?limit=5").json["summary"]["n"] == 1
     # JSON solto com ferramenta real → executa → audita
     r2 = c.post("/api/chat", json={"message": 'rode {"tool": "sys_info", "args": {}}',
-                                   "agent": "hermes"})
+                                   "agent": "betterme"})
     list(r2.response)
     ferramentas = [x["tool"] for x in c.get("/api/audit?limit=10").json["records"]]
     assert "sys_info" in ferramentas
@@ -660,7 +660,7 @@ def T26_chat_gera_metricas_e_auditoria():
 def T27_backups_e_restore_pela_api():
     cfg = fresh()
     c = _app(cfg)
-    from hermes.tools import execute_tool
+    from betterme.tools import execute_tool
 
     cfg.workdir.joinpath("api.txt").write_text("v1", encoding="utf-8")
     execute_tool("write_file", {"path": "api.txt", "content": "v2"}, cfg)
@@ -706,7 +706,7 @@ def T29_watch_valida_e_persiste_campos():
 def T30_export_conversa_md_e_json():
     cfg = fresh()
     c = _app(cfg)
-    from hermes.conversations import ConversationStore
+    from betterme.conversations import ConversationStore
 
     store = ConversationStore(cfg)
     s = store.new_session()
@@ -715,7 +715,7 @@ def T30_export_conversa_md_e_json():
     r = c.get(f"/api/conversations/{s['id']}/export?fmt=md")
     body = r.get_data(as_text=True)
     assert r.status_code == 200 and "attachment" in r.headers["Content-Disposition"]
-    assert "42" in body and "◈ Hermes" in body and "(2.5s)" in body
+    assert "42" in body and "◈ Betterme" in body and "(2.5s)" in body
     assert '"messages"' in c.get(f"/api/conversations/{s['id']}/export?fmt=json").get_data(as_text=True)
 
 
@@ -751,14 +751,14 @@ def T32_settings_aceita_chaves_v3():
 def T33_cli_versao_e_doctor():
     venv_py = ROOT / ".venv" / "bin" / "python"
     py = str(venv_py) if venv_py.exists() else sys.executable
-    out = os.popen(f'"{py}" -m hermes --version 2>&1').read()
-    from hermes.config import VERSION
+    out = os.popen(f'"{py}" -m betterme --version 2>&1').read()
+    from betterme.config import VERSION
     assert VERSION in out, f"esperava {VERSION}: {out}"
-    env = dict(os.environ, HERMES_DATA_DIR=tempfile.mkdtemp(prefix="hermes-cli-"),
-               HERMES_MOCK="1")
+    env = dict(os.environ, BETTERME_DATA_DIR=tempfile.mkdtemp(prefix="betterme-cli-"),
+               BETTERME_MOCK="1")
     import subprocess
 
-    r = subprocess.run([py, "-m", "hermes", "doctor"], capture_output=True,
+    r = subprocess.run([py, "-m", "betterme", "doctor"], capture_output=True,
                        text=True, env=env, timeout=120, cwd=str(ROOT))
     texto = r.stdout + r.stderr
     assert "Doctor" in texto and "Ollama" in texto, texto[:200]
@@ -787,11 +787,11 @@ def T34_anti_csrf_post_cross_origin():
     # ...mas passa com token válido (integração externa legítima)
     cfg.update({"auth_token": "segredo"})
     r = c.post("/api/schedules", json=ok_body,
-               headers={"Origin": "https://evil.com", "X-Hermes-Token": "segredo"})
+               headers={"Origin": "https://evil.com", "X-Betterme-Token": "segredo"})
     assert r.status_code == 200
     # GET não é afetado pelo guard (só pelo token, se houver)
     assert c.get("/api/status", headers={"Origin": "https://evil.com",
-                                         "X-Hermes-Token": "segredo"}).status_code == 200
+                                         "X-Betterme-Token": "segredo"}).status_code == 200
 
 
 @case
@@ -810,14 +810,14 @@ def T36_prompt_prefixo_estavel_sem_hora():
     """A data/hora sai da chave do cache: prefixo estável entre minutos."""
     from unittest.mock import patch
 
-    from hermes.agent import Agent
+    from betterme.agent import Agent
 
     cfg = fresh()
     ag = Agent(cfg)
-    with patch("hermes.agent.time.strftime", return_value="2026-01-01 10:00"):
+    with patch("betterme.agent.time.strftime", return_value="2026-01-01 10:00"):
         k1 = ag._prompt_key("pergunta")
         p1 = ag.system_prompt("pergunta")
-    with patch("hermes.agent.time.strftime", return_value="2026-01-01 10:59"):
+    with patch("betterme.agent.time.strftime", return_value="2026-01-01 10:59"):
         k2 = ag._prompt_key("pergunta")
         p2 = ag.system_prompt("pergunta")
     assert k1 == k2, "chave ainda depende do relógio"
@@ -830,7 +830,7 @@ def T37_system_busy_relativo_a_nucleos():
     """Load 3.5: ocioso em 16 núcleos, ocupado em 2."""
     from unittest.mock import patch
 
-    import hermes.scheduler as S
+    import betterme.scheduler as S
     with patch.object(S.Path, "read_text", return_value="3.50 1 1 1/1 1"), \
          patch.object(S.os, "cpu_count", return_value=16):
         assert S._system_busy() is False
@@ -846,7 +846,7 @@ def T37_system_busy_relativo_a_nucleos():
 
 def _fake_cli(script_body: str) -> tuple[Path, Path]:
     """Cria CLI falsa; devolve (dir, executável)."""
-    d = Path(tempfile.mkdtemp(prefix="hermes-cli-"))
+    d = Path(tempfile.mkdtemp(prefix="betterme-cli-"))
     exe = d / "claude"
     exe.write_text("#!/bin/bash\n" + script_body, encoding="utf-8")
     exe.chmod(0o755)
@@ -862,9 +862,9 @@ def _cli_prologue() -> str:
 def T38_guard_retry_modelo_recupera_e_executa():
     """1ª resposta: comando em bloco de código sem executar → guard repete
     com ordem direta → 2ª resposta CHAMA Bash e entrega saída real."""
-    from hermes.claude_agent import run_claude
+    from betterme.claude_agent import run_claude
 
-    cfg = Config(data_dir=tempfile.mkdtemp(prefix="hermes-t-"), mock=False)
+    cfg = Config(data_dir=tempfile.mkdtemp(prefix="betterme-t-"), mock=False)
     cfg.update({"model": "qwen2.5-coder:7b"})
     body = (_cli_prologue()
             + 'N=$(cat "$D/cnt" 2>/dev/null || echo 0); N=$((N+1)); echo $N > "$D/cnt"\n'
@@ -896,12 +896,12 @@ def T38_guard_retry_modelo_recupera_e_executa():
 
 @case
 def T39_guard_teimoso_hermes_executa_no_lugar():
-    """Modelo insiste em não executar → Hermes executa os comandos de verdade
+    """Modelo insiste em não executar → Betterme executa os comandos de verdade
     (denylist + auditoria) e entrega a saída REAL — nunca deixa na mão."""
-    from hermes import audit
-    from hermes.claude_agent import run_claude
+    from betterme import audit
+    from betterme.claude_agent import run_claude
 
-    cfg = Config(data_dir=tempfile.mkdtemp(prefix="hermes-t-"), mock=False)
+    cfg = Config(data_dir=tempfile.mkdtemp(prefix="betterme-t-"), mock=False)
     cfg.update({"model": "qwen2.5-coder:7b"})
     body = (_cli_prologue()
             + "cat <<'EOF'\n"
@@ -914,7 +914,7 @@ def T39_guard_teimoso_hermes_executa_no_lugar():
         final = run_claude(cfg, "informações do sistema", history=[], on_event=evs.append)
         assert "zorin-guard-ok" in final, final[:300]      # comando REAL executou
         assert "pulado" in final                            # bloco alucinado pulado
-        assert "guard de execução do Hermes" in final
+        assert "guard de execução do Betterme" in final
         assert any(e["type"] == "tool_start" and e["name"] == "run_command" for e in evs)
         recs = audit.query(cfg, tool="run_command", limit=10)
         assert any(r.get("source") == "guard-claude" for r in recs), recs
@@ -1109,7 +1109,7 @@ class _FakeCal(_threading.Thread):
                                    self.headers.get("Authorization", "")))
                 if self.path.startswith("/calendars/primary/events"):
                     self._send({"items": [
-                        {"summary": "Reunião do projeto Hermes", "status": "confirmed",
+                        {"summary": "Reunião do projeto Betterme", "status": "confirmed",
                          "start": {"dateTime": (hoje.replace(hour=9, minute=0,
                                              second=0, microsecond=0)).isoformat()},
                          "end": {"dateTime": (hoje.replace(hour=10, minute=0,
@@ -1176,8 +1176,8 @@ class _FakeToken(_threading.Thread):
 def T40_email_mcp_e2e_imap_smtp_reais():
     """Servidor MCP de e-mail via protocolo REAL (stdio) contra IMAP/SMTP
     falsos: listar, buscar, ler (assunto UTF-8) e enviar."""
-    from hermes import emailcfg
-    from hermes.mcp_client import get_manager, map_tool_name
+    from betterme import emailcfg
+    from betterme.mcp_client import get_manager, map_tool_name
 
     cfg = fresh()
     imap = _FakeImap()
@@ -1228,8 +1228,8 @@ def T41_secrets_protegidos_contra_o_agente():
     nada de senhas no config.yaml."""
     import stat as _stat
 
-    from hermes import emailcfg
-    from hermes.tools import execute_tool
+    from betterme import emailcfg
+    from betterme.tools import execute_tool
 
     cfg = fresh()
     emailcfg.save(cfg, {"accounts": [{
@@ -1242,7 +1242,7 @@ def T41_secrets_protegidos_contra_o_agente():
     r = execute_tool("run_command", {"command": f"cat {p}"}, cfg)
     assert not r["ok"] and "credenciais" in r["output"], r["output"][:150]
     r2 = execute_tool("run_command",
-                      {"command": "grep -i senha ~/.hermes/secrets/email.json"}, cfg)
+                      {"command": "grep -i senha ~/.betterme/secrets/email.json"}, cfg)
     assert not r2["ok"] and "credenciais" in r2["output"]
     # read_file fora do workspace → sandbox bloqueia
     r3 = execute_tool("read_file", {"path": str(p)}, cfg)
@@ -1259,12 +1259,12 @@ def T41_secrets_protegidos_contra_o_agente():
 def T42_log_mostra_todas_as_atividades():
     """Chat, ferramenta, tarefa agendada, ajustes e ações do painel
     aparecem no agent.log (que o Log ao vivo faz tail)."""
-    from hermes import scheduler as S
+    from betterme import scheduler as S
 
     cfg = fresh()
     c = _app(cfg)
     # 1. chat (mock) → pergunta + resposta
-    r = c.post("/api/chat", json={"message": "teste do log vivo", "agent": "hermes"})
+    r = c.post("/api/chat", json={"message": "teste do log vivo", "agent": "betterme"})
     list(r.response)
     # 2. ferramenta via terminal da GUI
     assert c.post("/api/tools/run", json={"command": "echo log-vivo-ok"}).json["ok"]
@@ -1295,7 +1295,7 @@ def T42_log_mostra_todas_as_atividades():
 @case
 def T43_activity_rotacao_por_tamanho():
     """agent.log rota em 5 MB (mantém .log.1) — sem crescer sem fim."""
-    from hermes import activity
+    from betterme import activity
 
     cfg = fresh()
     activity.log(cfg, "t", "linha 1", max_bytes=30)
@@ -1312,8 +1312,8 @@ def T43_activity_rotacao_por_tamanho():
 def T44_email_oauth_xoauth2_e2e():
     """Conta OAuth (XOAUTH2): refresh via token endpoint + login IMAP/SMTP
     com Bearer — ponta a ponta pelo servidor MCP real."""
-    from hermes import emailcfg
-    from hermes.mcp_client import get_manager, map_tool_name
+    from betterme import emailcfg
+    from betterme.mcp_client import get_manager, map_tool_name
 
     cfg = fresh()
     imap = _FakeImap(); imap.start()
@@ -1355,7 +1355,7 @@ def T44_email_oauth_xoauth2_e2e():
 @case
 def T45_oauth_device_flow_e_token_refresh():
     """Fluxo device-code (endpoint falso) e renovação quando o token expira."""
-    from hermes import emailcfg
+    from betterme import emailcfg
 
     # refresh: token válido em cache não bate no endpoint; expirado bate
     acc = {"client_id": "cid", "refresh_token": "rtok", "oauth_scopes": "s",
@@ -1386,7 +1386,7 @@ def T45_oauth_device_flow_e_token_refresh():
             return False
 
     saida: list[str] = []
-    import hermes.emailcfg as ec
+    import betterme.emailcfg as ec
     orig_request = ec.urllib.request.Request
     orig_urlopen = ec.urllib.request.urlopen
     def _device_resp(req, timeout=20):
@@ -1417,9 +1417,9 @@ def T45_oauth_device_flow_e_token_refresh():
 @case
 def T47_email_somente_leitura_padrao():
     """v3.1.3: conta SEM flag readonly → envio BLOQUEADO por padrão (o agente
-    só visualiza); `hermes email modo ... envio` libera; leitura sempre OK."""
-    from hermes import emailcfg
-    from hermes.mcp_client import get_manager, map_tool_name
+    só visualiza); `betterme email modo ... envio` libera; leitura sempre OK."""
+    from betterme import emailcfg
+    from betterme.mcp_client import get_manager, map_tool_name
 
     cfg = fresh()
     imap = _FakeImap(); imap.start()
@@ -1468,8 +1468,8 @@ def T47_email_somente_leitura_padrao():
 def T48_agenda_google_somente_leitura():
     """MCP agenda: device flow com escopo calendar.readonly, refresh do token,
     eventos via GET (nunca POST) e cache do access_token entre chamadas."""
-    from hermes import agendacfg
-    from hermes.mcp_client import get_manager, map_tool_name
+    from betterme import agendacfg
+    from betterme.mcp_client import get_manager, map_tool_name
 
     cfg = fresh()
     cal = _FakeCal(); cal.start()
@@ -1481,7 +1481,7 @@ def T48_agenda_google_somente_leitura():
         "token_endpoint": f"http://127.0.0.1:{tok_srv.port}/token",
         "access_token": None, "token_expires": 0}], "default": "gcal1"})
     # API falsa para o subprocesso do MCP (env da entrada de config)
-    os.environ["HERMES_AGENDA_API"] = f"http://127.0.0.1:{cal.port}"
+    os.environ["BETTERME_AGENDA_API"] = f"http://127.0.0.1:{cal.port}"
     try:
         agendacfg.register_mcp(cfg)
         mgr = get_manager(cfg)
@@ -1493,7 +1493,7 @@ def T48_agenda_google_somente_leitura():
                     or "apaga" in n or "delete" in n or "move" in n]
         res = mgr.call(map_tool_name("agenda", "agenda_hoje"), {})
         assert res["ok"], res["output"][:300]
-        assert "Reunião do projeto Hermes" in res["output"]
+        assert "Reunião do projeto Betterme" in res["output"]
         assert "dia inteiro" in res["output"]          # evento de dia todo
         assert "Sala 3" in res["output"] and "3 participante" in res["output"]
         # acesso foi Bearer com token renovado no endpoint falso
@@ -1510,7 +1510,7 @@ def T48_agenda_google_somente_leitura():
         assert res["ok"] and "somente leitura" in res["output"]
         mgr.stop_all()
     finally:
-        os.environ.pop("HERMES_AGENDA_API", None)
+        os.environ.pop("BETTERME_AGENDA_API", None)
         cal.httpd.shutdown(); tok_srv.httpd.shutdown()
     # escopo é somente leitura por definição
     assert agendacfg.CAL_SCOPE.endswith("calendar.readonly")
@@ -1552,7 +1552,7 @@ def _esperar(evs, pred, seg=25):
 def T76_orquestrador_aprende_experiencia():
     """v3.10 🧠: as tasks recentes (com as EDIÇÕES do operador) entram no
     contexto do planejador — reprovação e edição viram experiência."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     cfg = fresh()
     assert orc.experience(cfg) == ""                       # sem tasks: nada
@@ -1591,7 +1591,7 @@ def T77_hermes_update_offline():
     """v3.10 ⬇: lógica do update sem rede — escolha da última tag,
     comparação de versões e aplicação que PRESERVA data/.venv/.git."""
     import shutil as _sh
-    from hermes import update as up
+    from betterme import update as up
 
     # latest_tag com fetch injetado (sem rede)
     fetch = lambda url: json.dumps([{"name": "v3.9.0"}, {"name": "v3.10.0"},
@@ -1602,29 +1602,29 @@ def T77_hermes_update_offline():
     assert up.latest_tag(lambda url: "lixo") is None    # resposta inválida
     # apply_update preserva o que é local
     src = Path(tempfile.mkdtemp()) / "novo"
-    (src / "hermes").mkdir(parents=True)
-    (src / "hermes" / "novo.py").write_text("# novo", encoding="utf-8")
+    (src / "betterme").mkdir(parents=True)
+    (src / "betterme" / "novo.py").write_text("# novo", encoding="utf-8")
     (src / "pyproject.toml").write_text("novo", encoding="utf-8")
     (src / "data").mkdir()
     (src / "data" / "segredo.txt").write_text("não me toque", encoding="utf-8")
     dest = Path(tempfile.mkdtemp())
-    (dest / "hermes").mkdir()
-    (dest / "hermes" / "velho.py").write_text("# velho", encoding="utf-8")
+    (dest / "betterme").mkdir()
+    (dest / "betterme" / "velho.py").write_text("# velho", encoding="utf-8")
     (dest / "data").mkdir()
     (dest / "data" / "conversas.json").write_text("importante", encoding="utf-8")
     (dest / ".venv").mkdir()
     (dest / ".venv" / "bin").write_text("x", encoding="utf-8")
     atualizados = up.apply_update(src, dest, log=lambda *_: None)
-    assert "hermes" in atualizados and "pyproject.toml" in atualizados
+    assert "betterme" in atualizados and "pyproject.toml" in atualizados
     assert "data" not in atualizados
-    assert (dest / "hermes" / "novo.py").exists()
+    assert (dest / "betterme" / "novo.py").exists()
     assert (dest / "data" / "conversas.json").read_text() == "importante"
     assert (dest / ".venv" / "bin").exists()
     _sh.rmtree(src.parent, ignore_errors=True)
     _sh.rmtree(dest, ignore_errors=True)
     # CLI tem o comando
     import subprocess as _sp
-    r = _sp.run(["./.venv/bin/hermes", "update", "--help"],
+    r = _sp.run(["./.venv/bin/betterme", "update", "--help"],
                 capture_output=True, text=True, timeout=30)
     assert "check" in (r.stdout + r.stderr).lower()
 
@@ -1633,7 +1633,7 @@ def T77_hermes_update_offline():
 def T78_painel_de_saude_do_pipeline():
     """v3.10 📊: /api/orchestrator/stats calcula o funil (aprovação na 1ª,
     tentativas, duração, edições, skills top, por dia) e o Painel tem o card."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     c = _app(cfg)
     d = c.get("/api/orchestrator/stats").get_json()
@@ -1671,7 +1671,7 @@ def T79_edicao_do_operador_muda_decisao_do_planejador():
     decisão do planejador MUDA na task seguinte (executar com relatório
     → responder direto). Cadeia completa: edição → jsonl → experience()
     → prompt → decisão."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     prompts = []
     orig = orc._fast
@@ -1716,10 +1716,10 @@ def T80_memoria_persiste_restart_e_tem_limite():
     """v3.10 🧠 ACEITAÇÃO — esperado: a memória vem do DISCO (jsonl),
     não da RAM: novo processo mantém a preferência; janela de 6 tasks;
     bloco cortado em 1600 chars; histórico vazio não injeta nada."""
-    from hermes import orchestrator as orc
-    from hermes.config import Config
+    from betterme import orchestrator as orc
+    from betterme.config import Config
 
-    d = tempfile.mkdtemp(prefix="hermes-restart-")
+    d = tempfile.mkdtemp(prefix="betterme-restart-")
     cfg1 = Config(data_dir=d, mock=True)
     orc.record(cfg1, {"objetivo": "relatório", "tipo": "criacao",
                       "status": "aprovada", "tentativas": 1, "dur_s": 5.0,
@@ -1754,16 +1754,16 @@ def T81_update_end_to_end_v3110_local():
     (download REAL via file://), preserva data/ e .venv, não apaga
     arquivos locais, recusa downgrade e é rápido."""
     import zipfile as _zf
-    from hermes import update as up
-    from hermes.config import VERSION as _V
+    from betterme import update as up
+    from betterme.config import VERSION as _V
 
     # fixture SEMPRE à frente da versão instalada (senão quebra a cada release)
     _p = [int(x) for x in _V.split(".")]
     nova = f"v{_p[0]}.{_p[1] + 1}.0"
-    tmp = Path(tempfile.mkdtemp(prefix="hermes-upd-"))
+    tmp = Path(tempfile.mkdtemp(prefix="betterme-upd-"))
     src = tmp / f"personal-hermes-agent-behsantos-{nova}"
-    (src / "hermes").mkdir(parents=True)
-    (src / "hermes" / "__init__.py").write_text(
+    (src / "betterme").mkdir(parents=True)
+    (src / "betterme" / "__init__.py").write_text(
         f'VERSION = "{nova.lstrip("v")}"', encoding="utf-8")
     (src / "pyproject.toml").write_text(f'version = "{nova.lstrip("v")}"',
                                         encoding="utf-8")
@@ -1781,8 +1781,8 @@ def T81_update_end_to_end_v3110_local():
         json.dumps([{"name": "v3.9.0"}]), encoding="utf-8")
 
     dest = tmp / "inst"
-    (dest / "hermes").mkdir(parents=True)
-    (dest / "hermes" / "cli.py").write_text("# velho", encoding="utf-8")
+    (dest / "betterme").mkdir(parents=True)
+    (dest / "betterme" / "cli.py").write_text("# velho", encoding="utf-8")
     (dest / "pyproject.toml").write_text('version = "3.10.0"',
                                          encoding="utf-8")
     (dest / "data").mkdir()
@@ -1802,22 +1802,22 @@ def T81_update_end_to_end_v3110_local():
         texto = " ".join(out)
         assert rc == 0 and dur < 5, texto
         assert nova in texto and "itens atualizados" in texto
-        assert (dest / "hermes" / "__init__.py").read_text(
+        assert (dest / "betterme" / "__init__.py").read_text(
             encoding="utf-8") == f'VERSION = "{nova.lstrip("v")}"'
         assert (dest / "data" / "conversas.json").read_text(
             encoding="utf-8") == "[1,2,3]"           # dados sobrevivem
         assert not (dest / "data" / "do-repo.txt").exists()
         assert (dest / ".venv" / "bin").exists()
-        assert (dest / "hermes" / "cli.py").read_text(
+        assert (dest / "betterme" / "cli.py").read_text(
             encoding="utf-8") == "# velho"           # não apaga local
 
         # --check avisa e NÃO aplica
-        (dest / "hermes" / "__init__.py").unlink()
+        (dest / "betterme" / "__init__.py").unlink()
         out2 = []
         assert up.run(check_only=True, assume_yes=True,
                       print_fn=out2.append) == 0
         assert "há atualização" in " ".join(out2)
-        assert not (dest / "hermes" / "__init__.py").exists()
+        assert not (dest / "betterme" / "__init__.py").exists()
 
         # só há versão MAIS VELHA: não faz nada
         up.TAGS_API = f"file://{tmp}/tags-velhas.json"
@@ -1835,7 +1835,7 @@ def T82_painel_confere_com_jsonl_bruto_fuzz_e_perf():
     (todos conferem com o recálculo direto do jsonl bruto) e o endpoint
     responde rápido com 1000 tasks."""
     import random
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     cfg = fresh()
     c = _app(cfg)
@@ -1911,10 +1911,10 @@ def T82_painel_confere_com_jsonl_bruto_fuzz_e_perf():
 def T83_goals_persistem_restart():
     """v3.11 🎯: goal de sessão definido antes de um restart continua
     valendo depois — vem do disco (session_goals.json), não da RAM."""
-    from hermes import orchestrator as orc
-    from hermes.config import Config
+    from betterme import orchestrator as orc
+    from betterme.config import Config
 
-    d = tempfile.mkdtemp(prefix="hermes-goal-")
+    d = tempfile.mkdtemp(prefix="betterme-goal-")
     c1 = Config(data_dir=d, mock=True)
     orc.set_goal("s1", "zerar a caixa de entrada esta semana", c1)
     # "restart": RAM morta, novo objeto Config no MESMO data_dir
@@ -1948,7 +1948,7 @@ def T84_plano_pendente_retoma_pos_restart():
     """v3.11 🔁 ACEITAÇÃO — esperado: um restart no meio do portão de
     CRIAÇÃO não perde a task. O plano pendente re-aparece na GUI e, ao
     aprovar/editar, a execução RETOMA em thread nova e é registrada."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     c = _app(cfg)
     antigo = orc.APPROVAL_TIMEOUT_S
@@ -2007,7 +2007,7 @@ def T85_entrega_pendente_finaliza_pos_restart():
     """v3.11 📦 ACEITAÇÃO — esperado: restart no meio do portão de
     ENTREGA não perde o trabalho: o texto final re-aparece, entregar/
     editar finaliza e registra; refazer é recusado com mensagem honesta."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     c = _app(cfg)
     antigo = orc.APPROVAL_TIMEOUT_S
@@ -2057,9 +2057,9 @@ def T86_skills_audit_detecta_problemas():
     """v3.11 🛡: a auditoria pega o que importa — injeção de prompt,
     campos ausentes, nome errado, tamanho fora do orçamento, duplicata —
     e NÃO acusa falsamente quem ensina o contrário (negação)."""
-    from hermes.skills_audit import audit_skills
+    from betterme.skills_audit import audit_skills
 
-    d = Path(tempfile.mkdtemp(prefix="hermes-aud-"))
+    d = Path(tempfile.mkdtemp(prefix="betterme-aud-"))
 
     def sk(pasta, front, corpo):
         p = d / pasta
@@ -2106,10 +2106,10 @@ def T86_skills_audit_detecta_problemas():
 def T87_skills_audit_catalogo_real_limpo():
     """v3.11 🛡 ACEITAÇÃO — esperado: as 18 skills reais do catálogo
     passam limpas (a auditoria não tem falso positivo no que existe)."""
-    from hermes.config import Config
-    from hermes.skills_audit import audit_skills
+    from betterme.config import Config
+    from betterme.skills_audit import audit_skills
 
-    cfg = Config(data_dir=tempfile.mkdtemp(prefix="hermes-cat-"), mock=True)
+    cfg = Config(data_dir=tempfile.mkdtemp(prefix="betterme-cat-"), mock=True)
     rels = audit_skills(cfg.skills_dirs)
     assert len(rels) >= 18
     problemas = {r["name"]: r["problemas"] for r in rels
@@ -2131,7 +2131,7 @@ def T88_banner_offline_casca_em_cache():
     assert "version" in c.get("/api/status").get_json()
     # e o service worker (a causa da casca) segue servido
     sw = c.get("/sw.js")
-    assert sw.status_code == 200 and "hermes-shell" in sw.get_data(as_text=True)
+    assert sw.status_code == 200 and "betterme-shell" in sw.get_data(as_text=True)
 
 
 @case
@@ -2173,7 +2173,7 @@ def T90_auto_atribuicao_de_papeis():
     qwen2.5-coder:3b, hermes3:3b, llama3.2:3b), o auto-atribuidor
     escolhe: 🎯🔍💬🔌 hermes3:8b (maior geral · escolha atual) e
     ⚡ qwen2.5-coder:7b (modelo de código)."""
-    from hermes import autoselect as aus
+    from betterme import autoselect as aus
 
     MEUS = ["hermes3:8b", "qwen2.5-coder:7b", "qwen2.5:3b", "llama3.2:1b",
             "qwen2.5-coder:3b", "hermes3:3b", "llama3.2:3b"]
@@ -2205,7 +2205,7 @@ def T90_auto_atribuicao_de_papeis():
     assert "autoAssign" in html and "auto-atribuir papéis" in html
     # CLI expõe o subcomando
     import subprocess as _sp
-    rr = _sp.run(["./.venv/bin/hermes", "models", "--help"],
+    rr = _sp.run(["./.venv/bin/betterme", "models", "--help"],
                  capture_output=True, text=True, timeout=30)
     assert "auto" in rr.stdout.lower() and "auto-atribui" in rr.stdout.lower()
 
@@ -2216,8 +2216,8 @@ def T91_auto_assign_respeita_teto_de_tamanho():
     o auto-atribuidor tem teto max_model_b (padrão 9B, filosofia local
     ≤8B do projeto). Mesmo com gemma3:12b e qwen3-coder:30b instalados,
     NUNCA os escolhe; subir o teto libera (máquina melhor no futuro)."""
-    from hermes import autoselect as aus
-    from hermes.config import Config
+    from betterme import autoselect as aus
+    from betterme.config import Config
 
     MEUS = ["hermes3:8b", "qwen2.5-coder:7b", "qwen2.5:3b", "llama3.2:1b",
             "qwen2.5-coder:3b", "hermes3:3b", "llama3.2:3b"]
@@ -2235,7 +2235,7 @@ def T91_auto_assign_respeita_teto_de_tamanho():
     for _papel, (m, _) in esc4.items():
         assert aus._params(m) <= 4
     # default no config = 9.0 e coerce funciona
-    c9 = Config(data_dir=tempfile.mkdtemp(prefix="hermes-teto-"), mock=True)
+    c9 = Config(data_dir=tempfile.mkdtemp(prefix="betterme-teto-"), mock=True)
     assert float(c9.max_model_b) == 9.0
     c9.update({"max_model_b": 8})
     assert float(c9.max_model_b) == 8.0
@@ -2249,7 +2249,7 @@ def T92_modo_economico_e_experiencia_enxuta():
     auto-assign ECONÔMICO por padrão (🎯🔍⚡ herdam 💬 chat = 1 modelo
     residente, zero trocas; --multi libera por papel) e experiência
     enxuta (sinal forte primeiro, máx 4 linhas, ≤800 chars)."""
-    from hermes import autoselect as aus, orchestrator as orc
+    from betterme import autoselect as aus, orchestrator as orc
 
     MEUS = ["hermes3:8b", "qwen2.5-coder:7b", "qwen2.5:3b", "llama3.2:1b",
             "qwen2.5-coder:3b", "hermes3:3b", "llama3.2:3b"]
@@ -2295,13 +2295,13 @@ def T92_modo_economico_e_experiencia_enxuta():
 @case
 def T93_memoria_importavel():
     """v3.12 🧠: transferência de contexto PARA o agente —
-    hermes memory import (JSON lista ou um fato por linha), com dedupe
+    betterme memory import (JSON lista ou um fato por linha), com dedupe
     (mesmo fato não entra duas vezes) e erro claro em arquivo ruim."""
     import json as _json
-    from hermes.memory import MemoryStore
+    from betterme.memory import MemoryStore
 
     cfg = fresh()
-    d = Path(tempfile.mkdtemp(prefix="hermes-mem-"))
+    d = Path(tempfile.mkdtemp(prefix="betterme-mem-"))
     fatos = ["O operador prefere respostas diretas, sem preâmbulo.",
              "Hardware: RTX 2050 com 4 GB de VRAM.",
              "Linguas: português do Brasil."]
@@ -2311,7 +2311,7 @@ def T93_memoria_importavel():
                                  "segundo fato", encoding="utf-8")
     # JSON: 3 novos
     import subprocess as _sp
-    r = _sp.run(["./.venv/bin/hermes", "--data-dir", cfg.data_dir,
+    r = _sp.run(["./.venv/bin/betterme", "--data-dir", cfg.data_dir,
                  "memory", "import", str(d / "fatos.json")],
                 capture_output=True, text=True, timeout=30)
     assert "3 fato(s) importado(s)" in r.stdout + r.stderr, r.stdout + r.stderr
@@ -2319,21 +2319,21 @@ def T93_memoria_importavel():
     textos = {f["text"] for f in ms.list_all()}
     assert textos == set(fatos)
     # de novo: 0 novos, 3 duplicados
-    r = _sp.run(["./.venv/bin/hermes", "--data-dir", cfg.data_dir,
+    r = _sp.run(["./.venv/bin/betterme", "--data-dir", cfg.data_dir,
                  "memory", "import", str(d / "fatos.json")],
                 capture_output=True, text=True, timeout=30)
     assert "0 fato(s) importado(s)" in r.stdout + r.stderr
     assert "3 duplicado(s)" in r.stdout + r.stderr
     assert len(ms.list_all()) == 3
     # texto por linha: ignora comentário e vazia
-    r = _sp.run(["./.venv/bin/hermes", "--data-dir", cfg.data_dir,
+    r = _sp.run(["./.venv/bin/betterme", "--data-dir", cfg.data_dir,
                  "memory", "import", str(d / "fatos.txt")],
                 capture_output=True, text=True, timeout=30)
     assert "2 fato(s) importado(s)" in r.stdout + r.stderr
     assert len(ms.list_all()) == 5
     # JSON inválido: erro claro, exit != 0
     (d / "ruim.json").write_text("{fatos:", encoding="utf-8")
-    r = _sp.run(["./.venv/bin/hermes", "--data-dir", cfg.data_dir,
+    r = _sp.run(["./.venv/bin/betterme", "--data-dir", cfg.data_dir,
                  "memory", "import", str(d / "ruim.json")],
                 capture_output=True, text=True, timeout=30)
     assert r.returncode != 0 and "JSON inválido" in r.stdout + r.stderr
@@ -2346,7 +2346,7 @@ def T94_plano_cache_zero_tokens_na_repeticao():
     modelo; mensagem nova planeja; edição/reprovação do operador
     INVALIDA o cache (preferência nova, plano novo); instalações
     diferentes não compartilham cache."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     calls = []
     orig = orc._fast
@@ -2395,7 +2395,7 @@ def T94_plano_cache_zero_tokens_na_repeticao():
 def T95_skills_do_dia_a_dia():
     """v3.13 ✦ ACEITAÇÃO — as 5 skills novas casam com pedidos naturais
     do dia a dia (score >= 2) e o catálogo segue limpo na auditoria."""
-    from hermes.orchestrator import skills_for
+    from betterme.orchestrator import skills_for
 
     cfg = fresh()
 
@@ -2407,9 +2407,9 @@ def T95_skills_do_dia_a_dia():
     assert "autocorrecao" in pega("o comando deu erro e falhou, tente de novo")
     assert "atalhos-shell" in pega("verifique o espaço em disco e memória")
     assert "caminho-curto" in pega("resposta rápida e simples, direto")
-    from hermes.config import Config
-    from hermes.skills_audit import audit_skills
-    c2 = Config(data_dir=tempfile.mkdtemp(prefix="hermes-cat3-"), mock=True)
+    from betterme.config import Config
+    from betterme.skills_audit import audit_skills
+    c2 = Config(data_dir=tempfile.mkdtemp(prefix="betterme-cat3-"), mock=True)
     rels = audit_skills(c2.skills_dirs)
     assert len(rels) >= 23, len(rels)
     problemas = {r["name"]: r["problemas"] for r in rels if r["problemas"]}
@@ -2422,11 +2422,11 @@ def T96_fim_da_recusa_vazia():
     repetir chamadas/textos' e ENTREGAVA NADA — revisor reprovava 2x e
     a task morria sem resposta. O nudge anti-loop e a mensagem de
     refazer agora exigem a RESPOSTA COMPLETA com os dados já coletados."""
-    from hermes import agent as ag
+    from betterme import agent as ag
 
     assert "NUNCA se recuse a responder" in ag._ANTILOOP_NUDGE
     assert "NÃO são respostas" in ag._ANTILOOP_NUDGE
-    src = Path("hermes/orchestrator.py").read_text(encoding="utf-8")
+    src = Path("betterme/orchestrator.py").read_text(encoding="utf-8")
     assert "COLETADOS" in src and "JÁ " in src
     assert "resposta final COMPLETA" in src
 
@@ -2437,9 +2437,9 @@ def T97_leitura_da_home_e_sensiveis_bloqueados():
     impossível — sandbox bloqueava a HOME inteira (auditoria: list_dir
     ✖ /home/beh-solutions). Agora: LEITURA da home liberada por padrão
     (sandbox_home_read), ESCRITA continua só no workspace e pastas
-    sensíveis (~/.ssh, ~/.hermes/secrets, ~/.config…) NUNCA são lidas —
+    sensíveis (~/.ssh, ~/.betterme/secrets, ~/.config…) NUNCA são lidas —
     credenciais não entram no contexto do modelo."""
-    from hermes.tools import ToolError, execute_tool, resolve_path
+    from betterme.tools import ToolError, execute_tool, resolve_path
 
     cfg = fresh()
     assert cfg.sandbox is True and cfg.sandbox_home_read is True
@@ -2452,7 +2452,7 @@ def T97_leitura_da_home_e_sensiveis_bloqueados():
         r = execute_tool("read_file", {"path": str(alvo)}, cfg)
         assert r["ok"] and "dado do sistema" in r["output"]
         # 2. pastas sensíveis: bloqueadas mesmo para leitura
-        for sens in ("~/.ssh/config", "~/.hermes/secrets/email.json",
+        for sens in ("~/.ssh/config", "~/.betterme/secrets/email.json",
                      "~/.netrc"):
             try:
                 resolve_path(sens, cfg)
@@ -2489,7 +2489,7 @@ def T98_diagnostico_em_uma_chamada():
     sistema' custava 9+ chamadas (sys_info ×9 na auditoria), alucinação
     de saídas e recusas. Agora: UMA ferramenta devolve o digesto real
     completo, e as mensagens de refazer proíbem recusa e saída crua."""
-    from hermes import tools as tl
+    from betterme import tools as tl
 
     cfg = fresh()
     r = tl.execute_tool("diagnostico_sistema", {}, cfg)
@@ -2509,13 +2509,13 @@ def T98_diagnostico_em_uma_chamada():
     assert "UMA chamada" in spec["function"]["description"]
     assert "diagnostico_sistema" in tl.EXECUTORS
     # mensagens de refazer à prova de recusa e saída crua
-    src_o = Path("hermes/orchestrator.py").read_text(encoding="utf-8")
+    src_o = Path("betterme/orchestrator.py").read_text(encoding="utf-8")
     assert "saída crua" in src_o and "falha de" in src_o
     # skill atalhos-shell aponta para a ferramenta
     sk = Path("skills/atalhos-shell/SKILL.md").read_text(encoding="utf-8")
     assert "diagnostico_sistema" in sk
     # e o casamento continua funcionando para o pedido original
-    from hermes.orchestrator import skills_for
+    from betterme.orchestrator import skills_for
     assert "atalhos-shell" in [s["name"] for s in
                                skills_for(cfg, "busca geral no sistema e "
                                                "uso do dispositivo")]
@@ -2527,17 +2527,17 @@ def T99_codigo_verificado_e_selftest():
     bateria de campo com LLM REAL existe (pula limpa em mock/sem
     Ollama). Responde à pergunta do operador: 'pode alucinar em
     outros tipos de pedido?' — agora isso é MENSURÁVEL na máquina dele."""
-    from hermes import orchestrator as orc, selftest as st
+    from betterme import orchestrator as orc, selftest as st
 
     # 1. critério de execução injetado para tarefas de código
     crit = orc._extra_criterios("crie um script python que calcula potências")
     assert len(crit) == 1 and "EXECUTADO" in crit[0] and "SAÍDA" in crit[0]
     assert orc._extra_criterios("resuma o uso de disco") == []
     assert orc._extra_criterios("implemente uma função de ordenação")
-    src = Path("hermes/orchestrator.py").read_text(encoding="utf-8")
+    src = Path("betterme/orchestrator.py").read_text(encoding="utf-8")
     assert "criterios += _extra_criterios(message)" in src
     # 2. skill casa com pedidos de código/projeto
-    from hermes.orchestrator import skills_for
+    from betterme.orchestrator import skills_for
     cfg = fresh()
     nomes = [s["name"] for s in skills_for(cfg, "gere código python "
                                             "para o meu projeto")]
@@ -2555,7 +2555,7 @@ def T99_codigo_verificado_e_selftest():
     assert "não vou repetir" in st._RECUSA[0]
     # 4. CLI expõe o selftest
     import subprocess as _sp
-    r = _sp.run(["./.venv/bin/hermes", "--help"],
+    r = _sp.run(["./.venv/bin/betterme", "--help"],
                 capture_output=True, text=True, timeout=30)
     assert "selftest" in r.stdout.lower()
 
@@ -2566,7 +2566,7 @@ def T100_qa_do_qa_selftest_falha_quando_deve():
     nada. Os checkers do selftest têm que FLAGEAR as falhas reais do
     campo (recusa literal do transcript, código sem execução, dado
     errado) e NÃO acusar as entregas boas."""
-    from hermes import selftest as st
+    from betterme import selftest as st
 
     cen = {c["nome"]: c for c in st._cenarios()}
     # 1. a RECUSA REAL do transcript do operador é detectada
@@ -2603,10 +2603,10 @@ def T100_qa_do_qa_selftest_falha_quando_deve():
 
 @case
 def T101_matriz_de_todos_os_modelos():
-    """v3.14 🧪 `hermes selftest --all-models`: matriz modelo × cenário
+    """v3.14 🧪 `betterme selftest --all-models`: matriz modelo × cenário
     com recomendação — a resposta à pergunta 'testes de todos os
     modelos'. Em mock/sem Ollama pula limpo (nunca mente)."""
-    from hermes import selftest as st
+    from betterme import selftest as st
 
     saida = []
     assert st.run(fresh(), print_fn=saida.append) == 0
@@ -2616,7 +2616,7 @@ def T101_matriz_de_todos_os_modelos():
     assert any("mock" in s.lower() for s in saida)      # pulou, não mentiu
     # a flag existe no CLI
     import subprocess as _sp
-    r = _sp.run(["./.venv/bin/hermes", "selftest", "--help"],
+    r = _sp.run(["./.venv/bin/betterme", "selftest", "--help"],
                 capture_output=True, text=True, timeout=30)
     assert "--all-models" in r.stdout
     # a matriz formata cabeçalho com os 5 cenários
@@ -2630,7 +2630,7 @@ def T102_claude_senior_com_skills_e_goal():
     especialista em Node.js' e entregou links — recusa de quem não tem
     persona, skills, memória nem goal. Agora: persona SÊNIOR com
     anti-recusa, skill que casa INJETADA no prompt e objetivo da sessão."""
-    from hermes import claude_agent as ca
+    from betterme import claude_agent as ca
 
     # 1. persona sênior + anti-recusa no prompt do modo leve
     assert "ENGENHEIRO DE SOFTWARE SÊNIOR" in ca.CLAUDE_LIGHT_PROMPT
@@ -2649,7 +2649,7 @@ def T102_claude_senior_com_skills_e_goal():
     com_goal = ca._enrich_prompt(cfg, "bom dia", goal="construir a calculadora")
     assert "OBJETIVO DA SESSÃO" in com_goal and "calculadora" in com_goal
     # 5. a chamada do chat passa o goal (fonte)
-    src = Path("hermes/server/app.py").read_text(encoding="utf-8")
+    src = Path("betterme/server/app.py").read_text(encoding="utf-8")
     assert "goal=get_goal(session_id, cfg))" in src
     # 6. run_claude aceita goal e continua funcionando em mock
     evs = []
@@ -2664,7 +2664,7 @@ def T103_casamento_por_nome_de_skill():
     skill agora casa (antes exigia 2 palavras — 'crie um código de
     calculadora' ficava de fora). E a classe 'projeto/aplicativo'
     ganha o critério de execução de código."""
-    from hermes.orchestrator import _extra_criterios, skills_for
+    from betterme.orchestrator import _extra_criterios, skills_for
 
     cfg = fresh()
     nomes = [s["name"] for s in
@@ -2694,7 +2694,7 @@ def T104_goal_sem_eco_triplo():
     Causa raiz dupla: (1) runSlash disparava um POST novo a cada Enter
     (a guarda state.sending só valia para chat normal); (2) o comando
     era renderizado 2× (span + prefixo do textContent)."""
-    src = Path("hermes/server/templates/index.html").read_text(encoding="utf-8")
+    src = Path("betterme/server/templates/index.html").read_text(encoding="utf-8")
     # guarda: novos Enters não disparam POST durante a resposta
     assert "if (state.cmdBusy) return;" in src
     assert "finally { state.cmdBusy = false; }" in src
@@ -2703,7 +2703,7 @@ def T104_goal_sem_eco_triplo():
     assert 'd.textContent = (j.ok ? (text.split(" ")[0]' not in src
     assert 'c.textContent = text.split(" ")[0];' in src
     # lado servidor: /goal continua atômico e disponível
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     orc.set_goal(cfg.data_dir.name, "construir a calculadora", cfg)
     assert "calculadora" in orc.get_goal(cfg.data_dir.name, cfg)
@@ -2715,7 +2715,7 @@ def T104_goal_sem_eco_triplo():
 def T105_robustez_escrita_atomica_e_processos():
     """v3.14.2 ✦: state nunca corrompe (tmp+replace), processo do Claude
     é recolhido (sem zombie), fd do log do Ollama fecha no pai."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     orc.set_goal("s1", "objetivo de teste", cfg)
     goals = cfg.data_dir / "session_goals.json"
@@ -2725,10 +2725,10 @@ def T105_robustez_escrita_atomica_e_processos():
     assert dados.get("s1") == "objetivo de teste"
     assert not (cfg.data_dir / "session_goals.json.tmp").exists()  # replace ✔
     # Claude: finally recolhe o processo
-    ca = Path("hermes/claude_agent.py").read_text(encoding="utf-8")
+    ca = Path("betterme/claude_agent.py").read_text(encoding="utf-8")
     assert "proc.wait(timeout=5)" in ca and "proc.kill()" in ca
     # Manager: fd do log fechado no pai (filho herda)
-    mg = Path("hermes/manager.py").read_text(encoding="utf-8")
+    mg = Path("betterme/manager.py").read_text(encoding="utf-8")
     assert "logf.close()" in mg
 
 
@@ -2738,7 +2738,7 @@ def T106_update_defende_zip_slip():
     diretório de destino (zip-slip); zip normal do GitHub passa."""
     import tempfile
     import zipfile as _zip
-    from hermes.update import _assert_zip_seguro
+    from betterme.update import _assert_zip_seguro
     with tempfile.TemporaryDirectory() as td:
         dest = Path(td)
         maligno = Path(td) / "maligno.zip"
@@ -2754,7 +2754,7 @@ def T106_update_defende_zip_slip():
         ok = Path(td) / "ok.zip"
         with _zip.ZipFile(ok, "w") as zf:
             zf.writestr("personal-hermes-agent-behsantos-v3.14.2/README.md", "x")
-            zf.writestr("personal-hermes-agent-behsantos-v3.14.2/hermes/cli.py", "x")
+            zf.writestr("personal-hermes-agent-behsantos-v3.14.2/betterme/cli.py", "x")
         with _zip.ZipFile(ok) as zf:
             _assert_zip_seguro(zf, dest)               # não levanta ✔
 
@@ -2763,8 +2763,8 @@ def T106_update_defende_zip_slip():
 def T107_detectar_pasta_do_projeto():
     """v3.15.0 (PR#1): referência de pasta no pedido → workspace da task;
     URLs, frações e pastas de sistema/configuração não valem."""
-    from hermes.orchestrator import _detectar_projetos
-    from hermes.tools import ToolError, validar_escopo_projeto
+    from betterme.orchestrator import _detectar_projetos
+    from betterme.tools import ToolError, validar_escopo_projeto
 
     cands = _detectar_projetos(
         "crie uma calculadora node com POO em "
@@ -2794,15 +2794,15 @@ def T107_detectar_pasta_do_projeto():
 @case
 def T108_escopo_de_projeto_funcional():
     """v3.15.0 (PR#1): dentro do escopo — cwd e escrita seguem a pasta do
-    projeto; fora dele o sandbox continua; ~/.hermes intocável; escopo é
+    projeto; fora dele o sandbox continua; ~/.betterme intocável; escopo é
     thread-local (tasks concorrentes não vazam)."""
     import os as _os
     import shutil as _sh
     import threading as _th
-    from hermes import tools as T
+    from betterme import tools as T
 
     cfg = fresh()
-    proj = Path.home() / f".hermes-t108-{_os.getpid()}"
+    proj = Path.home() / f".betterme-t108-{_os.getpid()}"
     _sh.rmtree(proj, ignore_errors=True)
     try:
         with T.task_scope(proj, cfg) as esc:
@@ -2826,11 +2826,11 @@ def T108_escopo_de_projeto_funcional():
             raise AssertionError("escrita fora do escopo foi liberada")
         except T.ToolError:
             pass
-        # configuração do Hermes NUNCA vira escopo de projeto
+        # configuração do Betterme NUNCA vira escopo de projeto
         try:
             with T.task_scope(cfg.data_dir, cfg):
                 pass
-            raise AssertionError("~/.hermes aceito como escopo")
+            raise AssertionError("~/.betterme aceito como escopo")
         except T.ToolError:
             pass
     finally:
@@ -2840,19 +2840,19 @@ def T108_escopo_de_projeto_funcional():
 @case
 def T109_pipeline_na_pasta_do_projeto():
     """v3.15.0 (PR#1) E2E: pedido com referência de pasta → executor recebe
-    AMBIENTE (cwd + hermes.md), task roda com escopo na pasta (evento
+    AMBIENTE (cwd + betterme.md), task roda com escopo na pasta (evento
     visível), pasta inexistente é CRIADA — e sem referência nada muda."""
     import os as _os
     import shutil as _sh
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     cfg = fresh(creation_approval=False)
-    proj = Path.home() / f".hermes-t109-{_os.getpid()}"
-    proj2 = Path.home() / f".hermes-t109b-{_os.getpid()}"
+    proj = Path.home() / f".betterme-t109-{_os.getpid()}"
+    proj2 = Path.home() / f".betterme-t109b-{_os.getpid()}"
     _sh.rmtree(proj, ignore_errors=True)
     _sh.rmtree(proj2, ignore_errors=True)
     proj.mkdir(parents=True)
-    (proj / "hermes.md").write_text(
+    (proj / "betterme.md").write_text(
         "Convenção: código em ESM e testes com node.", encoding="utf-8")
     capturado = {}
 
@@ -2872,7 +2872,7 @@ def T109_pipeline_na_pasta_do_projeto():
         notas = [str(e.get("message", "")) for e in evs if e.get("type") == "note"]
         assert any("📁" in n and str(proj) in n for n in notas), notas[:6]
         assert "Pasta do projeto (cwd)" in capturado["prompt"]     # ambiente
-        assert "Convenção: código em ESM" in capturado["prompt"]   # hermes.md
+        assert "Convenção: código em ESM" in capturado["prompt"]   # betterme.md
         assert final
         # pasta inexistente é criada pelo harness na hora da execução
         evs2 = []
@@ -2886,7 +2886,7 @@ def T109_pipeline_na_pasta_do_projeto():
         orc.run_pipeline(_Ag(), cfg, "verifique o uso de disco", [],
                          on_event=evs3.append)
         assert not any("📁" in str(e.get("message", "")) for e in evs3)
-        # pasta RECUSADA (configuração do Hermes): avisa e segue no padrão
+        # pasta RECUSADA (configuração do Betterme): avisa e segue no padrão
         evs4 = []
         orc.run_pipeline(_Ag(), cfg, f"crie algo dentro de {cfg.data_dir}",
                          [], on_event=evs4.append)
@@ -2901,8 +2901,8 @@ def T109_pipeline_na_pasta_do_projeto():
 def T110_biblioteca_rag_local():
     """v3.15.0 (PR#2): livros do operador indexados e consultáveis —
     trecho VERBATIM com fonte (anti-alucinação por construção)."""
-    from hermes import knowledge
-    from hermes import tools as T
+    from betterme import knowledge
+    from betterme import tools as T
 
     cfg = fresh()
     livro = knowledge.biblioteca_dir(cfg) / "livro-teste.md"
@@ -2931,10 +2931,10 @@ def T111_git_no_projeto():
     da task; subcomando fora da lista e config global BLOQUEADOS."""
     import os as _os
     import shutil as _sh
-    from hermes import tools as T
+    from betterme import tools as T
 
     cfg = fresh()
-    proj = Path.home() / f".hermes-t111-{_os.getpid()}"
+    proj = Path.home() / f".betterme-t111-{_os.getpid()}"
     _sh.rmtree(proj, ignore_errors=True)
     try:
         with T.task_scope(proj, cfg):
@@ -2970,8 +2970,8 @@ def T111_git_no_projeto():
 def T112_skills_de_engenharia_multilingue():
     """v3.15.0 (PR#2): as 11 novas skills casam com pedidos reais de
     linguagem/arquitetura — e o catálogo continua limpo (39)."""
-    from hermes import orchestrator as orc
-    from hermes.skills import SkillLoader
+    from betterme import orchestrator as orc
+    from betterme.skills import SkillLoader
 
     cfg = fresh()
     nomes = [s["name"] for s in SkillLoader(cfg).enabled()]
@@ -3005,10 +3005,10 @@ def T113_folego_para_tarefas_de_projeto():
     ferramentas (não 4/12) — e o override é SEMPRE restaurado."""
     import os as _os
     import shutil as _sh
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     cfg = fresh(creation_approval=False)
-    proj = Path.home() / f".hermes-t113-{_os.getpid()}"
+    proj = Path.home() / f".betterme-t113-{_os.getpid()}"
     _sh.rmtree(proj, ignore_errors=True)
     capturado = {}
 
@@ -3042,9 +3042,9 @@ def T114_import_nativo_de_qualquer_fonte():
     aparece no catálogo, casa com pedido e é idempotente."""
     import tempfile
     import zipfile as _zip
-    from hermes import skills as S
-    from hermes.orchestrator import skills_for
-    from hermes.skills import SkillLoader
+    from betterme import skills as S
+    from betterme.orchestrator import skills_for
+    from betterme.skills import SkillLoader
 
     cfg = fresh()
     with tempfile.TemporaryDirectory() as td:
@@ -3090,9 +3090,9 @@ def T115_autoscan_baixou_virou_nativa():
     """v3.15.0 (PR#3): skill largada na pasta assistida (ex.: ~/Downloads)
     é descoberta e importada SEM comando — e só uma vez."""
     import tempfile
-    from hermes import skills as S
-    from hermes.orchestrator import skills_for
-    from hermes.skills import SkillLoader
+    from betterme import skills as S
+    from betterme.orchestrator import skills_for
+    from betterme.skills import SkillLoader
 
     cfg = fresh()
     with tempfile.TemporaryDirectory() as td:
@@ -3143,8 +3143,8 @@ def T116_delegacao_para_skill():
     """v3.15.0 (PR#3): a skill que casa DELEGA — vira MANUAL DA TAREFA no
     executor e a seção '## Verificação' dela vira critério do revisor."""
     import tempfile
-    from hermes import orchestrator as orc
-    from hermes import skills as S
+    from betterme import orchestrator as orc
+    from betterme import skills as S
 
     cfg = fresh(creation_approval=False)
     with tempfile.TemporaryDirectory() as td:
@@ -3192,7 +3192,7 @@ def T117_compactacao_de_contexto():
     """v3.15.0 (PR#3): conversa longa não perde contexto — perto do
     limite da janela, o MEIO vira resumo e a TAREFA ORIGINAL + resultados
     recentes ficam (padrão Claude Code, adaptado ao 8B local)."""
-    from hermes.agent import Agent
+    from betterme.agent import Agent
 
     cfg = fresh(num_ctx=1024)
     ag = Agent(cfg)
@@ -3237,9 +3237,9 @@ def T117_compactacao_de_contexto():
 @case
 def T118_claude_code_plugin_opcional():
     """v3.15.0 (PR#3): sem a CLI do Claude Code o sistema é 100% Python —
-    tarefa agendada cai no loop Hermes com nota, /api/status anuncia e a
+    tarefa agendada cai no loop Betterme com nota, /api/status anuncia e a
     GUI esconde a opção."""
-    from hermes import agent as AG, claude_agent as CA, scheduler as SCH
+    from betterme import agent as AG, claude_agent as CA, scheduler as SCH
 
     cap = {}
 
@@ -3263,9 +3263,9 @@ def T118_claude_code_plugin_opcional():
     finally:
         CA.claude_path = orig_cp
         AG.Agent = orig_agent
-    src_app = Path("hermes/server/app.py").read_text(encoding="utf-8")
+    src_app = Path("betterme/server/app.py").read_text(encoding="utf-8")
     assert '"claude_available": claude_ok,' in src_app
-    src_gui = Path("hermes/server/templates/index.html").read_text(
+    src_gui = Path("betterme/server/templates/index.html").read_text(
         encoding="utf-8")
     assert "s.claude_available === false" in src_gui
 
@@ -3275,7 +3275,7 @@ def T119_selftest_cenario_projeto_real():
     """v3.15.0 (PR#3): selftest mede o cenário que importa — projeto em
     pasta externa: arquivo criado DE VERDADE, executado e versionado."""
     import re as _re
-    from hermes import selftest as ST
+    from betterme import selftest as ST
 
     cens = ST._cenarios()
     proj = [c for c in cens if "projeto" in c["nome"].lower()]
@@ -3301,7 +3301,7 @@ def T120_perguntar_caminho_do_projeto():
     """v3.15.1: contrato do operador — iniciar projeto SEM caminho → o
     agente PERGUNTA a pasta; a resposta retoma a task no escopo certo
     (busca/cria o local). Cancela, assunto-mudou, flag off e TTL cobertos."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     cfg = fresh(creation_approval=False)
     capturado = {}
@@ -3326,7 +3326,7 @@ def T120_perguntar_caminho_do_projeto():
     # 2. operador responde o caminho → retoma e executa LÁ
     import os as _os
     import shutil as _sh
-    proj = Path.home() / f".hermes-t120-{_os.getpid()}"
+    proj = Path.home() / f".betterme-t120-{_os.getpid()}"
     _sh.rmtree(proj, ignore_errors=True)
     evs2 = []
     r2 = orc.run_pipeline(ag, cfg, str(proj), [], on_event=evs2.append,
@@ -3359,7 +3359,7 @@ def T120_perguntar_caminho_do_projeto():
     # 6. "quero INICIAR um projeto" (sem verbo criar): pergunta também —
     #    e a resposta retoma com escopo FORÇADO (decisão do operador)
     import shutil as _sh2
-    from hermes import tools as _T
+    from betterme import tools as _T
     cfg3 = fresh(creation_approval=False)
     cap3 = {}
     class _Ag3:
@@ -3373,7 +3373,7 @@ def T120_perguntar_caminho_do_projeto():
                           "quero iniciar um projeto: uma calculadora node com POO",
                           [], on_event=lambda e: None, session_id="s-t120e")
     assert "caminho" in rq.lower() and not cap3          # perguntou, não rodou
-    proj3 = Path.home() / f".hermes-t120e-{__import__('os').getpid()}"
+    proj3 = Path.home() / f".betterme-t120e-{__import__('os').getpid()}"
     _sh2.rmtree(proj3, ignore_errors=True)
     orc.run_pipeline(_Ag3(), cfg3, str(proj3), [],
                           on_event=lambda e: None, session_id="s-t120e")
@@ -3397,8 +3397,8 @@ def T121_mission_subtasks_sequenciais():
     do projeto propagada e relatório final com validação do objetivo."""
     import os as _os
     import shutil as _sh
-    from hermes import mission as M
-    from hermes import orchestrator as orc
+    from betterme import mission as M
+    from betterme import orchestrator as orc
 
     cfg = fresh(creation_approval=False)
 
@@ -3442,7 +3442,7 @@ def T121_mission_subtasks_sequenciais():
     orc.review = (lambda cfg, objetivo, criterios, resultado:
                   (criterios_vistos.append(list(criterios))
                    or {"veredito": "ok"}))
-    proj = Path.home() / f".hermes-t121-{_os.getpid()}"
+    proj = Path.home() / f".betterme-t121-{_os.getpid()}"
     _sh.rmtree(proj, ignore_errors=True)
     try:
         evs = []
@@ -3471,8 +3471,8 @@ def T121_mission_subtasks_sequenciais():
 def T122_mission_reescreve_task_ao_falhar():
     """v3.16.0 🔁: subtask reprovada → a TASK é reescrita (prompt melhorado
     com o problema do revisor) e re-executada — até concluir a missão."""
-    from hermes import mission as M
-    from hermes import orchestrator as orc
+    from betterme import mission as M
+    from betterme import orchestrator as orc
 
     cfg = fresh(creation_approval=False, ask_project_path=False)
     prompts = []
@@ -3516,9 +3516,9 @@ def T122_mission_reescreve_task_ao_falhar():
 
 @case
 def T123_memory_list_clear():
-    """v3.16.1: hermes memory list/clear — gerenciar a memória sem repetir:
+    """v3.16.1: betterme memory list/clear — gerenciar a memória sem repetir:
     import → list → clear --yes → import de novo (zero duplicatas)."""
-    from hermes.memory import MemoryStore
+    from betterme.memory import MemoryStore
 
     cfg = fresh()
     ms = MemoryStore(cfg)
@@ -3533,12 +3533,12 @@ def T123_memory_list_clear():
     textos = {f.get("text") for f in ms.list_all()}
     assert textos == {"fato A de teste", "fato C nova"}
     # CLI com parsers registrados (fonte)
-    src = Path("hermes/cli.py").read_text(encoding="utf-8")
+    src = Path("betterme/cli.py").read_text(encoding="utf-8")
     assert 'add_parser("list"' in src and 'add_parser("clear"' in src
     assert "cmd_memory_list" in src and "cmd_memory_clear" in src
     # help do pai menciona os subcomandos
     import subprocess as _sp
-    r = _sp.run(["./.venv/bin/hermes", "memory", "--help"],
+    r = _sp.run(["./.venv/bin/betterme", "memory", "--help"],
                 capture_output=True, text=True, timeout=30, check=False)
     assert "import" in (r.stdout or "") and "list" in (r.stdout or "")
     assert "clear" in (r.stdout or "")
@@ -3550,8 +3550,8 @@ def T124_provedores_externos_gratuitos():
     externo+fallback; chave mora em secrets/ (600) e NUNCA em config."""
     import os as _os
     import stat as _stat
-    from hermes import llm_providers as LP
-    from hermes.ollama_client import MockOllamaClient, OllamaClient, get_client
+    from betterme import llm_providers as LP
+    from betterme.ollama_client import MockOllamaClient, OllamaClient, get_client
 
     # registro: só provedores gratuitos, com base/modelo; llm7 sem chave
     for nome, info in LP.REGISTRY.items():
@@ -3565,15 +3565,15 @@ def T124_provedores_externos_gratuitos():
     assert not hasattr(cli, "externo") and not getattr(cli, "is_external", False)
     # configurado: externo com fallback (cfg NÃO-mock — mock tem precedência)
     import tempfile as _tf2
-    from hermes.config import Config as _Cfg
-    cfg = _Cfg(data_dir=_tf2.mkdtemp(prefix="hermes-t124b-"), mock=False)
+    from betterme.config import Config as _Cfg
+    cfg = _Cfg(data_dir=_tf2.mkdtemp(prefix="betterme-t124b-"), mock=False)
     cfg.update({"llm_provider": "groq", "llm_model": "llama-3.1-8b-instant"})
     cli2 = get_client(cfg)
     assert hasattr(cli2, "externo") and cli2.externo.provedor == "groq"
     assert isinstance(cli2.local, OllamaClient)
     assert cli2.is_external is True
     # mock ignora provedor externo (demo segue local-simulada)
-    cfg3 = _Cfg(data_dir=_tf2.mkdtemp(prefix="hermes-t124c-"), mock=True)
+    cfg3 = _Cfg(data_dir=_tf2.mkdtemp(prefix="betterme-t124c-"), mock=True)
     cfg3.update({"llm_provider": "groq"})
     assert isinstance(get_client(cfg3), MockOllamaClient)
     # chave em secrets (600), fora do config.yaml
@@ -3593,8 +3593,8 @@ def T125_memoria_nunca_sai_da_maquina():
     """v3.17.0 🔒 REGRA DO OPERADOR: fatos pessoais da memória são injetados
     no prompt SÓ no cliente local; provedor externo (ou fallback) recebe a
     task sem memória."""
-    from hermes.agent import Agent
-    from hermes.memory import MemoryStore
+    from betterme.agent import Agent
+    from betterme.memory import MemoryStore
 
     cfg = fresh()
     ms = MemoryStore(cfg)
@@ -3617,7 +3617,7 @@ def T125_memoria_nunca_sai_da_maquina():
     assert "Tigrão" not in p_ext and "4242" not in p_ext
     assert "Habilidades" in p_ext                     # skills continuam
     # FallbackClient também é externo (pode vir a usar o provedor)
-    from hermes.llm_providers import ExternalClient, FallbackClient
+    from betterme.llm_providers import ExternalClient, FallbackClient
     ext = ExternalClient(cfg, "llm7", _transport=lambda *a: iter(()))
     fb = FallbackClient(ext, _Local())
     assert fb.is_external is True
@@ -3628,8 +3628,8 @@ def T126_cliente_externo_sse_e_fallback():
     """v3.17.0: cliente OpenAI-compatível parseia SSE (tokens + tool_calls
     completos com argumentos normalizados) e o fallback cai no local se o
     externo falhar antes do 1º token."""
-    from hermes.llm_providers import ExternalClient, FallbackClient
-    from hermes.ollama_client import OllamaError
+    from betterme.llm_providers import ExternalClient, FallbackClient
+    from betterme.ollama_client import OllamaError
 
     cfg = fresh()
 
@@ -3723,7 +3723,7 @@ def T75_aba_ollama_modelos_e_papeis():
 def T63_e2e_jornada_completa():
     """E2E: sessão nova → conversa → task com skill → selo → tudo persistido
     (conversa, task, goal por sessão) — a jornada real do operador."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     c = _app(cfg)
     # 1. conversa comum cria sessão
@@ -3765,7 +3765,7 @@ def T63_e2e_jornada_completa():
 def T64_e2e_criacao_editar_plano_e_entrega():
     """E2E do portão de criação com EDIÇÃO dos dois lados: plano editado
     muda o objetivo; entrega editada entrega o texto do operador."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     c = _app(cfg)
     orc.APPROVAL_TIMEOUT_S = 25
@@ -3797,7 +3797,7 @@ def T64_e2e_criacao_editar_plano_e_entrega():
 def T65_integracao_skills_injecao_e_modelos():
     """Integração orquestrador×skills×modelos: skill relevante entra no
     prompt do executor; modelo do papel é usado; irrelevante não entra."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     cfg.orchestrator_model = "qwen3:8b"
     cfg.executor_model = "qwen3-coder:8b"
@@ -3838,7 +3838,7 @@ def T65_integracao_skills_injecao_e_modelos():
 def T66_integracao_chat_grava_tudo():
     """Integração: uma rodada de chat deixa rastro em TODOS os módulos —
     conversa (store), atividade (agent.log), auditoria e métricas."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     c = _app(cfg)
     metrics_antes = c.get("/api/metrics").get_json()
@@ -3892,7 +3892,7 @@ def T67_integracao_settings_desliga_revisor():
 @case
 def T68_perf_orquestrador_e_skills():
     """Performance dos componentes do pipeline (orçamentos generosos p/ CI)."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     t0 = time.time(); orc.plan(cfg, "verifique o uso de disco", [])
     assert time.time() - t0 < 0.5                       # plano heurístico
@@ -3905,7 +3905,7 @@ def T68_perf_orquestrador_e_skills():
     orc._extract_json("x" * 20000 + '{"a":1}' + "y" * 20000)
     assert time.time() - t0 < 0.4                       # JSON em lixo longo
     # 100 tasks no jsonl → lista rápida e id segue a sequência
-    from hermes.orchestrator import record, list_tasks, _next_id
+    from betterme.orchestrator import record, list_tasks, _next_id
     for i in range(100):
         record(cfg, {"objetivo": f"t{i}", "status": "ok", "tentativas": 1,
                      "dur_s": 1, "veredito": "ok", "problema": ""})
@@ -3952,8 +3952,8 @@ def T71_estresse_chats_paralelos():
     """Estresse: 12 chats simultâneos (misto conversa/task) — todos entregam
     exatamente 1 done não vazio, sem erros, tasks registradas."""
     import threading as _th
-    from hermes import orchestrator as orc
-    from hermes.server.app import create_app
+    from betterme import orchestrator as orc
+    from betterme.server.app import create_app
     cfg = fresh()
     app = create_app(cfg)          # cada thread usa o PRÓPRIO client
     antes = len(orc.list_tasks(cfg, limit=500))
@@ -4022,7 +4022,7 @@ def T73_estresse_historico_e_mensagem_grande():
     done = next((e for e in evs if e.get("type") == "done"), None)
     assert done and done["message"].strip(), [e.get("type") for e in evs][:8]
     # memória com 50 fatos continua usável
-    from hermes.memory import MemoryStore
+    from betterme.memory import MemoryStore
     mem = MemoryStore(cfg)
     for i in range(50):
         mem.add(f"fato de estresse {i} para o agente lembrar")
@@ -4034,8 +4034,8 @@ def T73_estresse_historico_e_mensagem_grande():
 def T74_estresse_skills_30_diretorio_usuario():
     """Estresse do casamento de skills: 30 skills a mais no diretório do
     usuário continuam casando rápido e SEM falso-positivo em RAM."""
-    from hermes import orchestrator as orc
-    from hermes.skills import SkillLoader
+    from betterme import orchestrator as orc
+    from betterme.skills import SkillLoader
     cfg = fresh()
     userdir = cfg.data_dir / "skills"
     for i in range(30):
@@ -4063,7 +4063,7 @@ def T61_modelos_por_papel_sequenciais():
     """v3.7: um modelo por PAPEL (orquestrador × executor), troca SEQUENCIAL
     — nunca paralelo. Vazio = cfg.model. O executor recebe o override e ele
     é restaurado no fim; settings e GUI aceitam os dois campos."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     cfg = fresh()
     assert orc.model_for(cfg, "orchestrator") == cfg.model      # default
@@ -4108,7 +4108,7 @@ def T61_modelos_por_papel_sequenciais():
 def T62_ferramentas_reconstruidas_e_respostas_entendiveis():
     """v3.7: página Ferramentas sem inputs/botões quebrados (componente .frow
     com labels, sem flex inline) e padrão de COMUNICAÇÃO nas respostas."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     c = _app(fresh())
     html = c.get("/").get_data(as_text=True)
@@ -4124,7 +4124,7 @@ def T62_ferramentas_reconstruidas_e_respostas_entendiveis():
     # respostas entendíveis: prompts
     assert "COMUNICAÇÃO" in orc._PLANO_JSON or True   # (no executor, abaixo)
     assert "COMUNICAÇÃO: escreva para a PESSOA" in open(
-        "hermes/orchestrator.py", encoding="utf-8").read()
+        "betterme/orchestrator.py", encoding="utf-8").read()
     assert "ENTENDÍVEL para a pessoa que pediu" in orc._REVISAO_JSON
 
 
@@ -4133,7 +4133,7 @@ def T59_skills_precisas_caso_real():
     """v3.6 (caso real do operador): 'resumo detalhado do uso de memória
     ram' NÃO pode aplicar a skill resumo-inbox (era falso-positivo por
     palavras genéricas); skills certas continuam casando."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     cfg = fresh()
     # falso-positivo real: RAM ≠ caixa de e-mail
@@ -4156,7 +4156,7 @@ def T60_contexto_followup_e_retomada():
     follow-ups; retomada é imperativa (EXECUTE AGORA + pedido original);
     revisor ancorado (não inventa critério, tolera cortesia); heurística
     trata 'conclua o anterior' como ação."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     # prompts com as âncoras
     assert "REGRA DE CONTINUAÇÃO" in orc._PLANO_JSON
@@ -4220,7 +4220,7 @@ def T57_resposta_sempre_entregue():
     final mesmo sem tokens streamados (marcador do render defensivo)."""
     import threading as _th
 
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     c = _app(cfg)
     orc.APPROVAL_TIMEOUT_S = 20
@@ -4287,7 +4287,7 @@ def T57_resposta_sempre_entregue():
 def T58_mente_senior_orquestrador():
     """v3.5: orquestrador e revisor com mente SÊNIOR (30 anos, cobrança,
     sem retrabalho) e o padrão de qualidade injetado no executor."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     # personas nos prompts
     assert "ORQUESTRADOR" in orc._PLANO_JSON and "SÊNIOR" in orc._PLANO_JSON
@@ -4356,7 +4356,7 @@ def T54_comandos_slash_no_chat():
     # /reset limpa
     c.post("/api/chat/command", json={"text": "/goal outra coisa", "session_id": "s2"})
     c.post("/api/chat/command", json={"text": "/reset", "session_id": "s2"})
-    from hermes import orchestrator as _orc
+    from betterme import orchestrator as _orc
     assert _orc.get_goal("s2") == ""
 
 
@@ -4364,7 +4364,7 @@ def T54_comandos_slash_no_chat():
 def T55_skills_aplicadas_ao_pipeline():
     """v3.4 ✦: skills ativas relevantes são selecionadas por palavra-chave
     e o conteúdo é injetável no executor; irrelevante não seleciona nada."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     cfg = fresh()
     sks = orc.skills_for(cfg, "pesquise na internet os preços de passagens aéreas")
@@ -4387,7 +4387,7 @@ def T56_aprovacao_de_criacao_e2e():
     no plano encerra sem executar. Editar troca o plano."""
     import threading as _th
 
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     c = _app(cfg)
     orc.APPROVAL_TIMEOUT_S = 25          # teto de segurança do teste
@@ -4461,7 +4461,7 @@ def T56_aprovacao_de_criacao_e2e():
 def T51_orquestrador_plano_e_rota():
     """v3.3 🎯: plano JSONParseado; JSON inválido → heurística; ação → rota
     'executar' com objetivo; conversa → 'responder'; flag desliga tudo."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     cfg = fresh()
     # heurística (mock não bate no modelo — determinístico)
@@ -4495,7 +4495,7 @@ def T51_orquestrador_plano_e_rota():
 def T52_revisor_vereditos():
     """v3.3 🔍: ok/refazer parseados; lixo → ok (entrega nunca trava); flag
     desligada → sempre ok; problema vem junto no refazer."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
 
     cfg = fresh()
     orig = orc._fast
@@ -4528,7 +4528,7 @@ def T53_pipeline_e2e_no_chat():
     """v3.3 e2e: mensagem de AÇÃO no chat gera 🎯 task → execução → 🔍
     revisão → registro (jsonl + endpoint); conversa comum não passa pelo
     pipeline (nenhuma task nova)."""
-    from hermes import orchestrator as orc
+    from betterme import orchestrator as orc
     cfg = fresh()
     c = _app(cfg)
     antes = len(orc.list_tasks(cfg))
@@ -4566,7 +4566,7 @@ def T50_gui_responsiva_e_pwa():
     """v3.2: GUI responsiva (viewport dinâmico, barra inferior, alvos de toque,
     inputs 16px anti-zoom do iOS) e PWA instalável (manifest, service worker
     que NUNCA cacheia /api/, ícones PNG gerados sem dependências)."""
-    from hermes.server.app import create_app
+    from betterme.server.app import create_app
     cfg = fresh()
     c = create_app(cfg).test_client()
     html = c.get("/").get_data(as_text=True)
@@ -4598,7 +4598,7 @@ def T50_gui_responsiva_e_pwa():
 def T49_guard_anti_loop_claude():
     """Guard anti-loop: a mesma linha repetida em degeneração é cortada da
     resposta final (caso real: 'Acessar Configurações de Contas do Google:'×N)."""
-    from hermes.claude_agent import _strip_loops
+    from betterme.claude_agent import _strip_loops
 
     linha = "Acessar Configurações de Contas do Google:"
     lixo = "Início do passo a passo.\n" + (linha + "\n") * 30 + "Fim."
@@ -4619,13 +4619,13 @@ def T49_guard_anti_loop_claude():
 @case
 def T46_auth_hint_diagnostico_por_provedor():
     """A mensagem de erro certa para cada bloqueio de 2FA/OAuth."""
-    from hermes.emailcfg import auth_hint
+    from betterme.emailcfg import auth_hint
 
     h = auth_hint("a@gmail.com",
                   "AUTHENTICATIONFAILED [ALERT] Please log in via your web browser")
     assert "senha de aplicativo" in h.lower()
     h2 = auth_hint("a@outlook.com", "AUTHENTICATE failed")
-    assert "hermes email oauth" in h2
+    assert "betterme email oauth" in h2
     h3 = auth_hint("a@hotmail.com", "authenticationfailed")
     assert "microsoft" in h3.lower()
     assert auth_hint("a@x.com", "timeout") == ""              # sem palpite indevido
@@ -4638,8 +4638,8 @@ def T127_agente_externo_usa_modelo_do_provedor():
     — nomes Ollama não existem na API externa e todo chat ia a HTTP 400
     (model_unavailable), caindo no fallback silencioso: o provedor externo
     configurado nunca atendia de verdade (achado de teste E2E real)."""
-    from hermes.agent import Agent
-    from hermes.llm_providers import ExternalClient
+    from betterme.agent import Agent
+    from betterme.llm_providers import ExternalClient
 
     cfg = fresh()                                   # cfg.model = "hermes3:8b"
     modelos, auths = [], []
@@ -4672,7 +4672,7 @@ def T128_varredura_de_segredos_e_dlp_mascarar():
     DLP mascarar() que impede código/segredos de sair para provedores
     externos (regra D2 do operador)."""
     import argparse
-    from hermes import varredura as V
+    from betterme import varredura as V
 
     # ---- padrões e severidades
     txt = ("key = gsk_" + "A" * 30 + "\n"
@@ -4730,7 +4730,7 @@ def T128_varredura_de_segredos_e_dlp_mascarar():
     assert "abracadabra" not in limpo
     assert "frase normal de prosa" in limpo      # prosa preservada
 
-    # ---- auto-teste: o PRÓPRIO repo do Hermes não tem crítico
+    # ---- auto-teste: o PRÓPRIO repo do Betterme não tem crítico
     repo = Path(__file__).resolve().parent.parent
     achos = [a for a in V.varrer_repo(cfg, repo)
              if a.severidade == "CRITICO"]
@@ -4740,10 +4740,10 @@ def T128_varredura_de_segredos_e_dlp_mascarar():
 @case
 def T129_hermes_md_contexto_de_projeto():
     """v4.0.0 M2: HERMES.md/AGENTS.md descoberto (global + projeto),
-    HERMES.md vence AGENTS.md, cap 32 KiB, `hermes init` cria scaffold,
+    HERMES.md vence AGENTS.md, cap 32 KiB, `betterme init` cria scaffold,
     injeção no prompt LOCAL e versão DLP-mascarada no EXTERNO."""
-    from hermes import project_context as PC
-    from hermes.agent import Agent
+    from betterme import project_context as PC
+    from betterme.agent import Agent
 
     cfg = fresh()
     # sem arquivos -> seção vazia, prompt inalterado
@@ -4752,7 +4752,7 @@ def T129_hermes_md_contexto_de_projeto():
     # global + projeto; HERMES.md vence AGENTS.md no projeto
     (cfg.data_dir / "HERMES.md").write_text(
         "global: responder sempre em PT-BR", encoding="utf-8")
-    proj = Path.home() / f".hermes-t129-{os.getpid()}"
+    proj = Path.home() / f".betterme-t129-{os.getpid()}"
     shutil.rmtree(proj, ignore_errors=True)
     proj.mkdir(parents=True)
     try:
@@ -4765,6 +4765,11 @@ def T129_hermes_md_contexto_de_projeto():
             ach.get("global (máquina)", "")
         assert "pytest" in ach.get("HERMES.md do projeto", "")
         assert "npm" not in ach.get("HERMES.md do projeto", "")
+        # v4.1.0: BETTERME.md no projeto vence o HERMES.md legado
+        (proj / "BETTERME.md").write_text("novo: use poetry", encoding="utf-8")
+        ach_b = dict(PC.descobrir(cfg, proj))
+        assert "poetry" in ach_b.get("BETTERME.md do projeto", "")
+        (proj / "BETTERME.md").unlink()
         sec = PC.secao(cfg, proj)
         assert "pytest" in sec and "Instruções do projeto" in sec
         # sem HERMES.md no projeto -> AGENTS.md é aceito (compat Codex)
@@ -4779,7 +4784,7 @@ def T129_hermes_md_contexto_de_projeto():
         assert "truncado em 32 KiB" in sec3
 
         # init: cria scaffold; de novo -> não altera
-        p2 = Path.home() / f".hermes-t129b-{os.getpid()}"
+        p2 = Path.home() / f".betterme-t129b-{os.getpid()}"
         shutil.rmtree(p2, ignore_errors=True)
         p2.mkdir(parents=True)
         try:
@@ -4793,8 +4798,8 @@ def T129_hermes_md_contexto_de_projeto():
 
         # injeção no prompt do agente LOCAL (dentro do task_scope)
         (proj / "HERMES.md").write_text(
-            "regra local do projeto hermes-md-t129", encoding="utf-8")
-        from hermes.tools import task_scope
+            "regra local do projeto betterme-md-t129", encoding="utf-8")
+        from betterme.tools import task_scope
 
         class _Fala:
             simulated = False
@@ -4803,7 +4808,7 @@ def T129_hermes_md_contexto_de_projeto():
         ag = Agent(cfg, client=_Fala())
         with task_scope(proj, cfg):
             prompt = ag.system_prompt("algo")
-        assert "regra local do projeto hermes-md-t129" in prompt
+        assert "regra local do projeto betterme-md-t129" in prompt
 
         # EXTERNO: seção vai, mas FILTRADA pelo DLP (código/segredo fora)
         class _Ext:
@@ -4839,8 +4844,8 @@ def T130_skills_de_metodologia_ptbr():
     """v4.0.0 M3 (D4): as 6 skills essenciais adaptadas do superpowers,
     reescritas em PT-BR no NOSSO modelo (fases do pipeline, nunca
     subagentes/comandos do Claude), sempre ativas e auditadas."""
-    from hermes.skills import SkillLoader
-    from hermes.skills_audit import run_audit
+    from betterme.skills import SkillLoader
+    from betterme.skills_audit import run_audit
 
     cfg = fresh()
     nomes = {"tdd", "debug-sistematico", "verificacao-antes-de-concluir",
@@ -4874,7 +4879,7 @@ def T131_sandbox_de_kernel_bwrap_seccomp():
     denylist de app quando o kernel não está disponível."""
     import struct as _st
     import subprocess as _sp
-    from hermes import sandbox_kernel as SK
+    from betterme import sandbox_kernel as SK
 
     # ---- BPF: formato e blocklist
     bpf = SK.bpf_blocklist()
@@ -4970,8 +4975,8 @@ def T132_autonomia_tres_niveis():
     """v4.0.0 M5 (D3): cauteloso/padrao/autonomo — gates soft respeitam
     o nível, hard gates são inegociáveis, AUTÔNOMO cria sem approval e
     ganha varredura pré-entrega; /autonomia no chat."""
-    from hermes import autonomy as AU
-    from hermes import orchestrator as orc
+    from betterme import autonomy as AU
+    from betterme import orchestrator as orc
 
     # ---- funções de nível
     cfg = fresh()
@@ -4988,7 +4993,7 @@ def T132_autonomia_tres_niveis():
     # ---- E2E: AUTÔNOMO com gate de criação LIGADO cria sem approval
     cfg2 = fresh(creation_approval=True)
     cfg2.update({"autonomia": "autonomo"})
-    proj = Path.home() / f".hermes-t132-{os.getpid()}"
+    proj = Path.home() / f".betterme-t132-{os.getpid()}"
     shutil.rmtree(proj, ignore_errors=True)
 
     class _Ag:
@@ -5009,14 +5014,14 @@ def T132_autonomia_tres_niveis():
         shutil.rmtree(proj, ignore_errors=True)
 
     # fonte: gates ligados ao nível
-    src = Path("hermes/orchestrator.py").read_text(encoding="utf-8")
+    src = Path("betterme/orchestrator.py").read_text(encoding="utf-8")
     assert "pula_gate_criacao(cfg)" in src and "pre_entrega_varredura" in src
-    assert "confirma_todo_comando" in Path("hermes/tui.py").read_text(
+    assert "confirma_todo_comando" in Path("betterme/tui.py").read_text(
         encoding="utf-8")
 
     # ---- varredura pré-entrega (AUTÔNOMO): crítico vira aviso
     cfg3 = fresh()
-    sujo = Path.home() / f".hermes-t132b-{os.getpid()}"
+    sujo = Path.home() / f".betterme-t132b-{os.getpid()}"
     shutil.rmtree(sujo, ignore_errors=True)
     sujo.mkdir(parents=True)
     try:
@@ -5024,7 +5029,7 @@ def T132_autonomia_tres_niveis():
                                         encoding="utf-8")
         aviso = AU.pre_entrega_varredura(cfg3, sujo)
         assert "CRÍTICO" in aviso and "chave.txt" in aviso
-        limpo = Path.home() / f".hermes-t132c-{os.getpid()}"
+        limpo = Path.home() / f".betterme-t132c-{os.getpid()}"
         shutil.rmtree(limpo, ignore_errors=True)
         limpo.mkdir(parents=True)
         try:
@@ -5078,7 +5083,7 @@ class _PoolFake:
 def T133_contrato_de_veredito_e_evidencia():
     """v4.0.0 M6 (R3): schema do veredito, confiança mínima, evidência
     obrigatória e checagem DETERMINÍSTICA em disco (risco #7)."""
-    from hermes.specialists import (checar_evidencia, invocar, validar,
+    from betterme.specialists import (checar_evidencia, invocar, validar,
                                     _extrair_json)
 
     bom = _extrair_json(_veredito_falso())
@@ -5095,7 +5100,7 @@ def T133_contrato_de_veredito_e_evidencia():
 
     # evidência em disco: arquivo:linha existe e contém o trecho
     cfg = fresh()
-    d = Path.home() / f".hermes-t133-{os.getpid()}"
+    d = Path.home() / f".betterme-t133-{os.getpid()}"
     shutil.rmtree(d, ignore_errors=True)
     d.mkdir(parents=True)
     try:
@@ -5139,7 +5144,7 @@ def T133_contrato_de_veredito_e_evidencia():
 def T134_dlp_codigo_e_segredos_nao_saim_no_pool():
     """v4.0.0 M6 (R6/D2): o caso enviado ao pool externo passa pelo DLP —
     código e segredos NUNCA saem; prosa permanece."""
-    from hermes.specialists import invocar
+    from betterme.specialists import invocar
 
     cfg = fresh()
     caso = ("o script é:\n```python\ndef banco():\n    return 1\n"
@@ -5157,7 +5162,7 @@ def T134_dlp_codigo_e_segredos_nao_saim_no_pool():
 @case
 def T135_pool_de_provedores_rotacao_e_fallback():
     """v4.0.0 M6 (R7): externo falha -> rotaciona -> todos caem -> local."""
-    from hermes.specialists import Pool
+    from betterme.specialists import Pool
 
     cfg = fresh()
 
@@ -5200,7 +5205,7 @@ def T135_pool_de_provedores_rotacao_e_fallback():
 def T136_exames_de_competencia_e_degradacao():
     """v4.0.0 M6 (R8/R5): casos-ouro com cache; reprovado desativa o
     especialista SEM quebrar o pipeline (regra 8 do ADR-001)."""
-    from hermes.specialists import _arquivo_exames, disponiveis, exame, \
+    from betterme.specialists import _arquivo_exames, disponiveis, exame, \
         invocar
 
     cfg = fresh()
@@ -5238,7 +5243,7 @@ def T137_loop_de_aprendizado_aprovacao():
     """v4.0.0 M6.5: missão com >=5 ferramentas aprovada -> RASCUNHO em
     staging (nunca direto no catálogo); aprovação instala a skill (com
     backup+auditoria); reprovada -> lição; nada entra sem o operador."""
-    from hermes import learning as LG
+    from betterme import learning as LG
 
     cfg = fresh()
     # abaixo do limiar: nada proposto
@@ -5263,7 +5268,7 @@ def T137_loop_de_aprendizado_aprovacao():
     assert alvo.is_file()
     assert not LG.pendentes(cfg)                    # staging esvaziou
     # skill aparece no catálogo do agente
-    from hermes.skills import SkillLoader
+    from betterme.skills import SkillLoader
     nomes = {s["name"] for s in SkillLoader(cfg).enabled()}
     assert ps[0]["alvo"] in nomes
     # de novo a mesma missão -> aprovar vira PATCH com backup
@@ -5287,7 +5292,7 @@ def T137_loop_de_aprendizado_aprovacao():
     assert ps4[0]["tipo"] == "licao" and "LIÇÃO" in ps4[0]["rascunho"]
     ok4, msg4 = LG.aprovar(cfg, ps4[0]["id"])
     assert ok4 and "memória" in msg4
-    from hermes.memory import MemoryStore
+    from betterme.memory import MemoryStore
     fatos = " ".join(f["text"] for f in MemoryStore(cfg).list_all())
     assert "missão que deu errado" in fatos
 
@@ -5296,11 +5301,11 @@ def T137_loop_de_aprendizado_aprovacao():
 def T138_skills_aprender_e_busca_em_conversas():
     """v4.0.0 M6.5: `skills aprender` (arquivo/texto) cria rascunho com
     frontmatter e a busca em conversas acha decisões antigas."""
-    from hermes import learning as LG
-    from hermes.learning import buscar_conversas
+    from betterme import learning as LG
+    from betterme.learning import buscar_conversas
 
     cfg = fresh()
-    doc = Path.home() / f".hermes-t138-{os.getpid()}.md"
+    doc = Path.home() / f".betterme-t138-{os.getpid()}.md"
     doc.write_text("# Deploy manual do servidor\n\n1. rode deploy.sh\n"
                    "2. confira o log\n", encoding="utf-8")
     try:
@@ -5318,7 +5323,7 @@ def T138_skills_aprender_e_busca_em_conversas():
         doc.unlink(missing_ok=True)
 
     # busca em conversas: cria sessão com decisão antiga
-    from hermes.conversations import ConversationStore
+    from betterme.conversations import ConversationStore
     store = ConversationStore(cfg)
     s = store.new_session()
     store.append(s["id"], "user", "vamos usar TF-IDF sem embeddings")
@@ -5328,7 +5333,7 @@ def T138_skills_aprender_e_busca_em_conversas():
     assert "TF-IDF sem embeddings" in ach[0]["trecho"]
     assert buscar_conversas(cfg, "zurplefrobnicate") == []
     # ferramenta do agente
-    import hermes.tools as T
+    import betterme.tools as T
     r = T.execute_tool("conversas_buscar", {"termo": "determinístico"}, cfg)
     assert r["ok"] and "conversas passadas" in r["output"]
     assert "RAG" in r["output"]
@@ -5338,16 +5343,16 @@ def T138_skills_aprender_e_busca_em_conversas():
 def T139_gerente_de_codigo_optin_consciente():
     """v4.0.0 M7 (D5): Claude = gerente de código — OFF por padrão; ligar
     exige --yes após o aviso de privacidade (código vai à Anthropic);
-    ferramenta delega só quando ativo; Hermes segue como cérebro main."""
-    from hermes import code_manager as GM
-    import hermes.tools as T
+    ferramenta delega só quando ativo; Betterme segue como cérebro main."""
+    from betterme import code_manager as GM
+    import betterme.tools as T
 
     cfg = fresh()
     # off por padrão; delegar explica em vez de executar
     assert GM.ativo(cfg) is False
     r = T.execute_tool("gerente_codigo", {"task": "refatore o app"}, cfg)
     assert not r["ok"] or "DESLIGADO" in r["output"]
-    assert "hermes gerente on" in r["output"]
+    assert "betterme gerente on" in r["output"]
     # ligar SEM --yes não liga — só mostra o aviso
     ok, msg = GM.ativar(cfg, assumir=False)
     assert ok is False and "Anthropic" in msg and "CÓDIGO SAI" in msg
@@ -5394,7 +5399,7 @@ def T140_gui_agentes_endpoints_e_fonte():
     assert r8["ok"]
 
     # ---- fluxo aprendizados pela API
-    from hermes import learning as LG
+    from betterme import learning as LG
     LG.observar(cfg, "missão rica da GUI x", "aprovada", "passos reais", 6)
     pend = c.get("/api/aprendizados").get_json()["pendentes"]
     assert len(pend) == 1
@@ -5404,7 +5409,7 @@ def T140_gui_agentes_endpoints_e_fonte():
     assert c.get("/api/aprendizados").get_json()["pendentes"] == []
 
     # ---- fonte da GUI (zero-build, vanilla, inline)
-    html = Path("hermes/server/templates/index.html").read_text(
+    html = Path("betterme/server/templates/index.html").read_text(
         encoding="utf-8")
     for marcador in ('id="page-agentes"', 'data-page="agentes"',
                      "loadAgentes", "setAutonomia", "apDecide",
@@ -5415,6 +5420,83 @@ def T140_gui_agentes_endpoints_e_fonte():
     assert 'state.page==="agentes"){ loadAgentes(); }' in html
 
 
+@case
+def T141_renome_betterme_migracao_e_identidade():
+    """v4.1.0 (PR#4): renome Hermes->Betterme — pacote betterme, CLI
+    betterme (alias hermes), identidade no prompt, env BETTERME_* com
+    fallback HERMES_*, e migração automática ~/.hermes -> ~/.betterme."""
+    import subprocess as _sp
+    import sys as _sys
+    from betterme.agent import Agent
+
+    # identidade: o prompt de sistema apresenta o Betterme
+    cfg = fresh()
+
+    class _Fala:
+        simulated = False
+        def chat_stream(self, model, messages, **k):
+            yield {"message": {"content": "ok"}}
+    ag = Agent(cfg, client=_Fala())
+    prompt = ag.system_prompt("oi")
+    assert "Betterme" in prompt and "Você é o Hermes" not in prompt
+
+    # pacote e alias de console script
+    r = _sp.run([".venv/bin/betterme", "--version"], capture_output=True,
+                text=True, timeout=60)
+    assert r.returncode == 0 and "4.1.0" in r.stdout
+    r2 = _sp.run([".venv/bin/hermes", "--version"], capture_output=True,
+                 text=True, timeout=60)
+    assert r2.returncode == 0 and "4.1.0" in r2.stdout
+
+    # env legado continua funcionando (HERMES_MOCK)
+    r3 = _sp.run(["bash", "-c",
+                  "HERMES_MOCK=1 .venv/bin/python -c "
+                  "'from betterme.config import Config; "
+                  "c=Config(data_dir=\"/home/user/.t141-env\"); "
+                  "print(1 if c.mock else 0)'"],
+                 capture_output=True, text=True, timeout=60)
+    assert r3.returncode == 0 and r3.stdout.strip().endswith("1"), r3.stderr[-200:]
+
+    # migração: HOME falso com ~/.hermes legado -> vira ~/.betterme
+    fake = Path.home() / f".t141-home-{os.getpid()}"
+    shutil.rmtree(fake, ignore_errors=True)
+    (fake / ".hermes").mkdir(parents=True)
+    (fake / ".hermes" / "memory.json").write_text('{"facts": []}',
+                                                  encoding="utf-8")
+    (fake / ".hermes" / "biblioteca").mkdir()
+    (fake / ".hermes" / "biblioteca" / "livro.md").write_text("nota",
+                                                              encoding="utf-8")
+    try:
+        r4 = _sp.run([_sys.executable, "-c",
+                      "from betterme.config import Config; "
+                      "c = Config(); print(c.data_dir)"],
+                      capture_output=True, text=True, timeout=60,
+                      env={**os.environ, "HOME": str(fake)})
+        assert r4.returncode == 0, r4.stderr[-300:]
+        assert str(fake / ".betterme") in r4.stdout
+        assert (fake / ".betterme" / "memory.json").is_file()
+        assert (fake / ".betterme" / "biblioteca" / "livro.md").is_file()
+        assert not (fake / ".hermes").exists()      # movido, não copiado
+        # 2ª execução não quebra nem duplica
+        r5 = _sp.run([_sys.executable, "-c",
+                      "from betterme.config import Config; "
+                      "c = Config(); print(c.data_dir)"],
+                      capture_output=True, text=True, timeout=60,
+                      env={**os.environ, "HOME": str(fake)})
+        assert r5.returncode == 0
+    finally:
+        shutil.rmtree(fake, ignore_errors=True)
+
+    # data-dir explícito NUNCA dispara migração
+    dd = Path.home() / f".t141-dd-{os.getpid()}"
+    shutil.rmtree(dd, ignore_errors=True)
+    try:
+        c = Config(data_dir=str(dd))
+        assert c.data_dir == dd.resolve()
+    finally:
+        shutil.rmtree(dd, ignore_errors=True)
+
+
 if __name__ == "__main__":
-    print("◈ Hermes Agent — suíte de testes (v3.0)\n")
+    print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())

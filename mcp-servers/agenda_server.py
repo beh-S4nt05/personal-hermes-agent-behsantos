@@ -11,7 +11,7 @@ SOMENTE LEITURA POR CONSTRUÇÃO:
   * o escopo OAuth é 'calendar.readonly' (concedido pelo dono da conta);
   * este servidor só faz GET na API do Calendar — não existe código que
     crie, altere ou apague eventos;
-  * as credenciais vêm de $HERMES_AGENDA_SECRETS (arquivo 600, fora do
+  * as credenciais vêm de $BETTERME_AGENDA_SECRETS (arquivo 600, fora do
     workspace), lidas DIRETO por este processo — nunca passam pelo modelo.
 
 Stdlib pura (urllib/json) — zero dependências extras.
@@ -31,7 +31,7 @@ from pathlib import Path
 
 SERVER_NAME = "agenda"
 SERVER_VERSION = "1.0.0"
-API_BASE = os.environ.get("HERMES_AGENDA_API") or \
+API_BASE = os.environ.get("BETTERME_AGENDA_API") or os.environ.get("HERMES_AGENDA_API") or \
     "https://www.googleapis.com/calendar/v3"
 MAX_EVENTOS = 50
 
@@ -88,8 +88,8 @@ _ACC_CACHE: dict = {"mtime": None, "accs": None, "loaded": 0.0}
 def _load_accounts() -> list[dict]:
     """Agendas do arquivo de segredos — cache por mtime (token vivo entre
     chamadas, sem regravar nada em disco)."""
-    path = os.environ.get("HERMES_AGENDA_SECRETS") or \
-        str(Path.home() / ".hermes" / "secrets" / "agenda.json")
+    path = os.environ.get("BETTERME_AGENDA_SECRETS") or os.environ.get("HERMES_AGENDA_SECRETS") or \
+        str(Path.home() / ".betterme" / "secrets" / "agenda.json")
     try:
         mtime = os.path.getmtime(path)
         if (_ACC_CACHE["accs"] is not None
@@ -108,7 +108,7 @@ def _load_accounts() -> list[dict]:
 def _pick(args: dict) -> dict:
     accs = _load_accounts()
     if not accs:
-        raise RuntimeError("nenhuma agenda configurada — rode: hermes agenda oauth")
+        raise RuntimeError("nenhuma agenda configurada — rode: betterme agenda oauth")
     want = str(args.get("account") or "").strip()
     if not want:
         return accs[0]
@@ -243,7 +243,7 @@ def tool_proximo(args: dict) -> str:
 def tool_contas(_args: dict) -> str:
     accs = _load_accounts()
     if not accs:
-        return ("nenhuma agenda configurada — rode `hermes agenda oauth` no "
+        return ("nenhuma agenda configurada — rode `betterme agenda oauth` no "
                 "terminal e reinicie o server")
     linhas = [f"- {a.get('id')} → {a.get('user')} · 🔎 somente leitura "
               f"({a.get('oauth_scopes', 'calendar.readonly')})" for a in accs]

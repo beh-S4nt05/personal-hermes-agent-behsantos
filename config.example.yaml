@@ -1,6 +1,6 @@
 # ============================================================
-#  Configuração do Hermes Agent
-#  Local padrão: ~/.hermes/config.yaml (criado ao salvar na GUI)
+#  Configuração do Betterme Agent
+#  Local padrão: ~/.betterme/config.yaml (criado ao salvar na GUI)
 # ============================================================
 
 # --- Ollama ---
@@ -9,7 +9,7 @@ model: hermes3:8b                    # modelo padrão (hermes3:3b é mais leve)
 num_ctx: 8192                        # tamanho de contexto
 temperature: 0.4                     # criatividade (0 = determinístico)
 
-# --- GUI web (hermes server) ---
+# --- GUI web (betterme server) ---
 host: 127.0.0.1                      # use 0.0.0.0 para acessar de outros aparelhos
 port: 8080
 auth_token: ""                       # SENHA! obrigatória se host=0.0.0.0
@@ -38,7 +38,7 @@ mcp_servers:
     command: python3
     args: ["mcp-servers/figma_demo_server.py"]
     env:
-      HERMES_WORKDIR: ~/.hermes/workspace
+      HERMES_WORKDIR: ~/.betterme/workspace
 
   # Gmail — servidor MCP oficial do Google (requer projeto no Google Cloud,
   # Gmail API habilitada e OAuth; Developer Preview). Transporte HTTP:

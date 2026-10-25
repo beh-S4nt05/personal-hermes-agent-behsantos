@@ -1,4 +1,4 @@
-# 📖 Guia de Uso — o que fazer SOMENTE com o Hermes (v3.15.1)
+# 📖 Guia de Uso — o que fazer SOMENTE com o Betterme (v3.15.1)
 
 > Catálogo prático para o operador: capacidades reais (testadas, 120/120),
 > prompts de exemplo para copiar e colar, e limites honestos.
@@ -8,7 +8,7 @@
 
 ## 🚀 Modo missão — autonomia total (v3.16.0)
 
-Passe UMA tarefa com o prefixo **`missão:`** e o Hermes faz o resto:
+Passe UMA tarefa com o prefixo **`missão:`** e o Betterme faz o resto:
 
 ```
 missão: construa meu app de gastos em /media/Arquivos/projetos/gastos,
@@ -65,8 +65,8 @@ casou (ex.: "testes verdes, saída real colada") — prometer não basta.
 
 ## 2. 📚 Estudar e produzir com seus livros (RAG local)
 
-Coloque livros/docs em `~/.hermes/biblioteca/` (.md/.txt/.pdf), rode
-`hermes rag` e:
+Coloque livros/docs em `~/.betterme/biblioteca/` (.md/.txt/.pdf), rode
+`betterme rag` e:
 
 - "consulte a biblioteca sobre [assunto] e explique como o livro ensina"
 - "implemente o padrão X do livro [nome] no projeto Y"
@@ -124,7 +124,7 @@ no livro, ele diz que não está (não inventa citação).
 
 - Baixe qualquer repo de skills (zip/pasta) para `~/Downloads` → vira nativa
   em minutos (autoscan), casa com seus pedidos e **delega** o padrão de entrega
-- `hermes skills import <pasta/zip/URL>` para importar na hora
+- `betterme skills import <pasta/zip/URL>` para importar na hora
 - "crie uma skill para [seu processo]" → o agente RASCUNHA e você aprova/edita
 
 ## 10. 🎛️ Operar a própria suíte
@@ -132,8 +132,8 @@ no livro, ele diz que não está (não inventa citação).
 - `/goal`, `/tasks`, `/skills`, `/memoria`, `/tools`, `/ajuda` no chat
 - Voz→texto no chat (STT) · conversas persistentes + export .md
 - Aba Ollama: instalar/remover modelos, auto-atribuição
-- `hermes doctor` (ambiente) · `hermes selftest` (qualidade com LLM real,
-  incl. cenário de projeto) · `hermes update` (novas versões)
+- `betterme doctor` (ambiente) · `betterme selftest` (qualidade com LLM real,
+  incl. cenário de projeto) · `betterme update` (novas versões)
 
 ---
 
@@ -158,7 +158,7 @@ toda manhã 07:30: briefing com inbox, agenda e um resumo de uso da máquina
 
 **Receita 3 — estudar com seus livros e materializar:**
 ```
-(ponha os PDFs em ~/.hermes/biblioteca e rode: hermes rag)
+(ponha os PDFs em ~/.betterme/biblioteca e rode: betterme rag)
 consulte a biblioteca sobre o capítulo de coroutines
 explique como o livro ensina e me dê um exemplo
 agora crie um projeto Kotlin de exercício em ~/projetos/kotlin-lab
@@ -179,7 +179,7 @@ semanal domingo 20:00: relatório de gastos com tendência do mês
 | Limite | Por quê / contorno |
 |---|---|
 | Tarefas gigantes em um só pedido | modelo 8B a 0,5–2,4 tok/s — divida em etapas (cada uma verificada); a compactação segura o contexto, o tempo é o limite |
-| Compilar APK iOS/Android de verdade | requer SDK instalado na máquina; o Hermes gera o código Kotlin/Compose pronto |
+| Compilar APK iOS/Android de verdade | requer SDK instalado na máquina; o Betterme gera o código Kotlin/Compose pronto |
 | Controlar mouse/janelas do desktop | não há automação de GUI do sistema (só arquivos/comandos/web) |
 | Navegar em sites com JavaScript pesado | web_fetch lê texto; SPAs podem vir rasas |
 | Push/PR para GitHub sozinho | git push fica com você (por design — credencial); commits locais ele faz todos |
@@ -190,7 +190,7 @@ semanal domingo 20:00: relatório de gastos com tendência do mês
 
 ## Regra de ouro
 
-> O Hermes entrega **evidência**, não promessa: saída real colada, arquivo
+> O Betterme entrega **evidência**, não promessa: saída real colada, arquivo
 > que existe, teste que passou, commit com hash. Se um pedido voltar sem
 > evidência, reprove e peça de novo — o revisor da próxima tentativa cobra
 > junto com você.
@@ -199,7 +199,7 @@ semanal domingo 20:00: relatório de gastos com tendência do mês
 
 ## v4.0.0 — Agentes: autonomia, especialistas e aprendizado
 
-### 🎚 Níveis de autonomia (`hermes autonomia` ou `/autonomia` no chat)
+### 🎚 Níveis de autonomia (`betterme autonomia` ou `/autonomia` no chat)
 
 | Nível | Comportamento |
 |---|---|
@@ -222,23 +222,23 @@ passa por um **exame de competência** antes de ativar.
 ### 📚 Aprendizado (sempre com sua aprovação)
 
 Missão complexa aprovada → rascunho de skill; missão reprovada → lição.
-Veja e decida: `hermes aprendidos` → `aprovar <id>` / `rejeitar <id>`.
-Transforme documento em skill: `hermes skills aprender <arquivo|URL|texto>`.
-Decisões antigas: `hermes conversas buscar "termo"`.
+Veja e decida: `betterme aprendidos` → `aprovar <id>` / `rejeitar <id>`.
+Transforme documento em skill: `betterme skills aprender <arquivo|URL|texto>`.
+Decisões antigas: `betterme conversas buscar "termo"`.
 
 ### 👔 Gerente de código (Claude) — opt-in
 
-`hermes gerente on --yes` (leia o aviso: o código da task vai à nuvem
-Anthropic; memória e segredos nunca saem). O Hermes continua sendo o
-cérebro que decide quando delegar. `hermes gerente off` volta ao 100% local.
+`betterme gerente on --yes` (leia o aviso: o código da task vai à nuvem
+Anthropic; memória e segredos nunca saem). O Betterme continua sendo o
+cérebro que decide quando delegar. `betterme gerente off` volta ao 100% local.
 
 ### 🛡 Rotina pré-push
 
-`hermes varredura` antes de publicar código (exit 1 = crítico bloqueia).
-Nomes de terceiros: um por linha em `~/.hermes/varredura-nomes.txt`.
+`betterme varredura` antes de publicar código (exit 1 = crítico bloqueia).
+Nomes de terceiros: um por linha em `~/.betterme/varredura-nomes.txt`.
 
 ### 🧱 Sandbox de kernel
 
 Se `bwrap` estiver instalado (`sudo apt install bubblewrap`), os comandos
 do agente rodam isolados no kernel automaticamente; sem ele, a denylist
-de aplicação segue valendo. `hermes doctor` mostra o estado.
+de aplicação segue valendo. `betterme doctor` mostra o estado.
