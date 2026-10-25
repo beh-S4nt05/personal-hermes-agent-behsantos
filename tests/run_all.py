@@ -5814,6 +5814,188 @@ def T148_telegram_fluxo_e2e_com_http_fake():
     assert posts[-1][1]["text"].startswith("🔒")
 
 
+# ══════════════════════ v4.3.0 (PR#6) — ARENA DE PROVEDORES ══════════════════════
+
+@case
+def T149_arena_mesma_task_nos_contendores():
+    """v4.3.0 (PR#6): a MESMA task vai a TODOS os contendores do pool fake,
+    cronometrada — modo resposta (completion pura, sem ferramentas)."""
+    from betterme import arena
+
+    cfg = fresh()
+    pool = arena.candidatos(cfg)
+    assert len(pool) == 3, [n for n, _c in pool]
+    res = arena.rodar(cfg, "explique TF-IDF em uma frase", _pool=pool)
+    assert res["ok"] and len(res["resultados"]) == 3
+    prompts = [c.prompts[-1] for _n, c in pool]
+    assert prompts[0] and prompts[0] == prompts[1] == prompts[2], prompts
+    assert "TF-IDF" in prompts[0]
+    for r in res["resultados"]:
+        assert r["ok"] and r["tempo_ms"] > 0 and r["chars"] > 0, r
+    # n rodadas → tempo médio
+    res2 = arena.rodar(cfg, "task", n=3, _pool=arena.candidatos(cfg))
+    assert res2["ok"] and res2["n"] == 3
+
+
+@case
+def T150_revisor_ranking_com_criterios():
+    """v4.3.0 (PR#6): o revisor ranqueia com critérios — em mock o juiz
+    local não julga e a heurística determinística ordena groq>gemini>llm7."""
+    from betterme import arena
+
+    cfg = fresh()
+    res = arena.rodar(cfg, "resuma X")
+    assert res["ok"] and res["metodo"] == "heuristica"
+    ordem = [r["provedor"] for r in res["resultados"]]
+    assert ordem == ["groq", "gemini", "llm7"], ordem
+    notas = [r["nota"] for r in res["resultados"]]
+    assert notas == sorted(notas, reverse=True) and notas[0] == 10, notas
+    assert res["vencedor"] == "groq"
+    for r in res["resultados"]:
+        assert 0 <= r["nota"] <= 10 and r["veredito"], r
+    crit = "; ".join(res["criterios"])
+    assert "sucesso" in crit and "rapidez" in crit
+
+
+@case
+def T151_arena_nao_escreve_no_disco():
+    """v4.3.0 (PR#6): modo resposta — o resultado NUNCA escreve no disco
+    (única escrita permitida: linha de auditoria em logs/agent.log)."""
+    from betterme import arena
+
+    cfg = fresh()
+    antes = {str(p.relative_to(cfg.data_dir))
+             for p in cfg.data_dir.rglob("*") if p.is_file()}
+    res = arena.rodar(cfg, "tarefa que não deve criar arquivo nenhum")
+    assert res["ok"]
+    depois = {str(p.relative_to(cfg.data_dir))
+              for p in cfg.data_dir.rglob("*") if p.is_file()}
+    novos = depois - antes
+    assert novos <= {"logs/agent.log", "logs/agent.log.1"}, sorted(novos)
+
+
+@case
+def T152_contendor_que_falha_nao_derruba_rodada():
+    """v4.3.0 (PR#6): contendor em erro fica ok=False/nota 0 com motivo —
+    a rodada continua e o bom contendor vence."""
+    from betterme.arena import rodar
+    from betterme.ollama_client import OllamaError
+
+    class Bom:
+        model = "bom-1b"
+
+        def chat_stream(self, model, messages, **kw):
+            yield {"message": {"content": "resposta boa e desenvolvida " * 5}}
+
+    class Morto:
+        model = "morto-1b"
+
+        def chat_stream(self, model, messages, **kw):
+            raise OllamaError("HTTP 429: quota excedida")
+
+    cfg = fresh()
+    res = rodar(cfg, "task", _pool=[("bom", Bom()), ("morto", Morto())])
+    assert res["ok"]
+    por = {r["provedor"]: r for r in res["resultados"]}
+    assert por["morto"]["ok"] is False and "429" in por["morto"]["erro"]
+    assert por["morto"]["nota"] == 0 and "falhou" in por["morto"]["veredito"]
+    assert por["bom"]["ok"] and por["bom"]["nota"] == 10
+    assert res["vencedor"] == "bom"
+
+
+@case
+def T153_arena_dlp_mascara_task_antes_do_pool():
+    """v4.3.0 (PR#6) + D2: código/segredos da task são DLP-mascarados
+    ANTES de qualquer payload externo — nunca chegam ao provedor."""
+    from betterme import arena
+
+    cfg = fresh()
+    pool = arena.candidatos(cfg)
+    task = ("veja o login: senha='adm-12345' e o e-mail fulano@gmail.com\n"
+            "```python\nprint('código interno')\n```")
+    res = arena.rodar(cfg, task, _pool=pool)
+    assert res["ok"] and res["mascarada"] is True
+    for _n, c in pool:
+        enviado = c.prompts[-1]
+        assert "adm-12345" not in enviado, enviado
+        assert "fulano@gmail.com" not in enviado, enviado
+        assert "print(" not in enviado, enviado
+        assert "CODIGO LOCAL" in enviado and "REDACTED" in enviado, enviado
+
+
+@case
+def T154_revisor_local_valido_e_fallback():
+    """v4.3.0 (PR#6): juiz LOCAL válido → ranking do revisor (notas
+    10/8, motivo no veredito); JSON inválido → heurística sem quebrar."""
+    from betterme.arena import rodar
+
+    class P:
+        model = "p1"
+
+        def chat_stream(self, model, messages, **kw):
+            yield {"message": {"content": "resposta boa e desenvolvida " * 5}}
+
+    class Q:
+        model = "q1"
+
+        def chat_stream(self, model, messages, **kw):
+            yield {"message": {"content": "resposta curta"}}
+
+    cfg = fresh()
+    pool = [("alfa", P()), ("beta", Q())]
+    capturado = []
+    juiz = '{"ordem": ["B", "A"], "motivos": {"B": "mais precisa", "A": "prolixa"}}'
+
+    def juiz_fn(prompt):
+        capturado.append(prompt)
+        return juiz
+
+    res = rodar(cfg, "task", _pool=pool, _local=juiz_fn)
+    assert res["metodo"] == "revisor-local" and res["vencedor"] == "beta"
+    por = {r["provedor"]: r for r in res["resultados"]}
+    assert por["beta"]["nota"] == 10 and por["alfa"]["nota"] == 8
+    assert "mais precisa" in por["beta"]["veredito"]
+    assert "RESPOSTA A (alfa)" in capturado[0] and "RESPOSTA B (beta)" in capturado[0]
+    # juiz que devolve qualquer coisa inválida → heurística (não quebra)
+    res2 = rodar(cfg, "task", _pool=pool, _local=lambda p: "acho que a B é melhor")
+    assert res2["metodo"] == "heuristica" and res2["vencedor"] == "alfa"
+
+
+@case
+def T155_cli_arena_tabela_e_vencedor():
+    """v4.3.0 (PR#6): `betterme arena "<task>"` imprime tabela + vencedor
+    (mock: zero rede, zero chaves)."""
+    venv_py = ROOT / ".venv" / "bin" / "python"
+    py = str(venv_py) if venv_py.exists() else sys.executable
+    env = dict(os.environ,
+               BETTERME_DATA_DIR=tempfile.mkdtemp(prefix="betterme-arena-"),
+               BETTERME_MOCK="1")
+    import subprocess
+    r = subprocess.run([py, "-m", "betterme", "arena", "o que é regex?"],
+                       capture_output=True, text=True, env=env,
+                       timeout=120, cwd=str(ROOT))
+    texto = r.stdout + r.stderr
+    assert r.returncode == 0, texto[:300]
+    assert "🏟" in texto and "vencedor" in texto, texto[:300]
+    assert "groq" in texto and "veredito" in texto, texto[:300]
+
+
+@case
+def T156_arena_candidatos_reais_por_chave():
+    """v4.3.0 (PR#6): modo real — entram provedores com chave em secrets/
+    + anônimos (llm7); sem chave fica fora; pool vazio → orientação."""
+    from betterme import arena, llm_providers
+
+    cfg = fresh()
+    cfg.mock = False                      # data-dir limpo: sem chaves
+    llm_providers.salvar_key(cfg, "groq", "gsk_curta")   # curta: não casa
+    nomes = [n for n, _c in arena.candidatos(cfg)]
+    assert "groq" in nomes and "llm7" in nomes, nomes    # llm7 é anônimo
+    assert "gemini" not in nomes, nomes                  # sem chave → fora
+    res = arena.rodar(cfg, "x", _pool=[])
+    assert res["ok"] is False and "provider set" in res["msg"]
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())

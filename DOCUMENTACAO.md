@@ -1,6 +1,6 @@
 # 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
-**Versão 4.2.0** · gerado em 25/10/2026 · este documento é extraído do
+**Versão 4.3.0** · gerado em 25/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -101,6 +101,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `betterme gerente` | gerente de código (Claude Code) — opt-in consciente |
 | `betterme telegram` | canal Telegram: controle e aprovação pelo celular |
 | `betterme whatsapp` | canal WhatsApp via Playwright — grátis, local, removível |
+| `betterme arena` | 🏟️ roda a MESMA task nos provedores grátis e ranqueia (v4.3.0) |
 | `betterme aprendidos` | rascunhos de skills/lições esperando sua aprovação |
 | `betterme conversas` | conversas passadas do agente |
 | `betterme rag` | biblioteca de livros (RAG local): indexa ou consulta |
@@ -122,7 +123,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `betterme skills audit` (auditar o catálogo), `betterme config set/get`, `betterme server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v4.2.0)
+## 3. Modificações — o que foi feito (v1.0.0 → v4.3.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -130,6 +131,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v4.3.0** | 🏟️ ARENA DE PROVEDORES (PR #6) |
 | **v4.2.0** | 📱 GATEWAY DE MENSAGENS: Telegram + WhatsApp (PR #5) |
 | **v4.1.0** | 🏷️ BETTERME: o agente muda de nome (PR #4 do roadmap) |
 | **v4.1.0** | 🏷️ BETTERME: o agente muda de nome (PR #4 do roadmap) |
@@ -469,6 +471,7 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `cmd_gerente(args)` | v4.0.0 (M7, D5): gerente de código (Claude) — opt-in consciente. |
 | `cmd_telegram(args)` | v4.2.0 (PR#5): canal Telegram (token em secrets, allowlist). |
 | `cmd_whatsapp(args)` | v4.2.0 (PR#5): canal WhatsApp via Playwright (local, removível). |
+| `cmd_arena(args)` | v4.3.0 (PR#6): arena — mesma task nos provedores grátis, ranking medido. |
 | `cmd_aprendidos(args)` | v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador). |
 | `cmd_skills_aprender(args)` | v4.0.0 (M6.5): transforma documento/texto/URL em rascunho de skill. |
 | `cmd_conversas_buscar(args)` | v4.0.0 (M6.5): busca textual nas conversas passadas. |

@@ -583,6 +583,13 @@ def cmd_whatsapp(args) -> None:
     whatsapp_gw.cmd(args, _cfg(args))
 
 
+def cmd_arena(args) -> None:
+    """v4.3.0 (PR#6): arena — mesma task nos provedores grátis, ranking medido."""
+    from . import arena
+    arena.cmd(" ".join(getattr(args, "task", []) or []),
+              getattr(args, "n", 1) or 1, _cfg(args))
+
+
 def cmd_aprendidos(args) -> None:
     """v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador)."""
     from . import learning
@@ -783,6 +790,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("id", nargs="?", default=None,
                    help="número (para autorizar)")
     p.set_defaults(fn=cmd_whatsapp)
+
+    p = sub.add_parser("arena",
+                       help="🏟️ roda a MESMA task nos provedores grátis e ranqueia (v4.3.0)")
+    p.add_argument("task", nargs="+", help="a task — idêntica para todos os contendores")
+    p.add_argument("--n", type=int, default=1,
+                   help="rodadas por contendedor (default 1; tempo médio)")
+    p.set_defaults(fn=cmd_arena)
     p = sub.add_parser("aprendidos",
                        help="rascunhos de skills/lições esperando sua aprovação")
     pa = p.add_argument("acao", nargs="?", default="list",

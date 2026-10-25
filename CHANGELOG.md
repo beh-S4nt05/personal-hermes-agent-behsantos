@@ -1,5 +1,36 @@
 # Changelog
 
+## v4.3.0 — 🏟️ ARENA DE PROVEDORES (PR #6)
+
+"Qual modelo grátis resolve melhor ESTA task?" — medido, não achismo.
+
+**`betterme arena "<task>" [--n 3]`:**
+- A MESMA task roda em TODOS os contendores do pool gratuito (com chave
+  em `secrets/` + anônimos como llm7), em **modo resposta**: completion
+  pura, sem ferramentas, sem escrever NADA no disco do projeto.
+- Cronômetro por contendedor (`--n` rodadas → tempo médio).
+- O **revisor** ranqueia os resultados lado a lado e recomenda o
+  vencedor: juiz LOCAL (Ollama — nada sai da máquina); indisponível ou
+  JSON inválido → **heurística objetiva** (sucesso, adesão, tamanho,
+  rapidez — nota 0–10).
+- Saída: tabela (provedor · tempo · nota · veredito do revisor ·
+  trecho) + 🏆 vencedor + critérios.
+
+**Privacidade (D2 — lei, como sempre):**
+- A task é DLP-mascarada ANTES de qualquer payload externo: código e
+  segredos jamais saem (T153 prova).
+- Nada da arena é persistido: resultado vive na memória/stdout; a única
+  escrita é a linha padrão de auditoria no `logs/agent.log` (T151 prova).
+
+**Mock/demo:** pool fake determinístico (groq/gemini/llm7 com respostas
+e latências fixas) — `BETTERME_MOCK=1` roda a arena sem rede e sem
+chaves, ranking estável.
+
+**Testes:** T149–T156 (mesma task nos N contendores · revisor com
+critérios · nada escrito no disco · contendedor morto não derruba a
+rodada · DLP antes do pool · juiz local válido/inválido · CLI ·
+candidatos reais por chave) — **156/156**.
+
 ## v4.2.0 — 📱 GATEWAY DE MENSAGENS: Telegram + WhatsApp (PR #5)
 
 O Betterme no seu bolso: ver status, listar pendências, **aprovar
