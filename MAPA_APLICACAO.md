@@ -75,6 +75,8 @@ tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 | `whatsapp_gw.py` | 📱 canal WhatsApp via Playwright (grátis/local/removível; experimental, extra opcional). |
 | `code_manager.py` | 👔 Gerente de código (Claude) — opt-in consciente com aviso de privacidade (D5). |
 | `llm_providers.py` | Provedores LLM externos GRATUITOS (OpenAI-compat): registro groq/gemini/mistral/openrouter/llm7/zai/cohere, chave em secrets 600, fallback local — memória NUNCA sai (regra do operador). v3.17.1: chat_stream usa SEMPRE o modelo do provedor (o Agent passa nome Ollama em cfg.model → 400 + fallback silencioso; T127). |
+| `arena.py` | 🏟️ Arena de provedores (v4.3.0): a MESMA task em todos os contendores do pool grátis, em modo resposta (sem ferramentas/escrita), cronometrada; revisor LOCAL ranqueia com critérios (fallback heurística objetiva); task sempre DLP-mascarada (D2). CLI `betterme arena "<task>" [--n 3]`. |
+| `grafo.py` | 🗺️ Grafo de código (v4.4.0, E3): AST puro (stdlib, nada executa) → SQLite `grafo.db` no data-dir; símbolos função/classe/método com arquivo:linha + doc; arestas `chama`/`importa`/`herda` TODAS com proveniência arquivo:linha; `build\|query\|path` (BFS direcionado); tool `grafo_query` no cérebro — "onde está a lógica de X?" a custo zero de tokens. |
 | `manager.py` | Gerência do Ollama: boot/restart (systemd ou `ollama serve` com log), diagnóstico de ambiente. |
 | `autoselect.py` | Auto-atribuição de modelos por papel (lê SEMPRE a lista instalada). |
 | `conversations.py` | Sessões persistidas (`conversations/*.json`, atômico): histórico recuperável, busca, export. |
@@ -313,7 +315,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **156 casos** (v4.3.0), famílias:
+`tests/run_all.py` — **160 casos** (v4.4.0), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·

@@ -5996,6 +5996,162 @@ def T156_arena_candidatos_reais_por_chave():
     assert res["ok"] is False and "provider set" in res["msg"]
 
 
+# ══════════════════════ v4.4.0 (PR#7) — GRAFO DE CÓDIGO (E3) ══════════════════════
+
+def _fixture_grafo():
+    """Árvore de código conhecida (linhas contadas a dedo) p/ T157-T160."""
+    raiz = tempfile.mkdtemp(prefix="grafo-fix-")
+    pkg = Path(raiz) / "pkg"
+    pkg.mkdir()
+    (pkg / "mod.py").write_text(
+        "import json\n"
+        "from pathlib import Path\n"
+        "\n"
+        "class Base:\n"
+        "    def execute(self):\n"
+        "        return self.run()\n"
+        "\n"
+        "    def run(self):\n"
+        "        return 1\n"
+        "\n"
+        "class Filha(Base):\n"
+        "    def executar_tudo(self):\n"
+        "        return self.execute()\n"
+        "\n"
+        "def processar(dados):\n"
+        "    return json.dumps(dados)\n"
+        "\n"
+        "def principal():\n"
+        "    b = Base()\n"
+        "    return processar(b.execute())\n"
+        "", encoding="utf-8")
+    return raiz
+
+
+def _dump_grafo(cfg):
+    import sqlite3
+    con = sqlite3.connect(str(cfg.data_dir / "grafo.db"))
+    try:
+        sims = con.execute(
+            "SELECT tipo, nome, qualificado, arquivo, linha FROM simbolos "
+            "ORDER BY qualificado").fetchall()
+        ars = con.execute(
+            "SELECT tipo, origem, destino, arquivo, linha FROM arestas "
+            "ORDER BY tipo, origem, destino, arquivo, linha").fetchall()
+    finally:
+        con.close()
+    return sims, ars
+
+
+@case
+def T157_grafo_build_deterministico():
+    """v4.4.0 (PR#7): mesma árvore → mesmos símbolos e arestas (ordenados);
+    símbolos/arestas esperados presentes com proveniência arquivo:linha."""
+    from betterme import grafo
+
+    raiz = _fixture_grafo()
+    cfg_a, cfg_b = fresh(), fresh()
+    st = grafo.build(cfg_a, raiz)
+    assert st["arquivos"] == 1 and st["simbolos"] == 7, st
+    grafo.build(cfg_b, raiz)
+    sims_a, ars_a = _dump_grafo(cfg_a)
+    sims_b, ars_b = _dump_grafo(cfg_b)
+    assert sims_a == sims_b and ars_a == ars_b, "build não determinístico"
+    por_q = {q: (t, ar, li) for t, n, q, ar, li in sims_a}
+    assert por_q["pkg.mod.principal"] == ("funcao", "pkg/mod.py", 18)
+    assert por_q["pkg.mod.Base"] == ("classe", "pkg/mod.py", 4)
+    assert por_q["pkg.mod.Base.run"] == ("metodo", "pkg/mod.py", 8)
+    assert por_q["pkg.mod.Filha.executar_tudo"] == ("metodo", "pkg/mod.py", 12)
+    conjunto = set(ars_a)
+    assert ("chama", "pkg.mod.principal", "processar", "pkg/mod.py", 20) in conjunto
+    assert ("chama", "pkg.mod.Base.execute", "self.run", "pkg/mod.py", 6) in conjunto
+    assert ("herda", "pkg.mod.Filha", "Base", "pkg/mod.py", 11) in conjunto
+    assert ("importa", "pkg.mod", "json", "pkg/mod.py", 1) in conjunto
+    for _t, _o, _d, ar, li in ars_a:           # proveniência sempre válida
+        assert ar == "pkg/mod.py" and 1 <= li <= 20, (ar, li)
+    # build do PRÓPRIO repo: rápido, pula .venv/__pycache__, acha o Betterme
+    cfg_repo = fresh()
+    st_repo = grafo.build(cfg_repo, ROOT)
+    assert st_repo["arquivos"] > 40 and st_repo["simbolos"] > 500, st_repo
+    sims_repo, ars_repo = _dump_grafo(cfg_repo)
+    assert not any(".venv" in s[3] or "__pycache__" in s[3] for s in sims_repo)
+    assert not any(".venv" in a[3] or "__pycache__" in a[3] for a in ars_repo)
+    assert any(q == "betterme.arena.rodar" for _t, _n, q, _ar, _li in sims_repo)
+
+
+@case
+def T158_grafo_query_acha_funcao_e_linha():
+    """v4.4.0 (PR#7): query por nome acha função/classe/método com
+    arquivo:linha CERTOS — case-insensitive, substring, contagem de chamadas."""
+    from betterme import grafo
+
+    cfg = fresh()
+    grafo.build(cfg, _fixture_grafo())
+    r = grafo.query(cfg, "principal")
+    assert r["ok"] and len(r["simbolos"]) == 1, r
+    s = r["simbolos"][0]
+    assert (s["tipo"], s["arquivo"], s["linha"]) == ("funcao", "pkg/mod.py", 18)
+    assert s["faz"] == 3                      # Base(), processar(), execute()
+    r2 = grafo.query(cfg, "PRINCIPAL")        # case-insensitive
+    assert r2["ok"] and r2["simbolos"][0]["linha"] == 18
+    r3 = grafo.query(cfg, "execut")           # substring: execute + executar_tudo
+    nomes = {s["qualificado"] for s in r3["simbolos"]}
+    assert "pkg.mod.Base.execute" in nomes and "pkg.mod.Filha.executar_tudo" in nomes
+    r4 = grafo.query(cfg, "Base")
+    assert any(s["tipo"] == "classe" and s["linha"] == 4 for s in r4["simbolos"])
+    r5 = grafo.query(cfg, "nao_existe_isso")
+    assert r5["ok"] and r5["simbolos"] == []
+
+
+@case
+def T159_grafo_query_tool_catalogo_e_path():
+    """v4.4.0 (PR#7): ferramenta grafo_query no catálogo do cérebro —
+    query e caminho A→B via execute_tool; sem grafo → orientação honesta."""
+    from betterme import grafo
+    from betterme.tools import TOOL_NAMES, execute_tool
+
+    assert "grafo_query" in TOOL_NAMES
+    cfg = fresh()
+    r0 = execute_tool("grafo_query", {"termo": "principal"}, cfg)
+    assert r0["ok"] is False and "grafo build" in r0["output"], r0
+    grafo.build(cfg, _fixture_grafo())
+    r1 = execute_tool("grafo_query", {"termo": "principal"}, cfg)
+    assert r1["ok"] and "pkg/mod.py:18" in r1["output"], r1
+    r2 = execute_tool("grafo_query", {"de": "principal", "para": "run"}, cfg)
+    assert r2["ok"] and "→" in r2["output"], r2
+    assert "pkg/mod.py:20" in r2["output"] and "pkg/mod.py:6" in r2["output"]
+    assert "pkg.mod.Base.execute" in r2["output"]
+    r3 = execute_tool("grafo_query", {"de": "run", "para": "principal"}, cfg)
+    assert r3["ok"] and "sem caminho" in r3["output"]   # BFS é direcionado
+    r4 = execute_tool("grafo_query", {}, cfg)
+    assert r4["ok"] is False and "termo" in r4["output"]
+
+
+@case
+def T160_cli_grafo_build_query_path():
+    """v4.4.0 (PR#7): `betterme grafo build|query|path` ponta a ponta."""
+    venv_py = ROOT / ".venv" / "bin" / "python"
+    py = str(venv_py) if venv_py.exists() else sys.executable
+    raiz = _fixture_grafo()
+    env = dict(os.environ,
+               BETTERME_DATA_DIR=tempfile.mkdtemp(prefix="betterme-grafo-"),
+               BETTERME_MOCK="1")
+    import subprocess
+    r = subprocess.run([py, "-m", "betterme", "grafo", "build",
+                        "--raiz", raiz], capture_output=True, text=True,
+                       env=env, timeout=120, cwd=str(ROOT))
+    texto = r.stdout + r.stderr
+    assert r.returncode == 0 and "7 símbolos" in texto, texto[:300]
+    r2 = subprocess.run([py, "-m", "betterme", "grafo", "query", "principal"],
+                        capture_output=True, text=True, env=env,
+                        timeout=120, cwd=str(ROOT))
+    assert r2.returncode == 0 and "pkg/mod.py:18" in r2.stdout, r2.stdout[:300]
+    r3 = subprocess.run([py, "-m", "betterme", "grafo", "path",
+                         "principal", "run"], capture_output=True, text=True,
+                        env=env, timeout=120, cwd=str(ROOT))
+    assert r3.returncode == 0 and "Base.run" in r3.stdout, r3.stdout[:300]
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())

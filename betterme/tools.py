@@ -328,6 +328,34 @@ TOOLS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "grafo_query",
+            "description": (
+                "Consulta o GRAFO DE CÓDIGO do projeto (AST local, "
+                "milissegundos, ZERO tokens): onde está a lógica de X? "
+                "Use ANTES de ler arquivos às cegas — devolve "
+                "função/classe/método com arquivo:linha e o que faz; "
+                "com 'de'+'para' traça o caminho de chamadas A→B. "
+                "Requer `betterme grafo build` na raiz do projeto."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "termo": {"type": "string",
+                              "description": "nome (ou parte) de função/"
+                                             "classe/método a localizar"},
+                    "de": {"type": "string",
+                           "description": "origem do caminho de chamadas "
+                                          "(usar junto com 'para')"},
+                    "para": {"type": "string",
+                             "description": "destino do caminho de chamadas"},
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 TOOL_NAMES = {t["function"]["name"] for t in TOOLS}
@@ -870,6 +898,19 @@ def knowledge_search(args: dict, cfg) -> str:
     return "\n".join(partes)[:6000]
 
 
+def grafo_query(args: dict, cfg) -> str:
+    """v4.4.0 (PR#7): grafo de código — onde está a lógica de X? (zero tokens)."""
+    from . import grafo
+    de = str(args.get("de", "")).strip()
+    para = str(args.get("para", "")).strip()
+    if de and para:
+        return grafo.path_text(cfg, de, para)
+    termo = str(args.get("termo", "")).strip()
+    if not termo:
+        return "ERRO: informe 'termo' (ou 'de'+'para' para caminho de chamadas)."
+    return grafo.query_text(cfg, termo)
+
+
 EXECUTORS = {
     "run_command": run_command,
     "git_run": git_run,
@@ -887,6 +928,7 @@ EXECUTORS = {
     "especialista": especialista_tool,
     "conversas_buscar": conversas_buscar,
     "gerente_codigo": gerente_codigo_tool,
+    "grafo_query": grafo_query,
 }
 
 

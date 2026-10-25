@@ -590,6 +590,12 @@ def cmd_arena(args) -> None:
               getattr(args, "n", 1) or 1, _cfg(args))
 
 
+def cmd_grafo(args) -> None:
+    """v4.4.0 (PR#7): grafo de código (onde está a lógica de X?)."""
+    from . import grafo
+    grafo.cmd(args, _cfg(args))
+
+
 def cmd_aprendidos(args) -> None:
     """v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador)."""
     from . import learning
@@ -797,6 +803,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--n", type=int, default=1,
                    help="rodadas por contendedor (default 1; tempo médio)")
     p.set_defaults(fn=cmd_arena)
+
+    p = sub.add_parser("grafo",
+                       help="🗺️ grafo de código: onde está a lógica de X? (v4.4.0)")
+    gsub = p.add_subparsers(dest="acao", required=True)
+    gb = gsub.add_parser("build", help="constrói o grafo AST do projeto (SQLite no data-dir)")
+    gb.add_argument("--raiz", default=None,
+                    help="raiz do projeto (default: diretório atual)")
+    gq = gsub.add_parser("query", help="busca símbolos por nome (função/classe/método)")
+    gq.add_argument("termo", nargs="+", help="nome (ou parte) a buscar")
+    gp = gsub.add_parser("path", help="traça o caminho de chamadas A → B")
+    gp.add_argument("de", help="símbolo de origem")
+    gp.add_argument("para", help="símbolo de destino")
+    p.set_defaults(fn=cmd_grafo)
     p = sub.add_parser("aprendidos",
                        help="rascunhos de skills/lições esperando sua aprovação")
     pa = p.add_argument("acao", nargs="?", default="list",

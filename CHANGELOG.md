@@ -1,5 +1,33 @@
 # Changelog
 
+## v4.4.0 — 🗺️ GRAFO DE CÓDIGO (PR #7, E3)
+
+"Onde está a lógica de X?" em milissegundos, **zero tokens**.
+
+**`betterme/grafo.py` + `betterme grafo build|query|path`:**
+- AST Python PURO (stdlib) — nenhum código do projeto é executado;
+  grafo em SQLite no data-dir (`grafo.db`). O repo inteiro do Betterme
+  vira grafo em **~0,6 s** (55 arquivos · 822 símbolos · 10.306 arestas).
+- Símbolos: funções, classes e métodos (`modulo.Classe.metodo`) com
+  `arquivo:linha` e a primeira linha da docstring.
+- Arestas COM PROVENIÊNCIA (estilo Graphify — toda aresta sabe de onde
+  foi EXTRAÍDA): `chama` (linha do call), `importa` (linha do import),
+  `herda` (linha do class).
+- `query` busca por nome (substring, case-insensitive) com contagem de
+  chamadas; `path A B` traça o caminho de chamadas por BFS (direcionado)
+  mostrando cada salto com `arquivo:linha`.
+- Build determinístico (mesma árvore → mesmos símbolos/arestas),
+  pula `.venv`/`.git`/`__pycache__`/`node_modules` etc.
+
+**Ferramenta `grafo_query` no cérebro:** o modelo pergunta ao grafo em
+vez de ler arquivos às cegas — `{"termo": "..."}` localiza,
+`{"de": "A", "para": "B"}` traça o caminho. Sem grafo construído →
+orientação honesta ("rode `betterme grafo build`").
+
+**Testes:** T157–T160 (build determinístico + proveniência + repo
+inteiro · query acha linha certa · tool no catálogo + path A→B +
+sem-caminho direcionado · CLI ponta a ponta) — **160/160**.
+
 ## v4.3.0 — 🏟️ ARENA DE PROVEDORES (PR #6)
 
 "Qual modelo grátis resolve melhor ESTA task?" — medido, não achismo.
