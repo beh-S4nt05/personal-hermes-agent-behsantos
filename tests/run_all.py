@@ -19,7 +19,6 @@ import shutil
 import sys
 import tempfile
 import time
-import types
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -252,7 +251,7 @@ def T10_cache_do_prompt():
             yield {"message": {"content": "ok"}}
 
     ag = Agent(cfg, client=Fala())
-    p1 = ag.system_prompt("pergunta A")
+    ag.system_prompt("pergunta A")
     nuc = ag._prompt_cache[1]                             # núcleo cacheado
     id_antes = id(ag._prompt_cache)
     p2_ = ag.system_prompt("pergunta A")
@@ -400,7 +399,7 @@ def T16_regressao_denylist_seguranca():
 
 @case
 def T17_claude_modo_leve_e_fallback_de_cli_antiga():
-    from hermes.claude_agent import _claude_cmd, run_claude
+    from hermes.claude_agent import run_claude
 
     # mock=False: precisa executar a CLI de verdade (falsas, abaixo)
     cfg = Config(data_dir=tempfile.mkdtemp(prefix="hermes-t-"), mock=False)
@@ -1260,7 +1259,7 @@ def T41_secrets_protegidos_contra_o_agente():
 def T42_log_mostra_todas_as_atividades():
     """Chat, ferramenta, tarefa agendada, ajustes e ações do painel
     aparecem no agent.log (que o Log ao vivo faz tail)."""
-    from hermes import activity, scheduler as S
+    from hermes import scheduler as S
 
     cfg = fresh()
     c = _app(cfg)
@@ -1469,7 +1468,7 @@ def T47_email_somente_leitura_padrao():
 def T48_agenda_google_somente_leitura():
     """MCP agenda: device flow com escopo calendar.readonly, refresh do token,
     eventos via GET (nunca POST) e cache do access_token entre chamadas."""
-    from hermes import agendacfg, emailcfg
+    from hermes import agendacfg
     from hermes.mcp_client import get_manager, map_tool_name
 
     cfg = fresh()
@@ -2157,7 +2156,7 @@ def T89_js_da_gui_tem_sintaxe_valida():
                 _qjs.Context().eval("(function(){" + js + "})")
             except Exception as exc:  # noqa: BLE001
                 raise AssertionError(
-                    f"bloco <script> {i + 1} com erro de sintaxe: {exc}")
+                    f"bloco <script> {i + 1} com erro de sintaxe: {exc}") from exc
     _KW = {"if", "for", "while", "switch", "catch", "return", "new",
            "typeof", "void", "delete", "do", "function"}
     fns = set(_re.findall(r"function (\w+)\(", html))
@@ -2187,7 +2186,7 @@ def T90_auto_atribuicao_de_papeis():
     assert all(motivo for _, motivo in esc.values())  # toda escolha tem motivo
     assert "código" in esc["executor"][1]
     # pequenos nunca são escolhidos quando há maiores
-    for papel, (m, _) in esc.items():
+    for _papel, (m, _) in esc.items():
         assert m not in ("llama3.2:1b", "qwen2.5:3b", "llama3.2:3b")
     # sem modelo de código instalado: executor cai no melhor geral
     esc2 = aus.choose(["hermes3:3b", "llama3.2:1b"], chat_atual="hermes3:3b")
@@ -2233,7 +2232,7 @@ def T91_auto_assign_respeita_teto_de_tamanho():
     assert esc12["orchestrator"][0] == "gemma3:12b"
     # teto apertado: só pequenos
     esc4 = aus.choose(LOTE, chat_atual="hermes3:3b", max_b=4)
-    for papel, (m, _) in esc4.items():
+    for _papel, (m, _) in esc4.items():
         assert aus._params(m) <= 4
     # default no config = 9.0 e coerce funciona
     c9 = Config(data_dir=tempfile.mkdtemp(prefix="hermes-teto-"), mock=True)
@@ -2423,7 +2422,7 @@ def T96_fim_da_recusa_vazia():
     repetir chamadas/textos' e ENTREGAVA NADA — revisor reprovava 2x e
     a task morria sem resposta. O nudge anti-loop e a mensagem de
     refazer agora exigem a RESPOSTA COMPLETA com os dados já coletados."""
-    from hermes import agent as ag, orchestrator as orc
+    from hermes import agent as ag
 
     assert "NUNCA se recuse a responder" in ag._ANTILOOP_NUDGE
     assert "NÃO são respostas" in ag._ANTILOOP_NUDGE
@@ -2653,7 +2652,6 @@ def T102_claude_senior_com_skills_e_goal():
     src = Path("hermes/server/app.py").read_text(encoding="utf-8")
     assert "goal=get_goal(session_id, cfg))" in src
     # 6. run_claude aceita goal e continua funcionando em mock
-    out = []
     evs = []
     r = ca.run_claude(cfg, "oi", history=[], on_event=evs.append,
                       goal="teste")
@@ -3303,7 +3301,6 @@ def T120_perguntar_caminho_do_projeto():
     """v3.15.1: contrato do operador — iniciar projeto SEM caminho → o
     agente PERGUNTA a pasta; a resposta retoma a task no escopo certo
     (busca/cria o local). Cancela, assunto-mudou, flag off e TTL cobertos."""
-    import tempfile
     from hermes import orchestrator as orc
 
     cfg = fresh(creation_approval=False)
@@ -3378,7 +3375,7 @@ def T120_perguntar_caminho_do_projeto():
     assert "caminho" in rq.lower() and not cap3          # perguntou, não rodou
     proj3 = Path.home() / f".hermes-t120e-{__import__('os').getpid()}"
     _sh2.rmtree(proj3, ignore_errors=True)
-    rr = orc.run_pipeline(_Ag3(), cfg3, str(proj3), [],
+    orc.run_pipeline(_Ag3(), cfg3, str(proj3), [],
                           on_event=lambda e: None, session_id="s-t120e")
     assert cap3.get("scope") == proj3 and proj3.exists()  # escopo real + criada
     assert "AMBIENTE DA TAREFA" in cap3.get("prompt", "")
@@ -3387,7 +3384,7 @@ def T120_perguntar_caminho_do_projeto():
     orc._PEND_PROJETO["s-t120d"] = {"message": "crie um app python",
                                     "t": __import__("time").time() - 700}
     ag6 = _Ag()
-    r6 = orc.run_pipeline(ag6, cfg, "crie outro código python de agenda",
+    orc.run_pipeline(ag6, cfg, "crie outro código python de agenda",
                           [], on_event=lambda e: None, session_id="s-t120d")
     prompts6 = [m for m in capturado["prompts"]]
     assert "Pasta do projeto definida" not in prompts6[-1]
@@ -3875,7 +3872,6 @@ def T66_integracao_chat_grava_tudo():
 def T67_integracao_settings_desliga_revisor():
     """Integração settings×pipeline ao vivo: reviewer_on=false via API →
     próxima resposta vem SEM selo de revisão; religar traz o selo de volta."""
-    from hermes import orchestrator as orc
     cfg = fresh()
     c = _app(cfg)
     r = c.post("/api/settings", json={"reviewer_on": False}).get_json()
@@ -4668,6 +4664,77 @@ def T127_agente_externo_usa_modelo_do_provedor():
     ag2 = Agent(cfg, client=ext2)
     ag2.run([{"role": "user", "content": "oi"}])
     assert modelos[-1] == "llama-3.3-70b-versatile", modelos[-1]
+
+
+@case
+def T128_varredura_de_segredos_e_dlp_mascarar():
+    """v4.0.0 M1: scanner de segredos/dados (CRITICO bloqueia push) e o
+    DLP mascarar() que impede código/segredos de sair para provedores
+    externos (regra D2 do operador)."""
+    import argparse
+    from hermes import varredura as V
+
+    # ---- padrões e severidades
+    txt = ("key = gsk_" + "A" * 30 + "\n"
+           "cpf: 123.456.789-00\n"
+           "contato fulano@gmail.com\n"
+           "auth = Bearer " + "x" * 40 + "\n")
+    ach = V.varrer_texto(txt, "a.txt")
+    ids = {a.id: a.severidade for a in ach}
+    assert ids.get("chave_groq") == "CRITICO"
+    assert ids.get("cpf") == "ALTO"
+    assert ids.get("bearer") == "CRITICO"
+    assert "email_pessoal" in ids and ids["email_pessoal"] == "MEDIO"
+    # chave fake curta dos nossos testes NÃO dispara (falso positivo ok)
+    assert not [a for a in V.varrer_texto('k = "gsk_TESTE-123"', "b.txt")
+                if a.id == "chave_groq"]
+
+    # ---- nome pessoal do data-dir + trecho mascarado (não vaza no relatório)
+    cfg = fresh()
+    (cfg.data_dir / "varredura-nomes.txt").write_text(
+        "Nome Sobrenome Teste\n", encoding="utf-8")
+    ach2 = V.varrer_texto("o cliente Nome Sobrenome Teste ligou", "c.txt",
+                          nomes=V._nomes_pessoais(cfg))
+    n = [a for a in ach2 if a.id == "nome_pessoal"]
+    assert n and "Nome Sobrenome Teste" not in n[0].trecho
+
+    # ---- supressão inline e .varredura-ignore
+    ach3 = V.varrer_texto("k = gsk_" + "B" * 30 + "  # varredura:ok", "d.txt")
+    assert not [a for a in ach3 if a.id == "chave_groq"]
+    raiz = Path(tempfile.mkdtemp(prefix="t128-"))
+    try:
+        (raiz / "ruim.txt").write_text("tok = gsk_" + "C" * 30 + "\n",
+                                       encoding="utf-8")
+        (raiz / "ok.txt").write_text("cpf 111.222.333-44\n", encoding="utf-8")
+        (raiz / ".varredura-ignore").write_text("ok.txt\n", encoding="utf-8")
+        ach4 = V.varrer_repo(cfg, raiz)
+        assert {a.id for a in ach4} == {"chave_groq"}
+        # exit code: 1 com crítico, 0 sem
+        args = argparse.Namespace(tudo=True, raiz=str(raiz))
+        assert V.cmd(args, cfg) == 1
+        (raiz / "ruim.txt").write_text("limpo\n", encoding="utf-8")
+        assert V.cmd(args, cfg) == 0
+    finally:
+        shutil.rmtree(raiz, ignore_errors=True)
+
+    # ---- DLP mascarar(): código e segredos NUNCA saem
+    sujo = ("analise o arquivo:\n```python\ndef soma(a, b):\n"
+            "    return a + b\n```\ne a chave gsk_" + "D" * 30 +
+            "\ncpf 123.456.789-00\nemail x@gmail.com\nsenha = 'abracadabra'"
+            "\nx = 42\nfrase normal de prosa")
+    limpo = V.mascarar(sujo)
+    assert "def soma" not in limpo and "CODIGO LOCAL" in limpo
+    assert "gsk_" not in limpo and "[REDACTED:segredo]" in limpo
+    assert "123.456.789-00" not in limpo and "[REDACTED:cpf]" in limpo
+    assert "x@gmail.com" not in limpo and "[REDACTED:email_pessoal]" in limpo
+    assert "abracadabra" not in limpo
+    assert "frase normal de prosa" in limpo      # prosa preservada
+
+    # ---- auto-teste: o PRÓPRIO repo do Hermes não tem crítico
+    repo = Path(__file__).resolve().parent.parent
+    achos = [a for a in V.varrer_repo(cfg, repo)
+             if a.severidade == "CRITICO"]
+    assert not achos, f"CRÍTICO no repo público: {achos[:3]}"
 
 
 if __name__ == "__main__":

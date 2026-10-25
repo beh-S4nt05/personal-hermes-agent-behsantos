@@ -1,6 +1,5 @@
 """Mock da API Anthropic /v1/messages p/ medir o que o Claude Code envia."""
 import json
-import time
 from flask import Flask, Response, request
 
 app = Flask(__name__)

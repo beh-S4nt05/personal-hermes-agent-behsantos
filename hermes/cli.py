@@ -545,6 +545,14 @@ def cmd_provider(args) -> None:
         return
 
 
+def cmd_varredura(args) -> None:
+    """v4.0.0: varre segredos/dados pessoais — 1 se houver crítico."""
+    from . import varredura
+    code = varredura.cmd(args, _cfg(args))
+    if code:
+        raise SystemExit(code)
+
+
 def cmd_memory_list(args) -> None:
     """v3.16.1: lista os fatos da memória do agente."""
     from .memory import MemoryStore
@@ -672,6 +680,13 @@ def build_parser() -> argparse.ArgumentParser:
     pt.set_defaults(acao="test", fn=cmd_provider)
     po = psub.add_parser("off", help="volta ao Ollama local")
     po.set_defaults(acao="off", fn=cmd_provider)
+    p = sub.add_parser("varredura",
+                       help="varre segredos/dados pessoais antes de expor código (pré-push)")
+    p.add_argument("--tudo", action="store_true",
+                   help="varre o repo inteiro (default: diff não commitado)")
+    p.add_argument("--raiz", default=None,
+                   help="raiz do projeto (default: diretório atual)")
+    p.set_defaults(fn=cmd_varredura)
     p = sub.add_parser("rag", help="biblioteca de livros (RAG local): indexa ou consulta")
     p.add_argument("consulta", nargs="?", default="", help="texto a buscar (vazio = reindexar)")
     p.set_defaults(fn=cmd_rag)

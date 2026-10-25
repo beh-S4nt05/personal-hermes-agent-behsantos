@@ -146,7 +146,7 @@ def _sig(node):
         args.append(a.arg + "=?")
     if node.args.kwarg:
         args.append("**" + node.args.kwarg.arg)
-    for d in node.args.defaults:
+    for _d in node.args.defaults:
         pass
     return "(" + ", ".join(args) + ")"
 
