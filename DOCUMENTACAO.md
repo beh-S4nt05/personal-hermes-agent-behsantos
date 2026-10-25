@@ -1,6 +1,6 @@
 # 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
-**Versão 5.0.0** · gerado em 25/10/2026 · este documento é extraído do
+**Versão 5.1.0** · gerado em 25/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -109,6 +109,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `betterme revisar` | 🔍 revisa o git diff HEAD (gate único pré-push; v4.5.0) |
 | `betterme transcrever` | extrai áudio (ffmpeg) → whisper.cpp  |
 | `betterme vida` | 🌅 Modo Vida: relatório diário + curadoria de  |
+| `betterme fluxos` | ⚙️ fluxos n8n LOCAIS — automações visuais no  |
 | `betterme aprendidos` | rascunhos de skills/lições esperando sua aprovação |
 | `betterme conversas` | conversas passadas do agente |
 | `betterme rag` | biblioteca de livros (RAG local): indexa ou consulta |
@@ -130,7 +131,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `betterme skills audit` (auditar o catálogo), `betterme config set/get`, `betterme server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v5.0.0)
+## 3. Modificações — o que foi feito (v1.0.0 → v5.1.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -138,6 +139,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v5.1.0** | ⚙️ FLUXOS N8N LOCAIS (PR #11) |
 | **v5.0.0** | 🌅 MODO VIDA (PR #10) |
 | **v4.6.0** | 🎙️ MULTIMODAL LOCAL (PR #9, E5) |
 | **v4.5.0** | 🔍 REVISÃO DE DIFF (PR #8, E4) |
@@ -353,11 +355,13 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 
 ### betterme/server/app.py — 🌐 a API REST + GUI web (Flask/waitress): todos os endpoints, streaming do chat, aprovações, painel e páginas
 
-**82 endpoints HTTP:**
+**84 endpoints HTTP:**
 
 | Método e rota | O que faz |
 |---|---|
 | `GET /` | index |
+| `GET /fluxos` | fluxos_page |
+| `GET /api/fluxos/status` | fluxos_status |
 | `GET /manifest.webmanifest` | manifest |
 | `GET /sw.js` | service_worker |
 | `GET /icon-<int:size>.png` | pwa_icon |
@@ -487,6 +491,7 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `cmd_revisar(args)` | v4.5.0 (PR#8): revisão de diff — gate único pré-push. |
 | `cmd_multimodal(args)` | v4.6.0 (PR#9): transcrição local de áudio/vídeo (→ RAG). |
 | `cmd_vida(args)` | v5.0.0 (PR#10): Modo Vida — relatório diário + curadoria. |
+| `cmd_fluxos(args)` | v5.1.0 (PR#11): fluxos n8n locais (setup/start/stop/remover). |
 | `cmd_aprendidos(args)` | v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador). |
 | `cmd_skills_aprender(args)` | v4.0.0 (M6.5): transforma documento/texto/URL em rascunho de skill. |
 | `cmd_conversas_buscar(args)` | v4.0.0 (M6.5): busca textual nas conversas passadas. |
@@ -532,6 +537,7 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `conversas_buscar(args, cfg)` | v4.0.0 (M6.5): busca nas conversas passadas (decisões antigas). |
 | `especialista_tool(args, cfg)` | v4.0.0 (M6): o cérebro invoca um especialista (revisor, debugger, pesquisador, seguranca) para um caso pontual — veredi… |
 | `knowledge_search(args, cfg)` | v3.15.0 (PR#2): RAG local — trechos verbatim com fonte. |
+| `fluxos_chamar(args, cfg)` | v5.1.0 (PR#11): dispara workflow n8n local por webhook. |
 | `revisar_diff(args, cfg)` | v4.5.0 (PR#8): revisão de diff — veredito com arquivo:linha. |
 | `grafo_query(args, cfg)` | v4.4.0 (PR#7): grafo de código — onde está a lógica de X? (zero tokens). |
 | `execute_tool(name, arguments, cfg, source, agent)` | Executa uma ferramenta e devolve {'ok': bool, 'output': str}. v3.0: toda execução vai para a trilha de auditoria (data/… |

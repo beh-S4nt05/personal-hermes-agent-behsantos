@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>⚙ Fluxos — Betterme</title>
+<style>
+  :root{--bg:#0f1117;--txt:#e8e8f0;--dim:#9aa0b4;--border:#2a2d3a;
+        --acc:#7c5cff;--ok:#3ecf8e;--bad:#ff6b6b}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 system-ui,sans-serif;background:var(--bg);
+       color:var(--txt)}
+  header{padding:14px 18px;border-bottom:1px solid var(--border);
+         display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:16px;margin:0}
+  header a{color:var(--acc);text-decoration:none;font-size:13px}
+  .st{font-size:12px;color:var(--dim);padding:10px 18px;
+      border-bottom:1px solid var(--border)}
+  .st b{color:var(--txt)}
+  .ok{color:var(--ok)} .bad{color:var(--bad)}
+  iframe{width:100%;height:calc(100vh - 96px);border:0;background:#fff}
+  .erro{padding:26px 18px;color:var(--dim);max-width:640px}
+  .erro code{background:#1a1d29;border:1px solid var(--border);
+             border-radius:6px;padding:2px 7px;color:var(--acc);
+             font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚙ Fluxos n8n <span style="color:var(--dim);font-weight:400">
+    (locais)</span></h1>
+  <a href="/fluxos" onclick="carregar()">↻ atualizar</a>
+  <a href="http://127.0.0.1:5678" target="_blank" rel="noopener">
+    ↗ abrir em nova aba</a>
+  <a href="/" target="_self">← voltar ao Betterme</a>
+</header>
+<div class="st" id="st">carregando estado…</div>
+<div>
+<iframe id="editor" src=""></iframe>
+</div>
+<script>
+async function carregar(){
+  let st;
+  try{
+    st = await (await fetch("/api/fluxos/status")).json();
+  }catch(e){
+    document.getElementById("st").textContent =
+      "sem resposta da API do Betterme";
+    return;
+  }
+  const l = document.getElementById("st");
+  l.innerHTML =
+    "node: <b class='"+(st.node_ok?"ok":"bad")+"'>"+st.node_msg+"</b>" +
+    " · n8n: <b class='"+(st.n8n_instalado?"ok":"bad")+"'>"+
+      (st.n8n_instalado?"instalado":"não instalado")+"</b>" +
+    " · processo: <b class='"+(st.rodando?"ok":"bad")+"'>"+
+      (st.rodando?"rodando":"parado")+"</b>" +
+    " · telemetria: <b class='ok'>desligada (local)</b>";
+  const fr = document.getElementById("editor");
+  if(st.rodando){
+    fr.src = "http://" + location.hostname + ":5678/";
+  }else{
+    fr.remove();
+    const d = document.createElement("div");
+    d.className = "erro";
+    d.innerHTML = st.n8n_instalado
+      ? "O editor aparece aqui quando o n8n estiver rodando.<br><br>" +
+        "No terminal: <code>betterme fluxos start</code> — ou atualize " +
+        "esta página depois de iniciar."
+      : "Primeira vez? Instale o n8n local (Node.js 20.19–24.x à " +
+        "máquina):<br><br><code>betterme fluxos setup</code><br>" +
+        "<code>betterme fluxos start</code><br><br>" +
+        "Tudo fica em <b>"+ (st.diretorio||"seu data-dir") +"</b> — " +
+        "removível com <code>betterme fluxos remover</code>. " +
+        "Uso pessoal/interno = grátis (Sustainable Use License).";
+    document.body.appendChild(d);
+  }
+}
+carregar();
+</script>
+</body>
+</html>

@@ -6458,6 +6458,142 @@ def T169_curadoria_arquiva_antigos():
     assert len(learning.pendentes(cfg)) == antes
 
 
+# ══════════════════════ v5.1.0 (PR#11) — FLUXOS N8N LOCAIS ══════════════════════
+
+def _fixture_n8n_fake(cfg):
+    """Instala um binário n8n FAKE (sleep) no lugar certo do data-dir."""
+    from betterme import fluxos
+    bin_ = fluxos.n8n_bin(cfg)
+    bin_.parent.mkdir(parents=True, exist_ok=True)
+    bin_.write_text("#!/bin/sh\nsleep 60\n", encoding="utf-8")
+    bin_.chmod(0o755)
+    return bin_
+
+
+@case
+def T170_fluxos_node_check_e_setup_honesto():
+    """v5.1.0 (PR#11): Node 24 ✔ / 16 recusa / ausente recusa; setup com
+    node inadequado NÃO roda o npm; npm ausente → orientação."""
+    d = Path(tempfile.mkdtemp(prefix="n8n-fix-"))
+    fakes = {}
+    for nome, saida in (("node24", "v24.1.0\n"), ("node16", "v16.20.2\n")):
+        f = d / nome
+        f.write_text(f"#!/bin/sh\necho '{saida}'\n", encoding="utf-8")
+        f.chmod(0o755)
+        fakes[nome] = str(f)
+    from betterme import fluxos
+
+    ok, msg = fluxos.node_ok(fakes["node24"])
+    assert ok and "24.1" in msg, msg
+    ok2, msg2 = fluxos.node_ok(fakes["node16"])
+    assert not ok2 and "20.19" in msg2 and "n8n" in msg2, msg2
+    ok3, msg3 = fluxos.node_ok("/caminho/que/nao/existe")
+    assert not ok3 and "não encontrado" in msg3, msg3
+    # node ruim → setup recusa ANTES de tocar o npm
+    npm_chamou = []
+
+    def espiao(cmd, *a, **kw):
+        # só espiona o npm; delega o resto (node --version etc.)
+        if len(cmd) > 1 and cmd[1] == "install":
+            npm_chamou.append(cmd)
+            return 0
+        return orig(cmd, *a, **kw)
+
+    import betterme.fluxos as F
+    orig = F.subprocess.run
+    F.subprocess.run = espiao
+    try:
+        r = F.setup(fresh(), node_bin=fakes["node16"],
+                    npm_bin="npm")
+    finally:
+        F.subprocess.run = orig
+    assert r["ok"] is False and "não é suportado" in r["msg"], r
+    assert npm_chamou == [], "npm rodou com node inadequado!"
+
+
+@case
+def T171_fluxos_start_stop_com_n8n_fake():
+    """v5.1.0 (PR#11): start sobe o processo com telemetria OFF e pid
+    file; stop desce limpo; start sem instalar → orientação honesta."""
+    import os as _os
+    from betterme import fluxos
+
+    cfg = fresh()
+    r0 = fluxos.start(cfg)
+    assert r0["ok"] is False and "setup" in r0["msg"], r0
+    _fixture_n8n_fake(cfg)
+    r = fluxos.start(cfg)
+    assert r["ok"] and r["pid"], r
+    pid = int((fluxos._pid_file(cfg)).read_text(encoding="utf-8"))
+    assert pid == r["pid"]
+    _os.kill(pid, 0)                       # processo vivo
+    assert fluxos.rodando(cfg) is True
+    st = fluxos.status(cfg)
+    assert st["n8n_instalado"] and st["rodando"] and st["porta"] == 5678
+    assert st["node_ok"] in (True, False)  # não depende do node do host
+    # ambiente do processo: telemetria OFF (local-first)
+    env = fluxos._env(cfg)
+    assert env["N8N_DIAGNOSTICS_ENABLED"] == "false"
+    assert env["N8N_PERSONALIZATION_ENABLED"] == "false"
+    assert env["N8N_USER_FOLDER"].endswith("fluxos-user")
+    assert env["N8N_LISTEN_ADDRESS"] == "127.0.0.1"
+    r2 = fluxos.stop(cfg)
+    assert r2["ok"] and "parado" in r2["msg"]
+    assert fluxos.rodando(cfg) is False
+    assert not fluxos._pid_file(cfg).exists()
+    try:
+        _os.kill(pid, 0)
+        raise AssertionError("processo ainda vivo após stop")
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+@case
+def T172_fluxos_remover_tool_e_gui():
+    """v5.1.0 (PR#11): remover apaga instalação+perfil (com processo
+    rodando); tool fluxos_chamar no catálogo; rotas /fluxos e
+    /api/fluxos/status no GUI."""
+    import os as _os
+    from betterme import fluxos
+    from betterme.tools import TOOL_NAMES, execute_tool
+
+    cfg = fresh()
+    _fixture_n8n_fake(cfg)
+    r = fluxos.start(cfg)
+    assert r["ok"] and fluxos.rodando(cfg)
+    rem = fluxos.remover(cfg)
+    assert rem["ok"] and "removido" in rem["msg"], rem
+    assert not fluxos._dir(cfg).exists()
+    assert not fluxos._user_dir(cfg).exists()
+    assert fluxos.rodando(cfg) is False
+    try:
+        _os.kill(r["pid"], 0)
+        raise AssertionError("processo sobreviveu ao remover")
+    except (ProcessLookupError, PermissionError):
+        pass
+    # webhook: URL local certa + payload íntegro (post injetado)
+    ch = fluxos.chamar(cfg, "wf-42", {"a": 1},
+                       _post=lambda u, p: {"ok": True, "url": u, "p": p})
+    assert ch["ok"] and ch["url"] == \
+        "http://127.0.0.1:5678/webhook/wf-42" and ch["p"] == {"a": 1}
+    # sem n8n no ar → tool degrada com orientação (não quebra)
+    assert "fluxos_chamar" in TOOL_NAMES
+    rt = execute_tool("fluxos_chamar", {"caminho": "wf-42"}, cfg)
+    assert rt["ok"] is False and "fluxos start" in rt["output"], rt
+    rte = execute_tool("fluxos_chamar", {}, cfg)
+    assert rte["ok"] is False and "caminho" in rte["output"]
+    # GUI: página ⚙ Fluxos + status
+    c = _app(cfg)
+    pg = c.get("/fluxos")
+    assert pg.status_code == 200 and b"iframe" in pg.data and \
+        b"5678" in pg.data, pg.data[:120]
+    api = c.get("/api/fluxos/status")
+    assert api.status_code == 200
+    j = api.get_json()
+    assert set(j) >= {"node_ok", "n8n_instalado", "rodando", "porta"}
+    assert j["porta"] == 5678 and j["n8n_instalado"] is False
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())

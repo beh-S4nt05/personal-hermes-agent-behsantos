@@ -378,6 +378,29 @@ TOOLS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "fluxos_chamar",
+            "description": (
+                "Dispara um workflow do n8n LOCAL por webhook "
+                "(http://127.0.0.1:5678/webhook/<caminho>). Use para "
+                "automções visuais construídas na aba ⚙ Fluxos do GUI. "
+                "Requer o n8n rodando (betterme fluxos start)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "caminho": {"type": "string",
+                                "description": "id ou path do webhook do "
+                                               "workflow"},
+                    "payload": {"type": "object",
+                                "description": "dados a enviar (JSON)"},
+                },
+                "required": ["caminho"],
+            },
+        },
+    },
 ]
 
 TOOL_NAMES = {t["function"]["name"] for t in TOOLS}
@@ -920,6 +943,20 @@ def knowledge_search(args: dict, cfg) -> str:
     return "\n".join(partes)[:6000]
 
 
+def fluxos_chamar(args: dict, cfg) -> str:
+    """v5.1.0 (PR#11): dispara workflow n8n local por webhook."""
+    from . import fluxos
+    caminho = str(args.get("caminho", "")).strip()
+    payload = args.get("payload") or {}
+    if not caminho:
+        return "ERRO: informe 'caminho' (id/path do webhook do workflow)."
+    r = fluxos.chamar(cfg, caminho, payload)
+    if not r.get("ok"):
+        return f"ERRO: {r.get('msg', 'webhook falhou')}"
+    return f"⛓ workflow disparado (HTTP {r.get('status', '?')}): " \
+           f"{str(r.get('msg', ''))[:300]}"
+
+
 def revisar_diff(args: dict, cfg) -> str:
     """v4.5.0 (PR#8): revisão de diff — veredito com arquivo:linha."""
     from . import revisar
@@ -960,6 +997,7 @@ EXECUTORS = {
     "gerente_codigo": gerente_codigo_tool,
     "grafo_query": grafo_query,
     "revisar_diff": revisar_diff,
+    "fluxos_chamar": fluxos_chamar,
 }
 
 

@@ -144,6 +144,19 @@ def create_app(cfg: Config) -> Flask:
         resp.headers["Cache-Control"] = "no-store, must-revalidate"
         return resp
 
+    # ------------------------------------------- ⚙ Fluxos n8n (v5.1.0)
+    @app.get("/fluxos")
+    def fluxos_page():
+        html = (TEMPLATE_DIR / "fluxos.html").read_text(encoding="utf-8")
+        resp = Response(html, mimetype="text/html")
+        resp.headers["Cache-Control"] = "no-store, must-revalidate"
+        return resp
+
+    @app.get("/api/fluxos/status")
+    def fluxos_status():
+        from .. import fluxos
+        return jsonify(fluxos.status(cfg))
+
     # ------------------------------------------------- PWA (v3.2)
     # A GUI é instalável como app no celular/tablet (manifest + service
     # worker + ícones). Tudo gerado em Python puro — zero dependências.

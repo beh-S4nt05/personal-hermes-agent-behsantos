@@ -614,6 +614,12 @@ def cmd_vida(args) -> None:
     vida.cmd(args, _cfg(args))
 
 
+def cmd_fluxos(args) -> None:
+    """v5.1.0 (PR#11): fluxos n8n locais (setup/start/stop/remover)."""
+    from . import fluxos
+    fluxos.cmd(args, _cfg(args))
+
+
 def cmd_aprendidos(args) -> None:
     """v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador)."""
     from . import learning
@@ -864,6 +870,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("acao", nargs="?", default="status",
                    help="status|relatorio|curadoria|registrar")
     p.set_defaults(fn=cmd_vida)
+
+    p = sub.add_parser("fluxos",
+                       help="⚙️ fluxos n8n LOCAIS — automações visuais no "
+                            "GUI (v5.1.0; grátis p/ uso pessoal)")
+    p.add_argument("acao", nargs="?", default="status",
+                   help="status|setup|start|stop|remover")
+    p.add_argument("--node", default=None,
+                   help="caminho do node (default: PATH)")
+    p.add_argument("--npm", default=None,
+                   help="caminho do npm (default: PATH)")
+    p.set_defaults(fn=cmd_fluxos)
     p = sub.add_parser("aprendidos",
                        help="rascunhos de skills/lições esperando sua aprovação")
     pa = p.add_argument("acao", nargs="?", default="list",

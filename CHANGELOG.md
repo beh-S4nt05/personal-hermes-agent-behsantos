@@ -1,5 +1,33 @@
 # Changelog
 
+## v5.1.0 — ⚙️ FLUXOS N8N LOCAIS (PR #11)
+
+O editor de automações visuais EMBUTIDO no Betterme — grátis, local,
+removível (pedido do operador, 25/10/2026):
+
+- **`betterme fluxos setup|start|stop|status|remover`:** instala o n8n
+  via npm DENTRO do data-dir (`<data>/fluxos/`), nada no sistema;
+  perfil/workflows em `<data>/fluxos-user/`; **telemetria
+  desligada**; `remover` apaga tudo (instalação + perfil + workflows).
+- **GUI:** aba ⛓ Fluxos → página `/fluxos` com o editor em iframe
+  (localhost:5678) e "abrir em nova aba" como fallback; estado vivo
+  em `/api/fluxos/status`; instruções honestas quando não instalado.
+- **Integração nos 2 sentidos:** tool `fluxos_chamar` dispara
+  workflows por webhook local (skills do cérebro → n8n); nós HTTP do
+  n8n chamam a API local do Betterme (POST sem Origin já passa no
+  CSRF — T34; use auth_token fora do localhost).
+- **Requisito:** Node.js 20.19–24.x (Node 24 do operador ✔ —
+  verificado: n8n 2.x suporta 20.19–24.x). Node/npm ausentes ou
+  inadequados → mensagem clara de como instalar, nunca quebra.
+- **Licença:** n8n Community (Sustainable Use License) — grátis para
+  uso pessoal/interno; o repo público do Betterme só carrega o código
+  desta integração (não redistribui o n8n).
+
+**Testes:** T170–T172 (Node 24 ✔/16 recusa/ausente + setup não roda
+npm com node ruim · start/stop com n8n fake: pid, telemetria OFF,
+127.0.0.1 · remover apaga tudo com processo rodando + tool +
+rotas do GUI) — **172/172**.
+
 ## v5.0.0 — 🌅 MODO VIDA (PR #10)
 
 O Betterme cuidando da rotina — e do aprendizado — do operador:
