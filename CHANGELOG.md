@@ -1,5 +1,27 @@
 # Changelog
 
+## v4.5.0 — 🔍 REVISÃO DE DIFF (PR #8, E4)
+
+`betterme revisar` (ou "revise o diff" no chat, via ferramenta
+`revisar_diff`) — **gate único pré-commit/push**:
+
+- **Parte objetiva (zero LLM):** varredura do diff — segredo/CPF na
+  tela → CRITICO reprova na hora, mesmo que o revisor aprove.
+- **Parte subjetiva (LLM LOCAL):** o revisor lê o `git diff HEAD`
+  (teto de 60 KB) e devolve veredito JSON com problemas
+  `{arquivo, linha, problema, gravidade}`. **D2: diff tem código —
+  a análise roda no Ollama local, NADA vai ao pool gratuito.**
+- **Evidência validada (R3):** problema com arquivo fora do diff é
+  descartado; reprovar exige substância (crítico, grave, ou veredito
+  contra com problema válido) — juiz que rejeita só com evidência
+  inventada não bloqueia.
+- CLI com exit code (0 aprovado / 1 reprovado) para usar como gate
+  de pipeline; em mock, veredito simulado determinístico.
+
+**Testes:** T161–T163 (bug sutil flagrado + segredo reprova mesmo com
+juiz aprovando + evidência inventada descartada · diff limpo passa +
+diff vazio orienta · CLI exit codes + tool no catálogo) — **163/163**.
+
 ## v4.4.0 — 🗺️ GRAFO DE CÓDIGO (PR #7, E3)
 
 "Onde está a lógica de X?" em milissegundos, **zero tokens**.

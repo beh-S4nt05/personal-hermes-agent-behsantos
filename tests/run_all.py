@@ -6152,6 +6152,117 @@ def T160_cli_grafo_build_query_path():
     assert r3.returncode == 0 and "Base.run" in r3.stdout, r3.stdout[:300]
 
 
+# ══════════════════════ v4.5.0 (PR#8) — REVISÃO DE DIFF (E4) ══════════════════════
+
+def _fixture_git_diff():
+    """Repo git com 1 commit (base) para testar revisão de diff."""
+    import subprocess
+    raiz = Path(tempfile.mkdtemp(prefix="rev-fix-"))
+    (raiz / "soma.py").write_text(
+        "def soma(a, b):\n    return a + b\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=raiz, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=raiz, check=True)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-qm", "base"], cwd=raiz, check=True)
+    return raiz
+
+
+_JUIZ_APROVA = '{"aprovado": true, "problemas": [], "resumo": "ok"}'
+
+
+@case
+def T161_diff_com_bug_ou_segredo_e_flagrado():
+    """v4.5.0 (PR#8): bug sutil É flagrado pelo revisor (evidência
+    arquivo:linha validada); segredo no diff reprova MESMO com juiz
+    aprovando (gate objetivo da varredura)."""
+    from betterme import revisar
+
+    cfg = fresh()
+    raiz = _fixture_git_diff()
+    (raiz / "soma.py").write_text(
+        "def soma(a, b):\n    return a - b\n", encoding="utf-8")
+    juiz = ('{"aprovado": false, "problemas": [{"arquivo": "soma.py", '
+            '"linha": 2, "problema": "subtracao no lugar de soma", '
+            '"gravidade": "alta"}], "resumo": "erro de sinal"}')
+    r = revisar.revisar(cfg, raiz, _local=lambda p: juiz)
+    assert r["ok"] and r["aprovado"] is False, r
+    assert r["problemas"] == [{"arquivo": "soma.py", "linha": 2,
+                               "problema": "subtracao no lugar de soma",
+                               "gravidade": "alta"}], r["problemas"]
+    assert "soma.py:2" in revisar.revisar_texto(r)
+    # evidência inventada (arquivo fora do diff) é descartada
+    juiz2 = ('{"aprovado": false, "problemas": [{"arquivo": "nao_existe.py",'
+             ' "linha": 9, "problema": "x", "gravidade": "alta"}],'
+             ' "resumo": "y"}')
+    r2 = revisar.revisar(cfg, raiz, _local=lambda p: juiz2)
+    assert r2["problemas"] == [] and r2["aprovado"] is True, r2
+    # segredo CRITICO no diff → reprova mesmo com juiz aprovando
+    (raiz / "soma.py").write_text(
+        "def soma(a, b):\n    return a + b\n\nKEY = 'gsk_"
+        + "A" * 30 + "'\n", encoding="utf-8")
+    r3 = revisar.revisar(cfg, raiz, _local=lambda p: _JUIZ_APROVA)
+    assert r3["aprovado"] is False and r3["criticos"] == 1, r3
+
+
+@case
+def T162_diff_limpo_passa_e_vazio_orienta():
+    """v4.5.0 (PR#8): diff limpo passa (aprovado, zero problemas);
+    sem diff → mensagem honesta, sem quebrar."""
+    from betterme import revisar
+
+    cfg = fresh()
+    raiz = _fixture_git_diff()
+    (raiz / "soma.py").write_text(
+        "def soma(a, b):\n    return a + b  # soma\n", encoding="utf-8")
+    r = revisar.revisar(cfg, raiz, _local=lambda p: _JUIZ_APROVA)
+    assert r["ok"] and r["aprovado"] is True, r
+    assert r["problemas"] == [] and r["criticos"] == 0 and r["achados"] == 0
+    assert "APROVADO" in revisar.revisar_texto(r)
+    # mock sem juiz injetado → veredito simulado determinístico
+    r2 = revisar.revisar(cfg, raiz)
+    assert r2["ok"] and r2["aprovado"] is True and r2["metodo"] == "simulado"
+    # sem diff nenhum → orientação honesta
+    import subprocess
+    subprocess.run(["git", "add", "-A"], cwd=raiz, check=True)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-qm", "tudo"], cwd=raiz, check=True)
+    r3 = revisar.revisar(cfg, raiz)
+    assert r3["ok"] is False and "nenhum diff" in r3["msg"], r3
+
+
+@case
+def T163_cli_e_tool_revisar_diff():
+    """v4.5.0 (PR#8): `betterme revisar` ponta a ponta (exit 0 aprovado /
+    exit 1 reprovado) + ferramenta revisar_diff no catálogo do cérebro."""
+    from betterme.tools import TOOL_NAMES, execute_tool
+
+    assert "revisar_diff" in TOOL_NAMES
+    cfg = fresh()
+    raiz = _fixture_git_diff()
+    (raiz / "soma.py").write_text(
+        "def soma(a, b):\n    return a - b\n", encoding="utf-8")
+    r = execute_tool("revisar_diff", {"raiz": str(raiz)}, cfg)
+    assert r["ok"] and "APROVADO" in r["output"], r   # mock: simulado aprova
+    venv_py = ROOT / ".venv" / "bin" / "python"
+    py = str(venv_py) if venv_py.exists() else sys.executable
+    env = dict(os.environ,
+               BETTERME_DATA_DIR=tempfile.mkdtemp(prefix="betterme-rev-"),
+               BETTERME_MOCK="1")
+    import subprocess
+    rr = subprocess.run([py, "-m", "betterme", "revisar", "--raiz", str(raiz)],
+                        capture_output=True, text=True, env=env,
+                        timeout=120, cwd=str(ROOT))
+    assert rr.returncode == 0 and "APROVADO" in rr.stdout, rr.stdout[:300]
+    # reprovado → exit 1 (gate único pré-push)
+    (raiz / "soma.py").write_text(
+        "def soma(a, b):\n    return a + b\n\nKEY = 'gsk_" + "B" * 30
+        + "'\n", encoding="utf-8")
+    rr2 = subprocess.run([py, "-m", "betterme", "revisar", "--raiz", str(raiz)],
+                         capture_output=True, text=True, env=env,
+                         timeout=120, cwd=str(ROOT))
+    assert rr2.returncode == 1 and "REPROVADO" in rr2.stdout, rr2.stdout[:300]
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())

@@ -596,6 +596,12 @@ def cmd_grafo(args) -> None:
     grafo.cmd(args, _cfg(args))
 
 
+def cmd_revisar(args) -> None:
+    """v4.5.0 (PR#8): revisão de diff — gate único pré-push."""
+    from . import revisar
+    revisar.cmd(args, _cfg(args))
+
+
 def cmd_aprendidos(args) -> None:
     """v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador)."""
     from . import learning
@@ -816,6 +822,12 @@ def build_parser() -> argparse.ArgumentParser:
     gp.add_argument("de", help="símbolo de origem")
     gp.add_argument("para", help="símbolo de destino")
     p.set_defaults(fn=cmd_grafo)
+
+    p = sub.add_parser("revisar",
+                       help="🔍 revisa o git diff HEAD (gate único pré-push; v4.5.0)")
+    p.add_argument("--raiz", default=None,
+                   help="raiz do repo (default: diretório atual)")
+    p.set_defaults(fn=cmd_revisar)
     p = sub.add_parser("aprendidos",
                        help="rascunhos de skills/lições esperando sua aprovação")
     pa = p.add_argument("acao", nargs="?", default="list",

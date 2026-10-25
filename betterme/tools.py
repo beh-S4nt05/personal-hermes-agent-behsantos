@@ -356,6 +356,28 @@ TOOLS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "revisar_diff",
+            "description": (
+                "Revê o diff não commitado do projeto (git diff HEAD) e "
+                "emite veredito com arquivo:linha — gate único pré-push: "
+                "varredura objetiva de segredos + revisor LOCAL (código "
+                "jamais sai da máquina). Use quando o operador pedir "
+                "'revise o diff' ou antes de commitar."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "raiz": {"type": "string",
+                             "description": "raiz do repo git (default: "
+                                            "diretório atual)"},
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 TOOL_NAMES = {t["function"]["name"] for t in TOOLS}
@@ -898,6 +920,14 @@ def knowledge_search(args: dict, cfg) -> str:
     return "\n".join(partes)[:6000]
 
 
+def revisar_diff(args: dict, cfg) -> str:
+    """v4.5.0 (PR#8): revisão de diff — veredito com arquivo:linha."""
+    from . import revisar
+    raiz = str(args.get("raiz", "")).strip() or None
+    return revisar.revisar_texto(
+        revisar.revisar(cfg, Path(raiz) if raiz else None))
+
+
 def grafo_query(args: dict, cfg) -> str:
     """v4.4.0 (PR#7): grafo de código — onde está a lógica de X? (zero tokens)."""
     from . import grafo
@@ -929,6 +959,7 @@ EXECUTORS = {
     "conversas_buscar": conversas_buscar,
     "gerente_codigo": gerente_codigo_tool,
     "grafo_query": grafo_query,
+    "revisar_diff": revisar_diff,
 }
 
 
