@@ -372,6 +372,12 @@ def execute_entry(cfg, entry: dict, on_event=None) -> dict:
             "duration_s": round(time.time() - t0, 1),
         }
 
+    # v5.0.0 (PR#10): missões do Modo Vida são DETERMINÍSTICAS e locais
+    # (relatório/curadoria) — rodam sem LLM, sem tokens, sem rede.
+    if str(entry.get("input") or "").startswith("modo-vida:"):
+        from . import vida
+        return vida.executar_tarefa(cfg, entry)
+
     agent = Agent(cfg)
     events: list[dict] = []
     ev = on_event or (lambda _e: None)

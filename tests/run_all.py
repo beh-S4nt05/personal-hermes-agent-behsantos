@@ -6353,6 +6353,111 @@ def T166_sem_binario_nao_quebra_e_orienta():
     assert r4["ok"] is False and "segmentos" in r4["msg"], r4
 
 
+# ══════════════════════ v5.0.0 (PR#10) — MODO VIDA ══════════════════════
+
+def _rascunho(cfg, titulo, ts=None):
+    """Cria rascunho de aprendizado com id/timestamp únicos."""
+    import time as _t
+    _t.sleep(0.01)                     # garante id distinto (ms)
+    from betterme import learning
+    e = learning._salvar(cfg, {"tipo": "skill", "titulo": titulo,
+                               "rascunho": "corpo", "origem": "missao",
+                               "objetivo": titulo})
+    if ts is not None:
+        f = learning._dir(cfg) / f"{e['id']}.json"
+        d = json.loads(f.read_text(encoding="utf-8"))
+        d["ts"] = ts
+        f.write_text(json.dumps(d), encoding="utf-8")
+    return e
+
+
+@case
+def T167_cron_dispara_missao_modo_vida():
+    """v5.0.0 (PR#10): missão agendada `modo-vida:` dispara pelo
+    agendador de forma DETERMINÍSTICA — sem LLM, sem tokens, local."""
+    from betterme import scheduler, vida
+
+    cfg = fresh()
+    reg = vida.registrar(cfg)
+    assert reg["ok"] and len(reg["criadas"]) == 2, reg
+    from betterme.scheduler import ScheduleStore
+    entradas = [e for e in ScheduleStore(cfg).list_all()
+                if str(e.get("input", "")).startswith("modo-vida:")]
+    assert len(entradas) == 2
+    assert all(e.get("schedule", {}).get("type") for e in entradas)
+    # idempotente
+    reg2 = vida.registrar(cfg)
+    assert reg2["criadas"] == [], reg2
+    # dispatch pelo agendador: relatório SEM LLM (rápido, zero tools)
+    res = scheduler.execute_entry(cfg, {"input": "modo-vida: relatorio"})
+    assert res["status"] == "ok" and res["tools"] == [], res
+    assert res["output"].startswith("🌅 RELATÓRIO DIÁRIO"), res["output"][:80]
+    assert res["duration_s"] < 5          # sem o sleep de 1,2 s do mock LLM
+    assert "O que rodou" in res["output"] and "Precisa de você" in res["output"]
+    # ação desconhecida → erro honesto sem quebrar
+    res2 = scheduler.execute_entry(cfg, {"input": "modo-vida: loucura"})
+    assert res2["status"] == "error" and "desconhecida" in res2["output"]
+
+
+@case
+def T168_relatorio_diario_status_e_privacidade():
+    """v5.0.0 (PR#10): relatório traz status + aprendizados SEM dados
+    sensíveis — DLP mascara o texto INTEIRO antes de qualquer envio."""
+    from betterme import activity, vida
+
+    cfg = fresh()
+    activity.log(cfg, "agente", "⚙ write_file · x.py → ok")
+    activity.log(cfg, "arena", "🏟 3 contendores · vencedor: groq")
+    activity.log(cfg, "grafo", "🗺 build: 55 arquivos")
+    _rascunho(cfg, "baixar anexos do email do fulano@gmail.com")
+    (Path(cfg.data_dir) / "pending_approvals.json").write_text(
+        '[{"id": "T9", "kind": "criacao", "objetivo": "gerar relatorio"}]',
+        encoding="utf-8")
+    enviados = []
+    r = vida.relatorio_diario(cfg, _enviar=enviados.append)
+    assert r["ok"] and r["enviado"] and len(enviados) == 1, r
+    texto = enviados[0]
+    assert "RELATÓRIO DIÁRIO" in texto and "O que rodou (24h)" in texto
+    assert "3 atividade(s)" in texto and "agente 1" in texto
+    assert "O que aprendi" in texto and "Precisa de você" in texto
+    assert "1 aprovação(ões)" in texto
+    # PRIVACIDADE: e-mail do rascunho NUNCA sai cru — DLP no texto todo
+    assert "fulano@gmail.com" not in texto, texto
+    assert "[REDACTED:email_pessoal]" in texto, texto
+    # sem _enviar e Telegram desligado → só local, não quebra
+    r2 = vida.relatorio_diario(cfg)
+    assert r2["ok"] and r2["enviado"] is False
+
+
+@case
+def T169_curadoria_arquiva_antigos():
+    """v5.0.0 (PR#10): rascunhos envelhecidos (>7 dias) viram UM resumo
+    para decisão em lote; originais ARQUIVADOS (movidos, nunca apagados)."""
+    import time as _t
+    from betterme import learning, vida
+
+    cfg = fresh()
+    velho = _rascunho(cfg, "skill antiga de regex",
+                      ts=_t.time() - 10 * 86400)
+    fresco = _rascunho(cfg, "licao fresca de ontem")
+    r = vida.curadoria(cfg)
+    assert r["ok"] and r["arquivados"] == 1, r
+    pend_ids = [p["id"] for p in learning.pendentes(cfg)]
+    assert fresco["id"] in pend_ids and velho["id"] not in pend_ids
+    assert r["resumo_id"] in pend_ids
+    resumo = next(p for p in learning.pendentes(cfg)
+                  if p["id"] == r["resumo_id"])
+    assert resumo["tipo"] == "resumo" and velho["id"] in resumo["rascunho"]
+    arq = learning._dir(cfg) / "arquivados" / f"{velho['id']}.json"
+    assert arq.is_file(), "original não foi arquivado (nem apagado)"
+    assert not (learning._dir(cfg) / f"{velho['id']}.json").exists()
+    # sem envelhecidos → nada a curar (não cria resumo vazio)
+    antes = len(learning.pendentes(cfg))
+    r2 = vida.curadoria(cfg)
+    assert r2["arquivados"] == 0 and "nada a curar" in r2["msg"], r2
+    assert len(learning.pendentes(cfg)) == antes
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())

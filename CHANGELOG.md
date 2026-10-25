@@ -1,5 +1,31 @@
 # Changelog
 
+## v5.0.0 — 🌅 MODO VIDA (PR #10)
+
+O Betterme cuidando da rotina — e do aprendizado — do operador:
+
+- **Missões agendadas `modo-vida:`** no agendador: 100% determinísticas
+  e LOCAIS (zero tokens, zero LLM, zero rede além do Telegram opcional)
+  — o agendador despacha para o Modo Vida ANTES do loop do agente.
+  `betterme vida registrar` cria (idempotente): relatório diário 07:00
+  + curadoria semanal seg 08:30.
+- **Relatório diário** (`betterme vida relatorio`): o que rodou (24 h,
+  por fonte) · o que aprendeu (rascunhos aguardando você) · o que
+  precisa de você (aprovações pendentes). Entrega via Telegram quando
+  ativo; senão, local.
+- **Curadoria semanal** (`betterme vida curadoria`): rascunhos
+  envelhecidos (>7 dias) viram UM resumo para decisão em lote;
+  originais ARQUIVADOS em `aprendidos/arquivados/` (movidos, nunca
+  apagados).
+- **Privacidade (lei):** relatório é canal de CONTROLE — só contagens
+  e títulos curtos, e o texto INTEIRO passa pelo DLP `mascarar()`
+  antes de qualquer envio (T168 prova: e-mail de rascunho sai
+  `[REDACTED:email_pessoal]`).
+
+**Testes:** T167–T169 (cron dispara missão determinística sem LLM ·
+relatório com status+aprendizados e DLP no envio · curadoria arquiva
+antigos em resumo em lote) — **169/169**.
+
 ## v4.6.0 — 🎙️ MULTIMODAL LOCAL (PR #9, E5)
 
 `betterme audio|video transcrever <arquivo>` — áudio/vídeo vira

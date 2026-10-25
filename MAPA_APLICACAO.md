@@ -79,6 +79,7 @@ tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 | `grafo.py` | 🗺️ Grafo de código (v4.4.0, E3): AST puro (stdlib, nada executa) → SQLite `grafo.db` no data-dir; símbolos função/classe/método com arquivo:linha + doc; arestas `chama`/`importa`/`herda` TODAS com proveniência arquivo:linha; `build\|query\|path` (BFS direcionado); tool `grafo_query` no cérebro — "onde está a lógica de X?" a custo zero de tokens. |
 | `revisar.py` | 🔍 Revisão de diff (v4.5.0, E4): gate único pré-push — varredura objetiva (CRITICO reprova) + revisor LLM LOCAL (D2: diff tem código, nada sai) com veredito JSON e evidência arquivo:linha VALIDADA contra o diff; CLI exit 0/1 + tool `revisar_diff` no cérebro. |
 | `multimodal.py` | 🎙️ Multimodal local (v4.6.0, E5): ffmpeg → whisper.cpp LOCAL (timestamps) → transcrição vira livro `.txt` na biblioteca RAG (fonte citada); modelos em <data>/models; degradação honesta sem binários. CLI `betterme audio\|video transcrever`. |
+| `vida.py` | 🌅 Modo Vida (v5.0.0): missões agendadas `modo-vida:` determinísticas (dispatcher no scheduler ANTES do LLM — zero tokens); relatório diário (atividades 24h + rascunhos + aprovações) entregue via Telegram c/ DLP no texto inteiro; curadoria semanal (envelhecidos → resumo em lote + arquivados, nada apagado). CLI `betterme vida status\|relatorio\|curadoria\|registrar`. |
 | `manager.py` | Gerência do Ollama: boot/restart (systemd ou `ollama serve` com log), diagnóstico de ambiente. |
 | `autoselect.py` | Auto-atribuição de modelos por papel (lê SEMPRE a lista instalada). |
 | `conversations.py` | Sessões persistidas (`conversations/*.json`, atômico): histórico recuperável, busca, export. |
@@ -317,7 +318,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **166 casos** (v4.6.0), famílias:
+`tests/run_all.py` — **169 casos** (v5.0.0), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·

@@ -608,6 +608,12 @@ def cmd_multimodal(args) -> None:
     multimodal.cmd(args, _cfg(args))
 
 
+def cmd_vida(args) -> None:
+    """v5.0.0 (PR#10): Modo Vida — relatório diário + curadoria."""
+    from . import vida
+    vida.cmd(args, _cfg(args))
+
+
 def cmd_aprendidos(args) -> None:
     """v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador)."""
     from . import learning
@@ -851,6 +857,13 @@ def build_parser() -> argparse.ArgumentParser:
                         help="modelo ggml-*.bin em <data>/models "
                              "(default: ggml-base.bin)")
         p.set_defaults(fn=cmd_multimodal)
+
+    p = sub.add_parser("vida",
+                       help="🌅 Modo Vida: relatório diário + curadoria de "
+                            "aprendizados (v5.0.0)")
+    p.add_argument("acao", nargs="?", default="status",
+                   help="status|relatorio|curadoria|registrar")
+    p.set_defaults(fn=cmd_vida)
     p = sub.add_parser("aprendidos",
                        help="rascunhos de skills/lições esperando sua aprovação")
     pa = p.add_argument("acao", nargs="?", default="list",
