@@ -102,7 +102,7 @@ no livro, ele diz que não está (não inventa citação).
 
 ## 6. 🖥️ Diagnóstico e gestão da própria máquina
 
-- "faça uma busca geral no sistema e entenda meu uso do dispositivo" (1 chamada, 10 seções, interpretado)
+- "faça uma busca geral no sistema e entenda meu uso do dispositivo" (1 chamada, 14 seções: CPU modelo/núcleos/threads/velocidade, velocidade da RAM, modelo do computador, uso atual, disco, memória, tops, GPU… — interpretado com dados REAIS)
 - "o que está consumindo minha memória? devo me preocupar?"
 - "onde foi meu espaço em disco? mostre os maiores diretórios"
 - "meu notebook está lento — diagnostique e me diga o que fazer"

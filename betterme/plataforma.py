@@ -234,6 +234,20 @@ _DIAG_LINUX = [
     ("sistema",
      "uname -sr && (head -2 /etc/os-release | cut -d'\"' -f2 "
      "| tr '\n' ' '; echo)", 5),
+    # v6.4.1: a spec completa do operador (4º achado de campo)
+    ("CPU (modelo, núcleos, threads, velocidade)",
+     "lscpu 2>/dev/null | grep -E 'Model name|^CPU\\(s\\)|Thread|Core|"
+     "Socket|max MHz|MHz' | head -8 || echo '(lscpu indisponível)'", 6),
+    ("uso de CPU agora",
+     "top -bn1 | head -5", 6),
+    ("velocidade da RAM",
+     "sudo -n dmidecode -t memory 2>/dev/null | grep -E 'Size:|Speed:' "
+     "| grep -v 'No Module' | head -8 "
+     "|| echo '(requer sudo: sudo dmidecode -t memory)'", 8),
+    ("modelo do computador",
+     "echo -n 'modelo: '; cat /sys/class/dmi/id/product_name "
+     "/sys/class/dmi/id/product_version 2>/dev/null | tr '\n' ' ' "
+     "|| echo '(sem DMI)'", 4),
     ("disco", "df -h | head -7", 5),
     ("memória", "free -h", 5),
     ("top RAM", "ps aux --sort=-%mem | head -7", 5),
@@ -254,6 +268,15 @@ _DIAG_LINUX = [
 
 _DIAG_MAC = [
     ("sistema", "sw_vers && sysctl -n machdep.cpu.brand_string", 5),
+    # v6.4.1: CPU completa + modelo + memória + disco + uso
+    ("CPU (núcleos, threads, memória, modelo)",
+     "sysctl machdep.cpu.brand_string hw.physicalcpu hw.logicalcpu "
+     "hw.memsize hw.model", 5),
+    ("memória (velocidade/chip)",
+     "system_profiler SPHardwareDataType 2>/dev/null "
+     "| grep -E 'Memory|Chip|Cores' | head -4", 10),
+    ("disco", "df -h / | tail -1", 5),
+    ("uso de CPU agora", "top -l 1 -n 0 2>/dev/null | head -8", 8),
     ("memória", "vm_stat | head -4", 4),
     ("bateria", "pmset -g batt", 4),
     ("uptime e carga", "uptime", 3),
@@ -263,6 +286,22 @@ _DIAG_WIN = [
     ("sistema",
      'powershell -NoProfile -Command '
      '"[Environment]::OSVersion.VersionString"', 8),
+    # v6.4.1: CPU completa + modelo + velocidade da RAM + uso
+    ("CPU (modelo, núcleos, threads, velocidade)",
+     'powershell -NoProfile -Command "Get-CimInstance Win32_Processor '
+     '| Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,'
+     'MaxClockSpeed | Format-List"', 12),
+    ("modelo do computador",
+     'powershell -NoProfile -Command "Get-CimInstance '
+     'Win32_ComputerSystem | Select-Object Manufacturer,Model '
+     '| Format-List"', 12),
+    ("velocidade da RAM",
+     'powershell -NoProfile -Command "Get-CimInstance Win32_PhysicalMemory '
+     '| Select-Object Capacity,Speed,ConfiguredClockSpeed | Format-List"',
+     12),
+    ("uso de CPU agora",
+     'powershell -NoProfile -Command "Get-CimInstance Win32_Processor '
+     '| Select-Object LoadPercentage | Format-List"', 10),
     ("memória",
      'powershell -NoProfile -Command "Get-CimInstance '
      'Win32_OperatingSystem | ForEach-Object { '

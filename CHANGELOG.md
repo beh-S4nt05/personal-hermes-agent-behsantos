@@ -1,5 +1,28 @@
 # Changelog
 
+## v6.4.1 — 🩺 4º ACHADO DE CAMPO: O AGENTE CUMPRE A FUNÇÃO
+
+Transcript real do operador: "relatório completo do uso do meu PC" →
+modelo INVENTOU hardware (Ubuntu/i7 falsos), alegou não estar conectado
+à máquina e, após /goal + task, o chat ficou MUDO. Três frentes:
+
+- **Fim do silêncio (2 redes de defesa)**: final vazio do pipeline vira
+  evento `error` explícito ("a geração terminou SEM resposta…") no
+  garantidor do worker; thread morta sem falar (kill/OOM) vira `error`
+  no laço do stream ("geração interrompida sem concluir…"). O chat
+  NUNCA termina sem uma palavra — antes, stream mudo = conversa muda.
+- **Regra anti-invenção no prompt**: dados do dispositivo (hardware,
+  SO, memória, disco, CPU, processos, modelo) SÓ das saídas reais de
+  `sys_info`/`diagnostico_sistema`; NUNCA escrever valores de cabeça;
+  falha de ferramenta = dizer que não obteve, mostrando o erro.
+- **Diagnóstico completo (a spec do operador), nos 3 SOs**: Linux 14
+  seções (+lscpu completo, uso de CPU, velocidade da RAM via dmidecode
+  com degradação sem sudo, modelo do computador via DMI) · macOS 8
+  (+sysctl completo, system_profiler, disco, uso) · Windows 8
+  (+Win32_Processor/ComputerSystem/PhysicalMemory/LoadPercentage).
+- GUIA-DE-USO atualizado à promessa real · T188 (nunca mudo + spec +
+  anti-invenção, com simulação dos 2 modos de falha) — **188/188**.
+
 ## v6.4.0 — 🏗 CONTRATOS E ESTRUTURAS (princípios de desenvolvimento)
 
 Varredura estrutural do interior do app aplicando bases reais de

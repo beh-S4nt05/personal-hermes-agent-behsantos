@@ -1075,8 +1075,23 @@ self.addEventListener("fetch", (e) => {
                     # resultado final é entregue de qualquer jeito — a
                     # resposta do agente NUNCA some (bug recorrente: fim do
                     # stream sem done = conversa muda sem resposta).
-                    if not result["done_emitted"] and result["final"]:
-                        q.put({"type": "done", "message": result["final"]})
+                    # v6.4.1: final VAZIO também fala — erro explícito em
+                    # vez de silêncio (4º achado de campo: "passei a task
+                    # mas sem resposta" — stream terminava mudo).
+                    if not result["done_emitted"]:
+                        if result["final"]:
+                            q.put({"type": "done",
+                                   "message": result["final"]})
+                        else:
+                            q.put({
+                                "type": "error",
+                                "message": (
+                                    "a geração terminou SEM resposta "
+                                    "(resultado vazio) — veja o Log ao "
+                                    "vivo, rode betterme doctor e tente "
+                                    "de novo; máquina com pouca RAM pode "
+                                    "interromper o modelo"),
+                            })
                     # v3.0: métricas históricas (painel de desempenho)
                     try:
                         from .. import metrics as _metrics
@@ -1094,12 +1109,30 @@ self.addEventListener("fetch", (e) => {
                              ensure_ascii=False) + "\n"
             t = threading.Thread(target=worker, daemon=True)
             t.start()
+            fim_visto = {"done": False, "error": False}
+
+            def _marca(ev: dict) -> dict:
+                if ev.get("type") in fim_visto:
+                    fim_visto[ev["type"]] = True
+                return ev
+
             try:
                 while True:
                     try:
                         item = q.get(timeout=5.0)
                     except queue.Empty:
                         if not t.is_alive():
+                            # v6.4.1: thread morreu SEM falar (kill/OOM) —
+                            # o operador merece um erro, não silêncio
+                            if not (fim_visto["done"] or fim_visto["error"]):
+                                yield json.dumps({
+                                    "type": "error",
+                                    "message": (
+                                        "a geração foi interrompida sem "
+                                        "concluir (thread morta — falta de "
+                                        "memória? veja o Log ao vivo e "
+                                        "betterme doctor)")},
+                                    ensure_ascii=False) + "\n"
                             break
                         # keepalive enquanto a IA "pensa" (ex.: modelo carregando
                         # na memória pela primeira vez) — mantém a conexão viva
@@ -1108,7 +1141,8 @@ self.addEventListener("fetch", (e) => {
                         continue
                     if item is None:
                         break
-                    yield json.dumps(item, ensure_ascii=False) + "\n"
+                    yield json.dumps(_marca(item),
+                                     ensure_ascii=False) + "\n"
             except GeneratorExit:
                 # navegador fechou/abortou a requisição: cancela a geração
                 cancel.set()

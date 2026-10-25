@@ -321,7 +321,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **187 casos** (v6.4.0), famílias:
+`tests/run_all.py` — **188 casos** (v6.4.1), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·

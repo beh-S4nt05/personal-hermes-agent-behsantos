@@ -7408,6 +7408,89 @@ def T187_contratos_estruturas_principios():
     assert "nivel_valido(args)" in src_app
 
 
+@case
+def T188_nunca_mudo_e_dados_reais():
+    """v6.4.1 (4º achado de campo): o agente PRECISA cumprir a função —
+    (a) o stream do chat NUNCA termina em silêncio: final vazio vira
+    erro explícito, thread morta vira erro explícito (2 redes);
+    (b) a spec de diagnóstico do operador (CPU modelo/núcleos/threads/
+    velocidade, velocidade da RAM, modelo do computador, uso atual)
+    existe como seções REAIS da tool em Linux/macOS/Windows;
+    (c) prompt proíbe inventar dados do dispositivo."""
+    import json
+    import threading
+
+    from betterme import orchestrator as orc
+    from betterme import plataforma as P
+    from betterme.tools import diagnostico_sistema
+
+    # ── (b) a spec pedida pelo operador, nos 3 SOs (nomes por SO)
+    SPEC = {
+        "linux": ("CPU (modelo, núcleos, threads, velocidade)",
+                  "velocidade da RAM", "modelo do computador",
+                  "uso de CPU agora"),
+        "macos": ("CPU (núcleos, threads, memória, modelo)",  # +hw.model
+                  "memória (velocidade/chip)", "uso de CPU agora",
+                  "disco"),
+        "windows": ("CPU (modelo, núcleos, threads, velocidade)",
+                    "velocidade da RAM", "modelo do computador",
+                    "uso de CPU agora"),
+    }
+    for so, termos in SPEC.items():
+        nomes = [n for n, _, _ in P.diag_commands(so)]
+        for termo in termos:
+            assert termo in nomes, (so, termo)
+    # ── (b2) a tool roda DE VERDADE e traz a seção de CPU com dado real
+    out = diagnostico_sistema({}, None)
+    assert "== CPU" in out and "== disco ==" in out and "== memória ==" in out
+    assert "Model name" in out or "CPU(s)" in out or "(lscpu" in out
+    # ── (c) regra anti-invenção no prompt do agente
+    src_agent = Path("betterme/agent.py").read_text(encoding="utf-8")
+    assert "NUNCA escreva valores" in src_agent
+    assert "diagnostico_sistema PRIMEIRO" in src_agent
+    # ── (a) nunca mudo: final vazio → erro explícito
+    cfg = fresh()
+    c = _app(cfg)
+    orig = orc.run_pipeline
+
+    def _evs(resp):
+        return [json.loads(l) for l in resp.data.decode().splitlines()
+                if l.strip()]
+
+    orc.run_pipeline = lambda *a, **k: ""
+    try:
+        evs = _evs(c.post("/api/chat", json={"message": "relatório",
+                                             "session": "t188"}))
+        tipos = [e.get("type") for e in evs]
+        assert "done" not in tipos and "error" in tipos
+        assert "SEM resposta" in [e for e in evs
+                                  if e.get("type") == "error"][0]["message"]
+    finally:
+        orc.run_pipeline = orig
+    # ── (a2) thread morta (BaseException) → erro explícito, não silêncio
+    def _matar(*a, **k):
+        raise KeyboardInterrupt
+
+    silencio = threading.excepthook
+    threading.excepthook = lambda *a: None      # cala o traceback do teste
+    orc.run_pipeline = _matar
+    try:
+        evs = _evs(c.post("/api/chat", json={"message": "relatório",
+                                             "session": "t188b"}))
+        tipos = [e.get("type") for e in evs]
+        assert "error" in tipos and "done" not in tipos
+    finally:
+        orc.run_pipeline = orig
+        threading.excepthook = silencio
+    # ── (a3) fluxo normal segue entregando done
+    evs = _evs(c.post("/api/chat", json={"message": "oi", "session": "t188c"}))
+    assert [e.get("type") for e in evs][-2] == "done"
+    # ── (a4) as duas redes existem no código (defesa em profundidade)
+    src_app = Path("betterme/server/app.py").read_text(encoding="utf-8")
+    assert "SEM resposta" in src_app           # rede 1: garantidor do worker
+    assert "interrompida sem" in src_app and "thread morta" in src_app  # rede 2
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())

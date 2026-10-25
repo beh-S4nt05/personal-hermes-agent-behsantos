@@ -36,7 +36,7 @@ Capacidades (ferramentas):
 - run_command: executa comandos bash (use para diagnosticar/gerenciar o sistema).
 - read_file / write_file / list_dir: manipulam arquivos no workspace.
 - sys_info: diagnóstico rápido da máquina.
-{webtools}- lembrar / esquecer: guarda e apaga fatos sobre o usuário (memória permanente).
+{dados_reais}{webtools}- lembrar / esquecer: guarda e apaga fatos sobre o usuário (memória permanente).
 
 Boas práticas:
 - Sempre INSPECIONE antes de agir (ex.: `df -h`, `free -h`, `ls`, ler arquivos).
@@ -223,6 +223,16 @@ class Agent:
         if self._prompt_cache and self._prompt_cache[0] == key:
             return self._prompt_cache[1] + _now_line()   # cache + hora fresca
         extra = self.cfg.system_prompt_extra.strip()
+        # v6.4.1: regra dura anti-invenção (4º achado de campo: o modelo
+        # inventou um relatório de hardware de cabeça — Ubuntu/i7 falsos)
+        dados_reais = (
+            "- DADOS DO DISPOSITIVO (hardware, SO, memória, disco, CPU,\n"
+            "  processos, modelo da máquina): chame sys_info e/ou\n"
+            "  diagnostico_sistema PRIMEIRO e responda APENAS com os números\n"
+            "  das saídas REAIS dessas ferramentas. NUNCA escreva valores de\n"
+            "  memória/CPU/disco/modelo de cabeça — se a ferramenta falhar,\n"
+            "  diga que não conseguiu obter o dado e mostre o erro.\n"
+        )
         webtools = (
             "- web_search / web_fetch: pesquisa na internet (DuckDuckGo) e lê "
             "páginas.\n  Use SEMPRE que a resposta depender de informação atual "
@@ -234,6 +244,7 @@ class Agent:
         )
         prompt = SYSTEM_PROMPT.format(
             webtools=webtools,
+            dados_reais=dados_reais,
             hostname=socket.gethostname(),
             workdir=self.cfg.workdir,
             sandbox="ATIVO (apenas o workspace)" if self.cfg.sandbox else "DESATIVADO (caminhos absolutos liberados)",
@@ -241,6 +252,9 @@ class Agent:
         )
         if not self.native_tools:
             prompt += FALLBACK_TOOLS_NOTE.format()
+        # v6.4.1: a regra anti-invenção entra SEMPRE (mesmo sem tools
+        # nativas — via fallback JSON o modelo ainda pode chamar)
+
         # seções dinâmicas: ferramentas MCP e catálogo de skills
         try:
             mcp_tools = self.mcp.openai_tools()
