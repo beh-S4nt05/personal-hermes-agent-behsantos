@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 APP_NAME = "betterme-agent"
-VERSION = "6.1.0"
+VERSION = "6.2.0"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
@@ -49,6 +49,9 @@ DEFAULTS = {
     "claude_use_ollama": True,
     "orchestrator_on": True,        # 🎯 conversa → plano → task → revisão
     "reviewer_on": True,            # 🔍 revisar o resultado antes de entregar
+    "review_fast_lane": True,       # v6.2.0: resposta direta sem
+                                   # ferramentas/critérios pula a revisão
+                                   # (−1 ida ao modelo; False = sempre rever)
     "creation_approval": True,      # 🔒 criação exige aprovação do operador
     "orchestrator_model": "",       # 🎯 modelo do orquestrador (vazio = cfg.model)
     "reviewer_model": "",           # 🔍 modelo do revisor (vazio = cfg.model)

@@ -64,6 +64,14 @@ def main() -> int:
                     help="modelo sugerido ao final (default hermes3:8b)")
     ap.add_argument("--skip-ollama-check", action="store_true",
                     help="não checar o Ollama ao final")
+    ap.add_argument("--full", action="store_true",
+                    help="carrega TUDO para iniciar plenamente: playwright "
+                         "(WhatsApp), Ollama (instala se faltar), modelo, "
+                         "n8n (fluxos) e doctor final")
+    ap.add_argument("--skip-n8n", action="store_true",
+                    help="(com --full) não instalar o n8n")
+    ap.add_argument("--skip-playwright", action="store_true",
+                    help="(com --full) não instalar playwright/chromium")
     args = ap.parse_args()
 
     print("🧩 Betterme Agent — instalador universal")
@@ -110,6 +118,51 @@ def main() -> int:
             print(f"     {HINTS['ollama'][sis]}")
             print("     (sem Ollama agora? Tudo bem — o modo demo "
                   "(BETTERME_MOCK=1) e o pool grátis funcionam)")
+
+    # ── --full: carregar TUDO para iniciar plenamente ──────────────
+    if args.full:
+        print("\n📦 MODO COMPLETO — carregando tudo (pode demorar):")
+        # (a) playwright (WhatsApp) + chromium
+        if not args.skip_playwright:
+            print("  ✔ playwright (canal WhatsApp) …")
+            rodar([py, "-m", "pip", "install", "-q", "-e", ".[whatsapp]"])
+            rodar([py, "-m", "playwright", "install", "chromium"])
+        # (b) Ollama — instala se faltar (por SO, best-effort)
+        if not args.skip_ollama_check:
+            if shutil.which("ollama"):
+                print("  ✔ Ollama já presente")
+            elif sis == "linux":
+                print("  ✔ instalando Ollama (script oficial — pode pedir sudo)…")
+                rodar(["bash", "-c",
+                       "curl -fsSL https://ollama.com/install.sh | sh"])
+            elif sis == "macos" and shutil.which("brew"):
+                print("  ✔ instalando Ollama via brew …")
+                rodar(["brew", "install", "ollama"])
+            elif sis == "windows" and shutil.which("winget"):
+                print("  ✔ instalando Ollama via winget …")
+                rodar(["winget", "install", "--id", "Ollama.Ollama", "-e",
+                       "--accept-source-agreements",
+                       "--accept-package-agreements"])
+            else:
+                print(f"  ℹ instale o Ollama manualmente: "
+                      f"{HINTS['ollama'][sis]}")
+        # (c) modelo local
+        if shutil.which("ollama") and not args.skip_ollama_check:
+            print(f"  ✔ baixando modelo {args.model} (GBs — paciência)…")
+            rodar(["ollama", "pull", args.model])
+        # (d) n8n (aba ⚙ Fluxos) — instala no data-dir e sobe
+        if not args.skip_n8n:
+            print("  ✔ n8n (fluxos) — instalando no data-dir …")
+            r1 = rodar([py, "-m", "betterme", "fluxos", "setup"])
+            if r1 == 0:
+                rodar([py, "-m", "betterme", "fluxos", "start"])
+            else:
+                print("  ℹ n8n precisa do Node.js 20.19–24.x — "
+                      "instale (ex.: winget install OpenJS.NodeJS.LTS / "
+                      "brew install node) e rode: betterme fluxos setup")
+        # (e) veredito final
+        print("\n🩺 veredito do ambiente:")
+        rodar([py, "-m", "betterme", "doctor"])
 
     # 5) próximos passos
     ativa = (r".venv\Scripts\activate" if sis == "windows"

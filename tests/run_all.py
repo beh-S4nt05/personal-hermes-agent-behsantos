@@ -637,7 +637,7 @@ def T25_endpoints_leitura_v3():
     assert c.get("/api/notifications").json["ok"]
     assert len(c.get("/api/recipes").json["recipes"]) == 6
     checks = c.get("/api/doctor").json["checks"]
-    assert [x["id"] for x in checks] == ["dispositivo", "ollama", "model", "stt", "claude", "security"]
+    assert [x["id"] for x in checks] == ["dispositivo", "cerebro", "ollama", "model", "stt", "claude", "security"]
 
 
 @case
@@ -6928,6 +6928,106 @@ def T179_dispositivo_universal_instalador_e_doctor():
     rd = Path("README.md").read_text(encoding="utf-8")
     assert "install.py" in rd and "qualquer dispositivo" in rd
     assert "winget" in rd and "brew install ollama" in rd
+
+
+# ══════════════════════ v6.2.0 — PERFORMANCE + BOOTSTRAP COMPLETO ══════════════════════
+
+@case
+def T180_performance_fast_lane_e_visibilidade():
+    """v6.2.0 (3º achado de campo — '>50s p/ tarefa simples, era <20s'):
+    (i) planejador/revisor passam keep_alive (modelo não descarrega
+    entre mensagens); (ii) cada estágio cronometrado no TRACE;
+    (iii) FAST LANE: executor usou 0 ferramentas → revisão pulada
+    (−1 ida completa ao modelo); (iv) doctor mostra o CÉREBRO e acusa
+    chave rápida guardada sem ativar."""
+    from pathlib import Path as _P
+    src = _P("betterme/orchestrator.py").read_text(encoding="utf-8")
+    # (i) keep_alive no _fast (planejador e revisor)
+    assert 'keep_alive=getattr(cfg, "keep_alive", "30m")' in src
+    # (ii) duração por estágio no TRACE
+    assert '"dur_s": round(time.time() - _t0, 1)' in src
+    # (iii) fast lane: 0 ferramentas → sem revisão
+    assert "_n_tools[0] == 0 and tentativa == 1" in src
+    assert "revisão pulada" in src
+    # fast lane vem ANTES da chamada review() dentro do _ciclo
+    i_lane = src.index("_n_tools[0] == 0 and tentativa == 1")
+    i_rev = src.index("ver = review(cfg, objetivo, criterios, resultado)")
+    assert i_lane < i_rev
+    assert 'not getattr(cfg, "mock", False)' in src   # mock: pipeline completo
+    assert "and not criterios" in src                 # critério cobrado = revisa
+    assert "and not resume_tid" in src                # retomada = revisa
+    assert '"review_fast_lane": True' in Path(
+        "betterme/config.py").read_text(encoding="utf-8")
+    # comportamental (modo REAL, sem mock): revisor que reprovaria NÃO é
+    # consultado — fast lane economiza a ida ao modelo
+    from betterme import orchestrator as orc
+    cfg_r = fresh()
+    cfg_r.mock = False                       # _fast falha em conectar → heurística
+
+    class _AgF:
+        def run(self, msgs, on_event=None, cancel=None):
+            calls.append(1)
+            on_event({"type": "done", "message": "resposta direta"})
+            return "resposta direta"
+
+    calls = []
+    rev = {"n": 0}
+
+    def _review(_cfg, _o, _c, _r):
+        rev["n"] += 1
+        return {"veredito": "refazer", "problema": "x"}
+
+    orig, orig_plan = orc.review, orc.plan
+    orc.review = _review
+    orc.plan = lambda cfg, msg, hist=None: {   # plano sem critérios
+        "rota": "executar", "objetivo": "responder direto",
+        "passos": [], "criterios": [], "tipo": "leitura"}
+    try:
+        orc.run_pipeline(_AgF(), cfg_r, "verifique o disco", [],
+                         on_event=lambda _e: None)
+    finally:
+        orc.review = orig
+        orc.plan = orig_plan
+    assert len(calls) == 1, calls            # sem refazer
+    assert rev["n"] == 0, rev                # revisão pulada (fast lane)
+    # (iv) doctor: cérebro
+    from betterme import doctor
+    from betterme.llm_providers import salvar_key
+    cfg = fresh()
+    c = {x["id"]: x for x in doctor.run_checks(cfg)}
+    assert c["cerebro"]["ok"] and "local" in c["cerebro"]["detail"].lower()
+    salvar_key(cfg, "groq", "gsk_curta")          # curta: não casa a varredura
+    c2 = {x["id"]: x for x in doctor.run_checks(cfg)}
+    assert c2["cerebro"]["ok"] is False
+    assert "NÃO ativada" in c2["cerebro"]["detail"]
+    assert "provider set groq" in c2["cerebro"]["fix"]
+    cfg.update({"llm_provider": "groq"})
+    c3 = {x["id"]: x for x in doctor.run_checks(cfg)}
+    assert c3["cerebro"]["ok"] and "groq" in c3["cerebro"]["detail"]
+
+
+@case
+def T181_install_full_carrega_tudo():
+    """v6.2.0: install.py --full carrega TUDO para iniciar plenamente —
+    playwright+chromium (WhatsApp), Ollama (instala se faltar, por SO),
+    modelo local, n8n (fluxos, no data-dir) e doctor final."""
+    src = Path("install.py").read_text(encoding="utf-8")
+    assert '"--full"' in src and '"--skip-n8n"' in src
+    assert ".[whatsapp]" in src                  # playwright extra
+    assert "playwright" in src and "chromium" in src
+    assert "ollama.com/install.sh" in src        # linux
+    assert "brew" in src and "ollama" in src
+    assert "winget" in src and "Ollama.Ollama" in src
+    assert "pull" in src and "hermes3:8b" in src  # modelo default
+    assert "fluxos" in src and "setup" in src and "start" in src  # n8n
+    assert "doctor" in src                        # veredito final
+    # --help roda e oferta --full (CLI real)
+    venv_py = ROOT / ".venv" / "bin" / "python"
+    py = str(venv_py) if venv_py.exists() else sys.executable
+    import subprocess
+    r = subprocess.run([py, "install.py", "--help"], capture_output=True,
+                       text=True, timeout=60, cwd=str(ROOT))
+    assert r.returncode == 0 and "--full" in r.stdout, r.stdout[:200]
 
 
 if __name__ == "__main__":

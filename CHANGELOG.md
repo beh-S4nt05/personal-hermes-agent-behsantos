@@ -1,5 +1,38 @@
 # Changelog
 
+## v6.2.0 — ⚡ PERFORMANCE + BOOTSTRAP COMPLETO (3º achado de campo)
+
+**Dor real do operador:** ">50s para uma tarefa simples — era <20s.
+Com 3 formas de acessar LLMs remotos, deveria estar mais rápido."
+
+**Diagnóstico (pipeline 🎯→⚡→🔍 = 3+ viagens ao modelo por tarefa):**
+1. Planejador/revisor **não passavam `keep_alive`** → Ollama usava o
+   default de 5 min e DESCARREGAVA o modelo entre mensagens — a
+   próxima paga a recarga (dezenas de segundos). Corrigido: todas as
+   chamadas usam `cfg.keep_alive` (30m).
+2. **Revisão custava uma viagem inteira mesmo em resposta direta** —
+   novo FAST LANE: 0 ferramentas + 0 critérios + não-retomada →
+   revisão pulada (−1 ida ao modelo). Missões/retomadas/tarefas com
+   critérios continuam SEMPRE revisadas (contrato intacto); mock/demo
+   roda o pipeline completo; kill-switch `review_fast_lane: False`.
+3. **Cronômetro por estágio**: cada chamada do orquestrador/revisor
+   registra `dur_s` no TRACE — dá pra VER onde o tempo vai.
+4. **Doctor ganha o check "Cérebro (LLM)"**: mostra local vs provedor
+   e ACUSA chave rápida guardada sem ativar ("betterme provider set
+   groq — 3-10× mais rápido"). As 3 formas de acesso remoto existem,
+   mas o cérebro principal só fica rápido QUANDO ativa uma.
+
+**`install.py --full` — carrega TUDO para iniciar plenamente:**
+playwright + chromium (WhatsApp) · Ollama (instala se faltar, por SO:
+script oficial/brew/winget) · modelo (`ollama pull`) · **n8n**
+(`betterme fluxos setup` + `start`) · veredito final do doctor.
+Flags: `--skip-n8n`, `--skip-playwright`, `--model`, `--skip-ollama-check`.
+
+**Testes:** T180 (keep_alive + dur_s + fast lane comportamental com
+revisor que reprovaria NÃO consultado + contrato missões/retomada
+preservado + check Cérebro) · T181 (--full carrega tudo) · T25
+atualizado — **181/181**.
+
 ## v6.1.0 — 🧩 DISPOSITIVO UNIVERSAL (Windows | macOS | Linux, x86-64 e ARM64)
 
 Diretriz permanente do operador: **o Betterme é um agente para

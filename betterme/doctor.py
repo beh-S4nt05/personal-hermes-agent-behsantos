@@ -33,6 +33,33 @@ def run_checks(cfg) -> list[dict]:
         "fix": "",
     })
 
+    # 0.5) Cérebro (LLM): local ou provedor rápido? (v6.2.0)
+    prov = str(getattr(cfg, "llm_provider", "local") or "local")
+    if prov != "local":
+        ok, detail = True, f"provedor externo: {prov} (fallback local automático)"
+        fix = ""
+    else:
+        rapido = ""
+        try:
+            from .llm_providers import api_key
+            rapido = next((n for n in ("groq", "mistral", "gemini",
+                                       "openrouter", "cohere", "zai")
+                           if api_key(cfg, n)), "")
+        except Exception:  # noqa: BLE001
+            pass
+        if rapido:
+            ok, detail = False, (
+                f"Ollama LOCAL (lento em CPU) — há uma chave {rapido} "
+                "guardada e NÃO ativada")
+            fix = f"betterme provider set {rapido}   # 3-10× mais rápido"
+        else:
+            ok, detail = True, "Ollama local (nenhum provedor externo ativo)"
+            fix = "betterme provider set groq   # opcional: chave grátis = mais rápido"
+    checks.append({
+        "id": "cerebro", "name": "Cérebro (LLM)", "ok": ok,
+        "detail": detail, "fix": fix,
+    })
+
     # 1) Ollama acessível?
     ok, detail = False, "servidor não responde"
     try:

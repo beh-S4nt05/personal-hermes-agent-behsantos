@@ -151,11 +151,13 @@ def _fast(cfg, system: str, user: str, ntok: int = 200,
         from .ollama_client import get_client
         client = get_client(cfg)
         out = []
+        _t0 = time.time()
         for chunk in client.chat_stream(
                 model or model_for(cfg, "orchestrator"),
                 [{"role": "system", "content": system},
                  {"role": "user", "content": user[:1800]}],
-                options={"num_predict": ntok, "temperature": 0}):
+                options={"num_predict": ntok, "temperature": 0},
+                keep_alive=getattr(cfg, "keep_alive", "30m")):
             msg = chunk.get("message") or {}
             piece = msg.get("content") or ""
             if piece:
@@ -164,7 +166,8 @@ def _fast(cfg, system: str, user: str, ntok: int = 200,
                 break
         texto = "".join(out)
         TRACE.append({"stage": stage, "pergunta": user[:240],
-                      "resposta_bruta": texto[:500] or "(vazio)"})
+                      "resposta_bruta": texto[:500] or "(vazio)",
+                      "dur_s": round(time.time() - _t0, 1)})   # v6.2.0
         return texto
     except Exception:  # noqa: BLE001
         return ""
@@ -1048,6 +1051,21 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
             tent = tentativa
             resultado = _run_executor(msgs)
             if _cancelado():
+                break
+            # v6.2.0 FAST LANE: executor respondeu SEM ferramenta nenhuma,
+            # sem critérios a validar e não é retomada = resposta direta →
+            # a revisão custaria uma ida-e-volta inteira ao modelo sem
+            # agregar qualidade. (mock/demo roda o pipeline completo;
+            # kill-switch: cfg.review_fast_lane = False)
+            if (_n_tools[0] == 0 and tentativa == 1
+                    and not getattr(cfg, "mock", False)
+                    and not criterios
+                    and not resume_tid
+                    and getattr(cfg, "review_fast_lane", True)):
+                verd, prob = "ok", ""
+                ev({"type": "note",
+                    "message": "🔍 revisão pulada (resposta direta — "
+                               "0 ferramentas; −1 ida ao modelo)"})
                 break
             ver = review(cfg, objetivo, criterios, resultado)
             verd, prob = ver.get("veredito", "ok"), ver.get("problema", "")
