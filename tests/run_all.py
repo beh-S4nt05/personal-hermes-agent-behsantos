@@ -5334,6 +5334,37 @@ def T138_skills_aprender_e_busca_em_conversas():
     assert "RAG" in r["output"]
 
 
+@case
+def T139_gerente_de_codigo_optin_consciente():
+    """v4.0.0 M7 (D5): Claude = gerente de código — OFF por padrão; ligar
+    exige --yes após o aviso de privacidade (código vai à Anthropic);
+    ferramenta delega só quando ativo; Hermes segue como cérebro main."""
+    from hermes import code_manager as GM
+    import hermes.tools as T
+
+    cfg = fresh()
+    # off por padrão; delegar explica em vez de executar
+    assert GM.ativo(cfg) is False
+    r = T.execute_tool("gerente_codigo", {"task": "refatore o app"}, cfg)
+    assert not r["ok"] or "DESLIGADO" in r["output"]
+    assert "hermes gerente on" in r["output"]
+    # ligar SEM --yes não liga — só mostra o aviso
+    ok, msg = GM.ativar(cfg, assumir=False)
+    assert ok is False and "Anthropic" in msg and "CÓDIGO SAI" in msg
+    assert GM.ativo(cfg) is False
+    # ligar COM --yes
+    ok2, msg2 = GM.ativar(cfg, assumir=True)
+    assert ok2 and GM.ativo(cfg) is True
+    assert "cérebro" in msg2
+    # delegar ativo: run_claude em modo simulação responde (cfg.mock)
+    out = GM.delegar(cfg, "crie a função soma em soma.py e teste")
+    assert out and isinstance(out, str)
+    # status/desligar
+    assert "desligado" in GM.desativar(cfg) and GM.ativo(cfg) is False
+    # aviso de privacidade diferencia o pool (D2) do gerente (D5)
+    assert "D2" in GM.AVISO_PRIVACIDADE
+
+
 if __name__ == "__main__":
     print("◈ Hermes Agent — suíte de testes (v3.0)\n")
     sys.exit(run_all())

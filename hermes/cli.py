@@ -565,6 +565,12 @@ def cmd_autonomia(args) -> None:
     autonomy.cmd(args, _cfg(args))
 
 
+def cmd_gerente(args) -> None:
+    """v4.0.0 (M7, D5): gerente de código (Claude) — opt-in consciente."""
+    from . import code_manager
+    code_manager.cmd(args, _cfg(args))
+
+
 def cmd_aprendidos(args) -> None:
     """v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador)."""
     from . import learning
@@ -744,6 +750,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("nivel", nargs="?", default=None,
                    help="novo nível (vazio = mostra o atual)")
     p.set_defaults(fn=cmd_autonomia)
+    p = sub.add_parser("gerente",
+                       help="gerente de código (Claude Code) — opt-in consciente")
+    p.add_argument("acao", nargs="?", default="status",
+                   help="status|on|off")
+    p.add_argument("--yes", action="store_true",
+                   help="confirma o aviso de privacidade (necessário p/ on)")
+    p.set_defaults(fn=cmd_gerente)
     p = sub.add_parser("aprendidos",
                        help="rascunhos de skills/lições esperando sua aprovação")
     pa = p.add_argument("acao", nargs="?", default="list",

@@ -57,6 +57,29 @@ TOOLS: list[dict] = [
     {
         "type": "function",
         "function": {
+            "name": "gerente_codigo",
+            "description": (
+                "Delega uma task de CÓDIGO ao GERENTE DE CÓDIGO (Claude "
+                "Code) e devolve o resultado pleno. Requer ativação "
+                "explícita do operador (hermes gerente on --yes) — quando "
+                "desligado, explique e faça você mesmo. Use para "
+                "refatorações grandes, código complexo ou quando o "
+                "operador pedir expressamente o gerente."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task": {"type": "string",
+                             "description": "tarefa de código autônoma e "
+                                            "completa (contexto incluso)"},
+                },
+                "required": ["task"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "conversas_buscar",
             "description": (
                 "Busca nas CONVERSAS PASSADAS com o operador (decisões, "
@@ -775,6 +798,14 @@ def git_run(args: dict, cfg) -> str:
     return f"$ git {acao} {extra}".strip() + f"\n{out[:4000] if out else '(sem saída)'}"
 
 
+def gerente_codigo_tool(args: dict, cfg) -> str:
+    """v4.0.0 (M7, D5): delega uma task de CÓDIGO ao gerente Claude
+    (só se o operador ativou com `hermes gerente on --yes`)."""
+    from .code_manager import delegar
+    task = str(args.get("task", "")).strip()
+    return delegar(cfg, task)
+
+
 def conversas_buscar(args: dict, cfg) -> str:
     """v4.0.0 (M6.5): busca nas conversas passadas (decisões antigas)."""
     from .learning import buscar_conversas
@@ -855,6 +886,7 @@ EXECUTORS = {
     "backups": _backups_tool,
     "especialista": especialista_tool,
     "conversas_buscar": conversas_buscar,
+    "gerente_codigo": gerente_codigo_tool,
 }
 
 
