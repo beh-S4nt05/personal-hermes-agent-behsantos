@@ -1,5 +1,20 @@
 # Changelog
 
+## v6.3.1 — 📖 N8N PASSO A PASSO (TEMPLATE DE USO)
+
+- **`N8N_PASSOAPASSO.md`**: guia completo do zero à automação —
+  install/`--full`, `fluxos setup/start/abrir`, conta local, importação
+  por clipboard, disparo pelo chat (`fluxos_chamar`), API key +
+  `fluxos listar`, sentido reverso (tarefa webhook +
+  `POST /api/hooks/<id>`), automação por horário, tabela de
+  troubleshooting (404/não responde/409/Node) e remoção — com **2
+  workflows prontos** (JSON importável): *eco de teste* (webhook →
+  respond) e *dispara tarefa do Betterme* (webhook → HTTP no hook).
+- **GUI ⚙ Fluxos**: seção "📖 Passo a passo" com a jornada resumida e
+  os mesmos 2 templates com botão **copiar** (vanilla, clipboard +
+  fallback) — doc e GUI validados iguais pelo T184.
+- **184/184**.
+
 ## v6.3.0 — 🧠 ROTEADOR AUTOMÁTICO DE CÉREBRO + N8N BIDIRECIONAL
 
 *"Mas e como seria chamado os modelos online? (…) O intuito deles é dar

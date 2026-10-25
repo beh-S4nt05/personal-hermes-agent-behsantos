@@ -7152,6 +7152,52 @@ def T183_n8n_integracao_melhorada():
     assert 'p.add_argument("id", nargs="?", default=None' in cli_src
 
 
+@case
+def T184_n8n_guia_passo_a_passo():
+    """v6.3.1: template passo a passo do n8n — guia completo
+    (N8N_PASSOAPASSO.md) + seção na GUI com 2 workflows prontos para
+    importar (copiar) — doc e GUI contêm o MESMO par de templates
+    válidos."""
+    import json
+    import re
+
+    # ── guia: existe, cobre a jornada e traz 2 JSONs válidos
+    g = Path("N8N_PASSOAPASSO.md")
+    assert g.exists()
+    md = g.read_text(encoding="utf-8")
+    for topico in ("fluxos setup", "fluxos start", "fluxos apikey",
+                   "fluxos listar", "Import from clipboard", "Active",
+                   "api/hooks", "Respond to Webhook", "404",
+                   "fluxos remover", "Sustainable Use"):
+        assert topico in md, topico
+    blocos = re.findall(r"```json\n(.*?)```", md, re.S)
+    assert len(blocos) == 2
+    eco, gat = (json.loads(b) for b in blocos)
+    assert eco["name"] == "Betterme eco (teste)"
+    assert eco["nodes"][0]["parameters"]["path"] == "betterme-eco"
+    assert eco["nodes"][1]["type"] == "n8n-nodes-base.respondToWebhook"
+    assert gat["name"] == "Dispara tarefa do Betterme"
+    assert "/api/hooks/" in gat["nodes"][1]["parameters"]["url"]
+    assert gat["nodes"][1]["type"] == "n8n-nodes-base.httpRequest"
+
+    # ── GUI: seção passo a passo com os MESMOS templates (copiáveis)
+    c = _app(fresh())
+    pg = c.get("/fluxos")
+    assert pg.status_code == 200
+    html = pg.data.decode("utf-8")
+    assert "Passo a passo" in html
+    assert "N8N_PASSOAPASSO.md" in html
+    for m in re.finditer(
+            r'<script type="application/json" id="(tpl-\w+)">\n(.*?)'
+            r"</script>", html, re.S):
+        d = json.loads(m.group(2))
+        assert d["name"] in (eco["name"], gat["name"])
+    assert html.count("application/json") == 2
+    assert "copiar('tpl-eco'" in html and "copiar('tpl-gat'" in html
+    # sem segredos e sem dependências externas (vanilla)
+    assert "https://" not in html
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())

@@ -23,6 +23,19 @@
   .erro code{background:#1a1d29;border:1px solid var(--border);
              border-radius:6px;padding:2px 7px;color:var(--acc);
              font-size:13px}
+  #passoapasso ol{margin:6px 0 10px;padding-left:22px}
+  #passoapasso li{margin:4px 0}
+  #passoapasso code{background:#1a1d29;border:1px solid var(--border);
+             border-radius:6px;padding:1px 6px;color:var(--acc);
+             font-size:12px}
+  .tpl{margin:10px 0 4px}
+  .tpl-h{display:flex;align-items:center;gap:10px;color:var(--txt);
+         font-size:13px}
+  .tpl-h button{background:var(--acc);color:#fff;border:0;border-radius:6px;
+         padding:3px 10px;font-size:12px;cursor:pointer}
+  .tpl-pre{max-height:220px;overflow:auto;background:#1a1d29;
+         border:1px solid var(--border);border-radius:8px;padding:10px;
+         font-size:12px;line-height:1.45;color:#c8cde0;white-space:pre}
 </style>
 </head>
 <body>
@@ -50,9 +63,131 @@
       <code>betterme fluxos listar</code>.</div>
   </div>
 </details>
+<details class="st" id="passoapasso" style="color:var(--dim)">
+  <summary style="cursor:pointer">📖 Passo a passo — do zero à automação
+    (templates prontos para importar)</summary>
+  <div style="padding:6px 0 12px">
+    <ol>
+      <li><b>Instalar</b>: <code>betterme fluxos setup</code> — precisa do
+        Node.js 20.19–24.x na máquina (tudo de uma vez:
+        <code>python install.py --full</code>).</li>
+      <li><b>Subir</b>: <code>betterme fluxos start</code> · na primeira vez
+        o editor pede uma conta local (e-mail/senha ficam na sua máquina).</li>
+      <li><b>Primeiro fluxo</b>: copie o <b>Template A</b> abaixo → no editor,
+        menu <b>⋯</b> → <i>Import from clipboard</i> → cole → ative o
+        toggle <b>Active</b> (workflow inativo responde 404).</li>
+      <li><b>Teste do chat</b>: peça ao Betterme
+        "dispare o fluxo betterme-eco" — a resposta do n8n volta na
+        conversa.</li>
+      <li><b>API do n8n</b>: no editor, <i>Settings → n8n API</i> → criar
+        chave → <code>betterme fluxos apikey &lt;chave&gt;</code> →
+        <code>betterme fluxos listar</code>.</li>
+      <li><b>n8n → Betterme</b>: crie uma tarefa com gatilho <i>webhook</i>
+        (aba Tarefas), importe o <b>Template B</b> e troque a URL do nó
+        HTTP pelo <code>/api/hooks/&lt;id&gt;</code> da tarefa — o n8n
+        dispara o cérebro quando o fluxo quiser (por horário? troque o
+        1º nó por um <i>Schedule Trigger</i>).</li>
+      <li>Guia completo com troubleshooting:
+        <b>N8N_PASSOAPASSO.md</b> (acompanha o zip e o repo).</li>
+    </ol>
+    <div class="tpl">
+      <div class="tpl-h">🅰 Template A — Betterme → n8n (eco de teste)
+        <button onclick="copiar('tpl-eco',this)">copiar</button></div>
+      <pre class="tpl-pre" id="pre-tpl-eco"></pre>
+    </div>
+    <div class="tpl">
+      <div class="tpl-h">🅱 Template B — n8n → Betterme (dispara tarefa)
+        <button onclick="copiar('tpl-gat',this)">copiar</button></div>
+      <pre class="tpl-pre" id="pre-tpl-gat"></pre>
+    </div>
+  </div>
+</details>
 <div>
 <iframe id="editor" src=""></iframe>
 </div>
+<script type="application/json" id="tpl-eco">
+{
+  "name": "Betterme eco (teste)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "betterme-eco",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "eco-entrada",
+      "name": "Recebe do Betterme",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "betterme-eco"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\": true, \"msg\": \"o n8n recebeu!\"}",
+        "options": {}
+      },
+      "id": "eco-resposta",
+      "name": "Responde ao Betterme",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [220, 0]
+    }
+  ],
+  "connections": {
+    "Recebe do Betterme": {
+      "main": [[{"node": "Responde ao Betterme", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"}
+}
+</script>
+<script type="application/json" id="tpl-gat">
+{
+  "name": "Dispara tarefa do Betterme",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gatilho-n8n",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "gat-entrada",
+      "name": "Quando algo acontecer",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "gatilho-n8n"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8080/api/hooks/TROQUE-PELO-ID-DA-TAREFA",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"mensagem\": \"disparado pelo n8n\"}",
+        "options": {}
+      },
+      "id": "gat-http",
+      "name": "Chama o Betterme",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    }
+  ],
+  "connections": {
+    "Quando algo acontecer": {
+      "main": [[{"node": "Chama o Betterme", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"}
+}
+</script>
 <script>
 async function carregar(){
   let st;
@@ -92,6 +227,31 @@ async function carregar(){
         "Uso pessoal/interno = grátis (Sustainable Use License).";
     document.body.appendChild(d);
   }
+}
+function copiar(id, btn){
+  const txt = document.getElementById(id).textContent.trim();
+  const ok = () => {
+    btn.textContent = "copiado ✔";
+    setTimeout(() => { btn.textContent = "copiar"; }, 1600);
+  };
+  const fallback = () => {
+    const ta = document.createElement("textarea");
+    ta.value = txt;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); ok(); }
+    catch (e) { btn.textContent = "selecione e copie"; }
+    ta.remove();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(ok, fallback);
+  } else { fallback(); }
+}
+for (const par of [["tpl-eco", "pre-tpl-eco"], ["tpl-gat", "pre-tpl-gat"]]) {
+  const bruto = document.getElementById(par[0]).textContent.trim();
+  const alvo = document.getElementById(par[1]);
+  try { alvo.textContent = JSON.stringify(JSON.parse(bruto), null, 1); }
+  catch (e) { alvo.textContent = bruto; }
 }
 carregar();
 </script>
