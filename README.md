@@ -1,21 +1,26 @@
 # ◈ Betterme Agent
 
-**Agente Linux via terminal com Ollama (modelo Betterme) + GUI web para controle e
-gerenciamento de ligado/desligado.**
+**Agente pessoal que opera seu dispositivo — Windows | macOS | Linux (x86-64 e
+ARM64) — via terminal, GUI web, Telegram e WhatsApp, com cérebro local
+(Ollama + hermes3) e roteador opcional de provedores grátis.**
 
-O Betterme é um agente local que conversa, diagnostica e opera sua máquina Linux
-executando comandos shell, lendo/gravando arquivos e inspecionando o sistema —
-com o cérebro rodando no **Ollama** com o modelo **Betterme** (Nous Research),
-100% local, sem nuvem.
+O Betterme conversa, diagnostica e opera sua máquina executando comandos,
+lendo/gravando arquivos e inspecionando o sistema. **Local-first**: memória e
+dados pessoais ficam na sua máquina, sempre. Se você guardar uma chave de
+provedor grátis (Groq, Mistral, Gemini…), o **roteador automático** usa o
+cérebro rápido por padrão com fallback local — e código/segredos nunca saem
+(regra D2, DLP no transporte).
 
-A **GUI web** permite ligar/desligar o agente e o servidor Ollama com um clique,
-acompanhar o log ao vivo, conversar com o agente, enfileirar tarefas e ajustar
-a configuração.
+A **GUI web** liga/desliga agente e Ollama com um clique, mostra log ao vivo,
+chat com ferramentas visíveis na hora, tarefas agendadas, memória, skills,
+receitas, doctor e editor de automações n8n.
+
+**v6.4.2** · 190 testes · CHANGELOG com todo o histórico.
 
 ```
                         ┌─────────────────────────────┐
    navegador ──────────►│  GUI web (Flask)  :8080     │
-   (qualrem aparelho)   │  ▸ liga/desliga agentes     │
+   (qualquer aparelho)  │  ▸ liga/desliga agentes     │
                         │  ▸ log ao vivo · chat       │
                         │  ▸ fila de tarefas · ajustes│
                         └──────────┬──────────────────┘
@@ -28,7 +33,7 @@ a configuração.
    │ ▸ heartbeat+log    │ │ betterme agent …   │ │ modelo: hermes3 │
    └─────────┬──────────┘ └────────┬─────────┘ └────────▲────────┘
              │      ferramentas (bash, arquivos, diagnóstico)
-             └──────────────► Linux ◄────────────────────┘
+             └──────────► seu dispositivo ◄──────────────┘
 ```
 
 ---
@@ -36,12 +41,15 @@ a configuração.
 ## ⚡ Início rápido
 
 ```bash
-cd betterme-agent
-chmod +x install.sh
-./install.sh                       # instala Ollama + modelo hermes3:8b + CLI
+python3 install.py          # qualquer SO: venv + CLI + guia do Ollama
+betterme doctor             # checa dispositivo, cérebro, modelo, segurança
+betterme server             # GUI em http://127.0.0.1:8080
+```
 
-betterme status                      # conferir tudo
-betterme server                      # abrir a GUI em http://localhost:8080
+**Tudo de uma vez** (ditado por voz, WhatsApp, Ollama, modelo e n8n):
+
+```bash
+python3 install.py --full   # +--skip-stt/--skip-n8n/--skip-playwright
 ```
 
 Acesso de outros aparelhos na rede (**sempre com senha!**):
@@ -60,7 +68,7 @@ Para instalar como serviço que sobe junto do sistema:
 
 | Item | Valor |
 |---|---|
-| SO | Linux (testado em Debian/Ubuntu; usa systemd quando disponível) |
+| SO | Windows · macOS · Linux (x86-64 e ARM64; systemd quando disponível) |
 | Python | 3.9+ |
 | RAM | 8 GB (`hermes3:3b`) · 12 GB+ (`hermes3:8b`) · 64 GB+ (`hermes3:70b`) |
 | Disco | ~5 GB (modelo 8b) + 1 GB (Betterme) |
@@ -118,7 +126,16 @@ prontos: **N8N_PASSOAPASSO.md**.
 | `betterme ollama pull [modelo]` | baixa um modelo |
 | `betterme models` | lista modelos locais |
 | `betterme tasks` | fila de tarefas e resultados |
+| `betterme doctor` | diagnóstico do ambiente (dispositivo, cérebro, n8n…) |
+| `betterme provider list\|set\|off` | chaves grátis e roteador automático |
+| `betterme fluxos setup\|start\|listar` | automações n8n locais |
+| `betterme autonomia [nível]` | cauteloso · padrao · autonomo |
+| `betterme varredura` | caça segredos/dados no projeto (pré-push) |
+| `betterme update` | atualiza a partir das tags do GitHub |
 | `betterme config show\|set\|edit` | configuração |
+
+E também: `skills` · `memoria` · `rag` · `vida` · `arena` · `audio` ·
+`conversas` · `aprender` · `grafo` — `betterme --help` mostra tudo.
 
 Flags globais: `--data-dir DIR` (diretório de dados, padrão `~/.betterme`) e
 `--mock` (modo demonstração com Ollama simulado).
@@ -400,12 +417,12 @@ betterme config set model hermes3:3b
 | “não consegui falar com o Ollama” | `betterme ollama status` → `betterme ollama start` |
 | “modelo não encontrado” | `betterme ollama pull` (baixa o modelo da config) |
 | GUI não abre de outro aparelho | liberar a porta no firewall e usar `--host 0.0.0.0` |
-| Respostas lentas | use `hermes3:3b` ou reduza `num_ctx` |
+| Respostas lentas | guarde uma chave grátis (`betterme provider set groq`) — o roteador usa o provedor rápido · ou use `hermes3:3b` |
 | Agente “sem heartbeat” | processo travado → `betterme agent restart` |
 
 ---
 
-Feito com ◈ · [Ollama](https://ollama.com) · [Betterme 3 — Nous Research](https://ollama.com/library/hermes3) · Flask
+Feito com ◈ · [Ollama](https://ollama.com) · [Hermes 3 — Nous Research](https://ollama.com/library/hermes3) · Flask · n8n
 
 ## 🗺 Versões e branches de fase
 
@@ -417,6 +434,6 @@ O projeto evolui em fases — cada uma tem uma branch com o código do marco:
 | `v2.x` | 🌐 GUI web + Claude Code (v2.0.0 → v2.2.8) |
 | `v3.0.x` | 🏗 A plataforma: auditoria, backups, skills (v3.0.x) |
 | `v3.1.x` | 📧 E-mail (OAuth 2FA) + agenda somente leitura (v3.1.x) |
-| `main` | 📱 GUI responsiva + PWA (v3.2.x →) |
+| `main` | 🚀 v4.x: especialistas + autonomia + gateways · v5.x: vida/skills · v6.x: universal, performance, roteador de cérebro, n8n bidirecional (→ v6.4.2) |
 
 Detalhe versão a versão: [`docs/HISTORICO-DE-VERSOES.md`](docs/HISTORICO-DE-VERSOES.md) · tags de todas as releases na aba **Tags**.
