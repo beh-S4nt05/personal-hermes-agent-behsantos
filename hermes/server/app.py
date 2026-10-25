@@ -332,6 +332,22 @@ self.addEventListener("fetch", (e) => {
             return jsonify({"ok": True, "action": "reset", "output":
                             "🧹 objetivo da sessão limpo — a conversa continuará "
                             "sem goal (botão ＋ nova abre outra)"})
+        if cmd in ("/autonomia", "/autonomy"):
+            from ..autonomy import NIVEIS, DESCRICOES, nivel as _nv
+            alvo = args.strip().lower()
+            if alvo and alvo in NIVEIS:
+                cfg.update({"autonomia": alvo})
+                out = (f"🎚 autonomia agora: {alvo.upper()} — "
+                       f"{DESCRICOES[alvo]}")
+            elif alvo:
+                out = (f"✖ nível inválido: {alvo!r} — use: "
+                       + ", ".join(NIVEIS))
+            else:
+                out = (f"🎚 autonomia atual: {_nv(cfg).upper()}\n"
+                       + "\n".join(f"  • {n}: {DESCRICOES[n]}"
+                                   for n in NIVEIS)
+                       + "\nmude com: /autonomia cauteloso|padrao|autonomo")
+            return jsonify({"ok": True, "output": out})
         if cmd in ("/provider", "/provedor"):
             nome = str(getattr(cfg, "llm_provider", "local"))
             modelo = str(getattr(cfg, "llm_model", "") or "")

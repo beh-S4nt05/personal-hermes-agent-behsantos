@@ -559,6 +559,12 @@ def cmd_init(args) -> None:
     project_context.cmd(args, _cfg(args))
 
 
+def cmd_autonomia(args) -> None:
+    """v4.0.0: vê/muda o nível de autonomia (cauteloso|padrao|autonomo)."""
+    from . import autonomy
+    autonomy.cmd(args, _cfg(args))
+
+
 def cmd_memory_list(args) -> None:
     """v3.16.1: lista os fatos da memória do agente."""
     from .memory import MemoryStore
@@ -698,6 +704,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("caminho", nargs="?", default=None,
                    help="pasta do projeto (default: diretório atual)")
     p.set_defaults(fn=cmd_init)
+    p = sub.add_parser("autonomia",
+                       help="nível de autonomia do agente (cauteloso|padrao|autonomo)")
+    p.add_argument("nivel", nargs="?", default=None,
+                   help="novo nível (vazio = mostra o atual)")
+    p.set_defaults(fn=cmd_autonomia)
     p = sub.add_parser("rag", help="biblioteca de livros (RAG local): indexa ou consulta")
     p.add_argument("consulta", nargs="?", default="", help="texto a buscar (vazio = reindexar)")
     p.set_defaults(fn=cmd_rag)

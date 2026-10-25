@@ -4965,6 +4965,90 @@ def T131_sandbox_de_kernel_bwrap_seccomp():
               "pulados; fallback validado acima)")
 
 
+@case
+def T132_autonomia_tres_niveis():
+    """v4.0.0 M5 (D3): cauteloso/padrao/autonomo — gates soft respeitam
+    o nível, hard gates são inegociáveis, AUTÔNOMO cria sem approval e
+    ganha varredura pré-entrega; /autonomia no chat."""
+    from hermes import autonomy as AU
+    from hermes import orchestrator as orc
+
+    # ---- funções de nível
+    cfg = fresh()
+    assert AU.nivel(cfg) == "padrao"
+    assert not AU.pula_gate_criacao(cfg) and not AU.confirma_todo_comando(cfg)
+    cfg.update({"autonomia": "autonomo"})
+    assert AU.pula_gate_criacao(cfg) and AU.pula_gate_entrega(cfg)
+    cfg.update({"autonomia": "cauteloso"})
+    assert AU.confirma_todo_comando(cfg) and not AU.pula_gate_criacao(cfg)
+    cfg.update({"autonomia": "abracadabra"})
+    assert AU.nivel(cfg) == "padrao"                     # inválido -> padrão
+    assert len(AU.HARD_GATES) >= 4 and any("D2" in h for h in AU.HARD_GATES)
+
+    # ---- E2E: AUTÔNOMO com gate de criação LIGADO cria sem approval
+    cfg2 = fresh(creation_approval=True)
+    cfg2.update({"autonomia": "autonomo"})
+    proj = Path.home() / f".hermes-t132-{os.getpid()}"
+    shutil.rmtree(proj, ignore_errors=True)
+
+    class _Ag:
+        model_override = None
+        def run(self, msgs, on_event=None, cancel=None):
+            on_event({"type": "done", "message": "feito: t.txt criado"})
+            return "feito: t.txt criado"
+
+    evs = []
+    try:
+        final = orc.run_pipeline(_Ag(), cfg2,
+                                 f"crie o arquivo t.txt em {proj}",
+                                 [], on_event=evs.append)
+        assert final
+        assert not [e for e in evs
+                    if e.get("type") == "approval_request"], evs[:8]
+    finally:
+        shutil.rmtree(proj, ignore_errors=True)
+
+    # fonte: gates ligados ao nível
+    src = Path("hermes/orchestrator.py").read_text(encoding="utf-8")
+    assert "pula_gate_criacao(cfg)" in src and "pre_entrega_varredura" in src
+    assert "confirma_todo_comando" in Path("hermes/tui.py").read_text(
+        encoding="utf-8")
+
+    # ---- varredura pré-entrega (AUTÔNOMO): crítico vira aviso
+    cfg3 = fresh()
+    sujo = Path.home() / f".hermes-t132b-{os.getpid()}"
+    shutil.rmtree(sujo, ignore_errors=True)
+    sujo.mkdir(parents=True)
+    try:
+        (sujo / "chave.txt").write_text("k = gsk_" + "Q" * 30 + "\n",
+                                        encoding="utf-8")
+        aviso = AU.pre_entrega_varredura(cfg3, sujo)
+        assert "CRÍTICO" in aviso and "chave.txt" in aviso
+        limpo = Path.home() / f".hermes-t132c-{os.getpid()}"
+        shutil.rmtree(limpo, ignore_errors=True)
+        limpo.mkdir(parents=True)
+        try:
+            (limpo / "ok.txt").write_text("nada demais\n", encoding="utf-8")
+            assert AU.pre_entrega_varredura(cfg3, limpo) == ""
+        finally:
+            shutil.rmtree(limpo, ignore_errors=True)
+    finally:
+        shutil.rmtree(sujo, ignore_errors=True)
+
+    # ---- /autonomia no chat da GUI
+    cfg4 = fresh()
+    c = _app(cfg4)
+    r = c.post("/api/chat/command", json={"text": "/autonomia"}).get_json()
+    assert r["ok"] and "PADRAO" in r["output"]
+    r2 = c.post("/api/chat/command",
+                json={"text": "/autonomia autonomo"}).get_json()
+    assert r2["ok"] and AU.nivel(cfg4) == "autonomo"
+    r3 = c.post("/api/chat/command",
+                json={"text": "/autonomia xpto"}).get_json()
+    assert r3["ok"] and "inválido" in r3["output"]
+    assert AU.nivel(cfg4) == "autonomo"          # nível inválido não muda
+
+
 if __name__ == "__main__":
     print("◈ Hermes Agent — suíte de testes (v3.0)\n")
     sys.exit(run_all())

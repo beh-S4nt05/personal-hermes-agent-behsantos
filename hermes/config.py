@@ -32,6 +32,7 @@ DEFAULTS = {
     "llm_provider": "local",
     "llm_model": "",
     "sandbox_mode": "auto",
+    "autonomia": "padrao",
     "skills_watch_dirs": None,        # None = [~/Downloads]
     # Acesso à web (ferramentas web_search / web_fetch do agente e da GUI)
     "web_access": True,

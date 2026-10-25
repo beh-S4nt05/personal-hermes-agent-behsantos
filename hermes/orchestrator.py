@@ -945,8 +945,11 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     # ── 🔒 portão 1: aprovação do PLANO (só tarefas de criação) ──
     aprovacao = "auto"
     edit_snip, plano_editado = "", False   # v3.10: sinais de experiência
+    # v4.0.0 (M5): AUTÔNOMO pula o gate soft de criação (hard gates ficam)
+    from .autonomy import pula_gate_criacao, pre_entrega_varredura
     exige_aprovacao = (tipo == "criacao"
-                       and getattr(cfg, "creation_approval", True))
+                       and getattr(cfg, "creation_approval", True)
+                       and not pula_gate_criacao(cfg))
     if resume_plan:                    # v3.11: já aprovado antes do restart
         aprovacao = "retomada"
         plano_editado = bool(resume_plan.get("_editada"))
@@ -1105,8 +1108,10 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
         selo = "\n\n─\n🔍 *revisada pelo revisor — veredito: aprovada*"
     else:
         selo = f"\n\n─\n⚠ *revisão: reprovada* — {problema[:200]}"
+    from .autonomy import pula_gate_entrega
     if (exige_aprovacao and aprovacao in ("aprovada", "editada")
-            and veredito == "ok" and not _cancelado()):
+            and veredito == "ok" and not _cancelado()
+            and not pula_gate_entrega(cfg)):
         texto_entrega = (caixa["done"] or resultado) + selo
         ev({"type": "approval_request", "id": f"{tid}-e", "kind": "entrega",
             "texto": texto_entrega,
@@ -1159,6 +1164,16 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
             entregue = "entregue"
     else:
         final = (caixa["done"] or resultado) + selo
+
+    # v4.0.0 (M5): AUTÔNOMO entrega sem gate soft — em compensação, o
+    # projeto criado passa pela varredura PRÉ-ENTREGA (risco #10)
+    if tipo == "criacao" and projeto is not None:
+        try:
+            from .autonomy import nivel as _nivel_aut
+            if _nivel_aut(cfg) == "autonomo":
+                final += pre_entrega_varredura(cfg, projeto)
+        except Exception:  # noqa: BLE001
+            pass
 
     dur = round(time.time() - t0, 1)
     status = ("aprovada" if veredito == "ok" and not _cancelado() else

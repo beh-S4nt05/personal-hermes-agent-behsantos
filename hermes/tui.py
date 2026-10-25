@@ -41,11 +41,17 @@ def banner(cfg: Config) -> None:
     _emit(f"{DIM}{line}{RESET}\n")
 
 
-def _confirm_dangerous(name: str, args: dict) -> bool:
+def _confirm_dangerous(name: str, args: dict, cfg=None) -> bool:
     if name != "run_command":
         return True
     cmd = str(args.get("command", ""))
-    if not is_dangerous(cmd):
+    # v4.0.0 (M5): CAUTELOSO confirma TODO comando, não só os arriscados
+    try:
+        from .autonomy import confirma_todo_comando
+        sempre = cfg is not None and confirma_todo_comando(cfg)
+    except Exception:  # noqa: BLE001
+        sempre = False
+    if not is_dangerous(cmd) and not sempre:
         return True
     _emit(f"{YELLOW}⚠ comando arriscado proposto pelo agente:{RESET}\n  {cmd}")
     try:
@@ -111,7 +117,7 @@ def run_chat(cfg: Config) -> None:
                 _emit(f"{YELLOW}! {event.get('message')}{RESET}")
 
         try:
-            final = agent.run(history, on_event=on_event, allow_tool=_confirm_dangerous)
+            final = agent.run(history, on_event=on_event, allow_tool=lambda n, a: _confirm_dangerous(n, a, cfg))
         except KeyboardInterrupt:
             print(f"\n{DIM}(interrompido){RESET}")
             continue
