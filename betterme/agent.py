@@ -76,7 +76,7 @@ FALLBACK_TOOLS_NOTE = """
 Como alternativa às ferramentas nativas, você TAMBÉM pode chamar uma ferramenta \
 respondendo com um único bloco de código json no formato:
 ```json
-{{"tool": "nome_da_ferramenta", "args": {{"parametro": "valor"}}}}
+{{"tool": "nome_da_ferramenta", "args": {{"parâmetro": "valor"}}}}
 ```
 Use isso somente quando necessário e aguarde o resultado antes de continuar."""
 

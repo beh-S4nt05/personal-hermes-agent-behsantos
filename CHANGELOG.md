@@ -1,5 +1,26 @@
 # Changelog
 
+## v6.3.3 — ✍️ PORTUGUÊS CORRIGIDO (varredura completa)
+
+Varredura ortográfica de TODAS as strings do app (AST em .py + texto
+da GUI) com dicionário de ~130 padrões de erro + revisão manual das
+superfícies visíveis:
+
+- **GUI**: "A trabalhar…" → **"Trabalhando…"** (PT-BR; eram 4 pontos)
+  · anglicismo "render o máximo" → **"renderizar o máximo"**.
+- **DLP (varredura)**: marcador `[CODIGO LOCAL - nao e enviado]` →
+  **`[CÓDIGO LOCAL — não é enviado]`** (e `[CÓDIGO LOCAL]`) — "nao e"
+  tinha DOIS erros num marcador que aparece no pool externo.
+- **Prompt do agente**: exemplo de tool com "parametro" →
+  **"parâmetro"** · **CLI**: `fluxos status` "✖ não (…)" →
+  "✖ não — ligue com: …".
+- **Contratos preservados DE PROPÓSITO** (não são erros): chaves e
+  enums sem acento (`acao_proposta`, `evidencia`, `tipo: criacao`,
+  `gerente_codigo`, `/memoria`, nível `autonomo`, `diretorio` no
+  status) — mudá-los quebraria API/GUI/testes. O T186 trava os dois
+  lados: PT correto na prosa E contratos intactos.
+- T186 novo (4 asserts de marcador DLP atualizados) — **186/186**.
+
 ## v6.3.2 — 🗺 INTEGRAÇÃO TOTAL ("nenhuma solução é ilha")
 
 Varredura completa do app e integração de cada solução:

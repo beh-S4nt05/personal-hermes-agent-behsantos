@@ -1286,21 +1286,21 @@ async function sendChat(){
   state.sending = true; $("btn-send").disabled = true;
   $("btn-stop").style.display = "";
 
-  // loading "A trabalhar…" — fica até o primeiro token/resultado da IA
+  // loading "Trabalhando…" — fica até o primeiro token/resultado da IA
   const load = document.createElement("div");
   load.className = "msg bot working";
-  load.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar…';
+  load.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> Trabalhando…';
   $("chatlog").appendChild(load); scrollChat();
 
   const cursors = [];
   const turns = { texts: [], tools: [], cur: null, loading: load, stats: null };
   let finalMsg = "", errorMsg = "", aborted = false;
 
-  // cronômetro ao vivo no "A trabalhar…"
+  // cronômetro ao vivo no "Trabalhando…"
   const t0 = performance.now();
   const tick = setInterval(()=>{
     if (turns.loading)
-      turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar… <span class="hint">(' + ((performance.now()-t0)/1000).toFixed(0) + 's)</span>';
+      turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> Trabalhando… <span class="hint">(' + ((performance.now()-t0)/1000).toFixed(0) + 's)</span>';
   }, 1000);
 
   try{
@@ -1379,7 +1379,7 @@ function handleEvent(ev, turns, cursors){
   }
   if (ev.type === "step"){
     if (turns.loading)
-      turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar… <span class="hint">(passo '+ev.step+')</span>';
+      turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> Trabalhando… <span class="hint">(passo '+ev.step+')</span>';
     return;
   }
   if (ev.type === "cancelled"){
@@ -1405,7 +1405,7 @@ function handleEvent(ev, turns, cursors){
     scrollChat();
   } else if (ev.type === "tool_start"){
     if (turns.loading)
-      turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> A trabalhar… <span class="hint">(executando '+esc(ev.name)+')</span>';
+      turns.loading.innerHTML = '<span class="dots"><i></i><i></i><i></i></span> Trabalhando… <span class="hint">(executando '+esc(ev.name)+')</span>';
     turns.cur = null;
     turns.tools.push(toolBlock(ev.name, ev.args));
   } else if (ev.type === "tool_end"){
@@ -2602,7 +2602,7 @@ async function doSearchConversations(){
 <div class="modalwrap" id="doctor-modal">
   <div class="modal">
     <h3 style="margin-bottom:6px">🩺 Doctor — checagem do ambiente</h3>
-    <div class="hint" style="margin-bottom:10px">Alguns itens precisam da sua atenção para o Betterme render o máximo:</div>
+    <div class="hint" style="margin-bottom:10px">Alguns itens precisam da sua atenção para o Betterme renderizar o máximo:</div>
     <div id="doctor-list"></div>
     <div class="btnrow" style="margin-top:16px">
       <button class="b primary" onclick="closeDoctor()">entendi — verificar depois</button>

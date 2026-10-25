@@ -4723,7 +4723,7 @@ def T128_varredura_de_segredos_e_dlp_mascarar():
             "\ncpf 123.456.789-00\nemail x@gmail.com\nsenha = 'abracadabra'"
             "\nx = 42\nfrase normal de prosa")
     limpo = V.mascarar(sujo)
-    assert "def soma" not in limpo and "CODIGO LOCAL" in limpo
+    assert "def soma" not in limpo and "CÓDIGO LOCAL" in limpo
     assert "gsk_" not in limpo and "[REDACTED:segredo]" in limpo
     assert "123.456.789-00" not in limpo and "[REDACTED:cpf]" in limpo
     assert "x@gmail.com" not in limpo and "[REDACTED:email_pessoal]" in limpo
@@ -4822,7 +4822,7 @@ def T129_hermes_md_contexto_de_projeto():
             prompt2 = ag2.system_prompt("algo")
         assert "gsk_" not in prompt2 and "[REDACTED:segredo]" in prompt2
         assert "def segredo" not in prompt2
-        assert "CODIGO LOCAL" in prompt2          # código censurado, regra D2
+        assert "CÓDIGO LOCAL" in prompt2          # código censurado, regra D2
 
         # cache do prompt invalida quando o HERMES.md muda
         (proj / "HERMES.md").write_text("nova regra v2 t129", encoding="utf-8")
@@ -5155,7 +5155,7 @@ def T134_dlp_codigo_e_segredos_nao_saim_no_pool():
     assert r["ok"]
     enviado = pool.payloads[0]
     assert "def banco" not in enviado and "gsk_" not in enviado
-    assert "CODIGO LOCAL" in enviado and "[REDACTED:segredo]" in enviado
+    assert "CÓDIGO LOCAL" in enviado and "[REDACTED:segredo]" in enviado
     assert "o serviço caiu 3 vezes hoje" in enviado   # prosa preservada
 
 
@@ -5920,7 +5920,7 @@ def T153_arena_dlp_mascara_task_antes_do_pool():
         assert "adm-12345" not in enviado, enviado
         assert "fulano@gmail.com" not in enviado, enviado
         assert "print(" not in enviado, enviado
-        assert "CODIGO LOCAL" in enviado and "REDACTED" in enviado, enviado
+        assert "CÓDIGO LOCAL" in enviado and "REDACTED" in enviado, enviado
 
 
 @case
@@ -7276,6 +7276,45 @@ def T185_integracao_nenhuma_ilha():
     mapa_md = Path("MAPA_APLICACAO.md").read_text(encoding="utf-8")
     assert "Mapa de integração" in mapa_md
     assert "nenhuma solução é ilha" in mapa_md
+
+
+@case
+def T186_portugues_corrigido_contratos_intactos():
+    """v6.3.3: erros de português corrigidos SEM tocar em contratos.
+    Varredura completa do app: chaves/enums/comandos (acao_proposta,
+    /memoria, nível autonomo, gerente_codigo, tipo criacao) são
+    CONTRATOS e continuam sem acento DE PROPÓSITO; prosa visível usa
+    PT correto (Trabalhando…, renderizar, não é enviado, parâmetro)."""
+    from betterme.varredura import mascarar
+
+    # ── correções presentes, erros ausentes (GUI)
+    gui = Path("betterme/server/templates/index.html").read_text(
+        encoding="utf-8")
+    assert "Trabalhando…" in gui
+    assert "A trabalhar" not in gui            # variante europeia fora
+    assert "renderizar o máximo" in gui
+    assert "render o máximo" not in gui        # anglicismo fora
+    # ── marcador DLP com PT correto (comportamental)
+    limpo = mascarar("veja:\n```python\ndef soma(a, b):\n    return a + b\n```\nfim")
+    assert "CÓDIGO LOCAL — não é enviado" in limpo
+    assert "CODIGO" not in limpo and "nao e" not in limpo
+    # ── prompt do agente com acento no exemplo
+    agent = Path("betterme/agent.py").read_text(encoding="utf-8")
+    assert '"parâmetro": "valor"' in agent
+    # ── status do fluxos legível
+    flx = Path("betterme/fluxos.py").read_text(encoding="utf-8")
+    assert "não — ligue com: betterme fluxos start" in flx
+    # ── CONTRATOS intocáveis (sem acento DE PROPÓSITO — não "corrigir"):
+    app = Path("betterme/server/app.py").read_text(encoding="utf-8")
+    assert '"/memoria"' in app or "/memoria" in app          # rota/comando
+    aut = Path("betterme/autonomy.py").read_text(encoding="utf-8")
+    assert '"autonomo"' in aut                               # valor de nível
+    esp = Path("betterme/specialists.py").read_text(encoding="utf-8")
+    assert "acao_proposta" in esp and "evidencia" in esp      # veredito JSON
+    tls = Path("betterme/tools.py").read_text(encoding="utf-8")
+    assert "gerente_codigo" in tls                           # nome da tool
+    orc = Path("betterme/orchestrator.py").read_text(encoding="utf-8")
+    assert '"tipo": "criacao"' in orc or '"criacao"' in orc   # enum do TRACE
 
 
 if __name__ == "__main__":

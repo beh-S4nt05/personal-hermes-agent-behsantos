@@ -193,18 +193,18 @@ def varrer_diff(cfg, raiz: Path | None = None) -> list[Achado]:
 def mascarar(texto: str) -> str:
     """DLP do pool externo: censura segredos, CPF, e-mails e CÓDIGO.
 
-    - blocos ```fence``` viram ``[CÓDIGO LOCAL - nao e enviado]``
+    - blocos ```fence``` viram ``[CÓDIGO LOCAL — não é enviado]``
     - linhas soltas com cara de código viram ``[CODIGO LOCAL]``
     - segredos/CPF/e-mails viram ``[REDACTED:<tipo>]``
 
     Última linha de defesa antes de QUALQUER payload sair para um
     provedor gratuito (regra D2 + risco #2 do pre-mortem v4.0.0).
     """
-    saida = _FENCE.sub("[CODIGO LOCAL - nao e enviado]", texto)
+    saida = _FENCE.sub("[CÓDIGO LOCAL — não é enviado]", texto)
     linhas_out = []
     for lin in saida.splitlines():
         if _LINHA_CODIGO.match(lin):
-            lin = "[CODIGO LOCAL]"
+            lin = "[CÓDIGO LOCAL]"
         linhas_out.append(lin)
     saida = "\n".join(linhas_out)
     for id_, rx, _s, _d in _PADROES:

@@ -344,7 +344,8 @@ def cmd(args, cfg) -> None:
         print(f"  npm: {'✔' if st['npm'] else '✖ não encontrado'}")
         inst = "✔" if st["n8n_instalado"] else "✖ (betterme fluxos setup)"
         print(f"  n8n instalado: {inst}")
-        rod = "✔ sim" if st["rodando"] else "✖ não (betterme fluxos start)"
+        rod = ("✔ sim" if st["rodando"] else
+          "✖ não — ligue com: betterme fluxos start")
         print(f"  rodando: {rod}")
         print(f"  instalação: {st['diretorio']}")
         print(f"  dados/workflows: {st['user_dir']}")
