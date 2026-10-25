@@ -64,6 +64,13 @@ tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 |---|---|
 | `server/app.py` | Servidor Flask: **76 rotas** (chat SSE, orchestrator, Ollama, MCP, skills, logs, tools, conversas, agendador, memória, settings, auditoria, backups, métricas, notificações, receitas, doctor, hooks). Imports lazy → boot rápido. |
 | `ollama_client.py` | Cliente HTTP do Ollama (chat, streaming, modelos, pull) + fábrica `get_client` (v3.17.0: provedor externo com fallback). |
+| `varredura.py` | 🛡 Segurança/privacidade: scanner de segredos (exit 1 = bloqueia push) e DLP `mascarar()` — código/segredos nunca vão a provedores gratuitos (D2). |
+| `project_context.py` | 📋 HERMES.md/AGENTS.md root-to-leaf (global+projeto, cap 32 KiB) + `hermes init`; externo recebe versão DLP. |
+| `sandbox_kernel.py` | 🧱 Sandbox de kernel: bubblewrap + seccomp BPF (blocklist), modos read-only/workspace-write, fallback honesto p/ denylist. |
+| `autonomy.py` | 🎚 Autonomia 3 níveis (cauteloso/padrao/autonomo) + hard gates inejociáveis + varredura pré-entrega do AUTÔNOMO. |
+| `specialists.py` | 🧪 ESPECIALISTAS (ADR-001): veredito JSON com evidência validada em disco, pool grátis c/ fallback, exames de competência, DLP, auditoria. |
+| `learning.py` | 📚 Loop de aprendizado: rascunhos de skill/lição em staging, aprovação do operador, skills aprender, busca em conversas. |
+| `code_manager.py` | 👔 Gerente de código (Claude) — opt-in consciente com aviso de privacidade (D5). |
 | `llm_providers.py` | Provedores LLM externos GRATUITOS (OpenAI-compat): registro groq/gemini/mistral/openrouter/llm7/zai/cohere, chave em secrets 600, fallback local — memória NUNCA sai (regra do operador). v3.17.1: chat_stream usa SEMPRE o modelo do provedor (o Agent passa nome Ollama em cfg.model → 400 + fallback silencioso; T127). |
 | `manager.py` | Gerência do Ollama: boot/restart (systemd ou `ollama serve` com log), diagnóstico de ambiente. |
 | `autoselect.py` | Auto-atribuição de modelos por papel (lê SEMPRE a lista instalada). |
@@ -303,7 +310,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **127 casos** (v3.17.1), famílias:
+`tests/run_all.py` — **140 casos** (v4.0.0), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·

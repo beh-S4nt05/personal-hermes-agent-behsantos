@@ -1,5 +1,80 @@
 # Changelog
 
+## v4.0.0 — 🚀 A ENTRADA NO MODELO COMPLETO DE AGENTES DE IA
+
+A virada de filosofia (ADR-001): o Hermes deixa de ser "1 cérebro +
+skills" e passa a ser **1 CÉREBRO MAIN + especialistas-como-ferramentas**,
+com autonomia em 3 níveis, sandbox de kernel, loop de aprendizado e
+gerente de código. Decisões D1–D5 do operador viram lei do código.
+
+**M1 — 🛡 Varredura & DLP (`varredura.py`)**
+- `hermes varredura` (exit 1 em CRÍTICO — hook pré-push): 11 padrões
+  (chaves Groq/OpenAI/Anthropic/Gemini/GitHub/AWS, chave privada,
+  Bearer, senha, CPF, e-mail) + **nomes pessoais do data-dir**
+  (`varredura-nomes.txt`, privado).
+- `mascarar()` — DLP: TODO payload que sai para provedor gratuito passa
+  por ele; **código nunca sai** (regra D2), segredos/CPF/e-mail viram
+  `[REDACTED]`; `.varredura-ignore` + `# varredura:ok` p/ falsos
+  positivos.
+
+**M2 — 📋 Contexto de projeto (`project_context.py`)**
+- `HERMES.md` global (data-dir) + do projeto (task scope); `AGENTS.md`
+  aceito por compatibilidade (Codex/Qwen); cap 32 KiB; `hermes init`
+  gera o scaffold; externo recebe versão DLP-mascarada.
+
+**M3 — ✦ 6 skills de metodologia PT-BR** (adaptadas do superpowers,
+reescritas no nosso modelo — fases, nunca subagentes): tdd,
+debug-sistematico, verificacao-antes-de-concluir, code-review,
+brainstorming, writing-plans.
+
+**M4 — 🧱 Sandbox de kernel (`sandbox_kernel.py`)**
+- bubblewrap (fs/namespaces; read-only/workspace-write; `--unshare-net`)
+  + **seccomp blocklist em BPF puro** (13 syscalls, x86_64, EPERM);
+  probe real com cache; **fallback honesto** para a denylist de app
+  (defesa em profundidade); `sandbox_mode: auto|kernel|app`.
+
+**M5 — 🎚 Autonomia em 3 níveis (`autonomy.py`)**
+- CAUTELOSO (confirma tudo, inclusive cada comando na TUI) · PADRÃO
+  (v3.x: leitura livre, escrita aprovada) · AUTÔNOMO (encadeia sem
+  gates soft, ganha **varredura pré-entrega**). Hard gates
+  inejociáveis em qualquer nível (denylist, secrets, escopo, D2).
+- `hermes autonomia` + `/autonomia` no chat.
+
+**M6 — 🧪 ESPECIALISTAS (`specialists.py`) — o coração**
+- revisor · debugger · pesquisador · seguranca: skill injetada em
+  contexto limpo, veredito JSON com **evidência obrigatória checada em
+  disco** (arquivo:linha:trecho — nada de alucinação), single-writer
+  (propõem, nunca escrevem), profundidade 1.
+- **Pool de provedores gratuitos** com token bucket (30 RPM groq) e
+  fallback local; DLP no caso externo; **exames de competência** com
+  cache (reprovado = desativa e segue — nunca quebra); auditoria de
+  cada invocação. Tool `especialista()` no cérebro.
+
+**M6.5 — 📚 Loop de aprendizado (`learning.py`)**
+- Missão aprovada com ≥5 ferramentas → **rascunho de skill**; reprovada
+  → **rascunho de lição**; aprovação SEMPRE do operador (nem AUTÔNOMO
+  auto-aprove); aprovar instala no skills do **data-dir privado**
+  (backup `.antigo` + auditoria) ou grava na memória.
+- `hermes skills aprender <arquivo|URL|texto>` (= /learn do Qwen);
+  **busca em conversas passadas** (CLI `hermes conversas buscar` +
+  tool `conversas_buscar`).
+
+**M7 — 👔 Gerente de código (`code_manager.py`, D5)**
+- Hermes = cérebro main; Claude = gerente de código, **opt-in
+  consciente** (`hermes gerente on --yes`) com aviso explícito: o
+  código da task vai à nuvem Anthropic (memória/segredos nunca; pool
+  grátis segue sem código por D2). Tool `gerente_codigo`.
+
+**M8 — 🖥 GUI: página 🧪 Agentes** (especialistas+exames, seletor de
+autonomia, aprendizados pendentes com aprovar/descartar, gerente) +
+endpoints `/api/especialistas` `/api/autonomia` `/api/aprendizados`
+`/api/gerente` — vanilla JS inline, zero-build.
+
+**Qualidade:** ruff `E9,F,B,PLE` limpo em TODO o repo (incluindo tests/
+e tools/). **140/140 testes** (T128–T140 novos; bug real de privacidade
+(skill aprendida indo ao repo público) pego pela própria suíte e
+corrigido antes da release).
+
 ## v3.17.1 — 🩹 hotfix: provedor externo nunca atendia (modelo errado no payload)
 
 **Achado de teste E2E real** (geração ao vivo via llm7): o `Agent` chama

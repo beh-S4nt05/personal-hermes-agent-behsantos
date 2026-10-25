@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.17.1** · gerado em 25/10/2026 · este documento é extraído do
+**Versão 4.0.0** · gerado em 25/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -85,6 +85,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `hermes clear` | apaga TODOS os fatos da memória (reimporte um pacote limpo depois) |
 | `hermes skills` | catálogo de skills |
 | `hermes import` | importa skills: pasta local, .zip, URL git ou owner/repo |
+| `hermes aprender` | transforma arquivo/URL/texto em rascunho de skill (M6.5) |
 | `hermes scan` | varre pastas assistidas (ex.: ~/Downloads) e importa skills novas |
 | `hermes audit` | audita todas as skills: estrutura, tamanho,  |
 | `hermes chat` | chat interativo no terminal |
@@ -94,6 +95,12 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `hermes set` | ativa um provedor (pede a chave com segurança) |
 | `hermes test` | ping + 1 completion real do provedor ativo |
 | `hermes off` | volta ao Ollama local |
+| `hermes varredura` | varre segredos/dados pessoais antes de expor código (pré-push) |
+| `hermes init` | cria HERMES.md (instruções duráveis do projeto) |
+| `hermes autonomia` | nível de autonomia do agente (cauteloso|padrao|autonomo) |
+| `hermes gerente` | gerente de código (Claude Code) — opt-in consciente |
+| `hermes aprendidos` | rascunhos de skills/lições esperando sua aprovação |
+| `hermes conversas` | conversas passadas do agente |
 | `hermes rag` | biblioteca de livros (RAG local): indexa ou consulta |
 | `hermes doctor` | diagnostica a conexão Ollama↔Python (com geração de teste) |
 | `hermes email` | configura contas de e-mail (MCP email_*) |
@@ -113,7 +120,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.17.1)
+## 3. Modificações — o que foi feito (v1.0.0 → v4.0.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -121,6 +128,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v4.0.0** | 🚀 A ENTRADA NO MODELO COMPLETO DE AGENTES DE IA |
 | **v3.17.1** | 🩹 hotfix: provedor externo nunca atendia (modelo errado no payload) |
 | **v3.17.0** | 🔌 provedores LLM externos GRATUITOS, com privacidade dura |
 | **v3.16.1** | 🧠 memória gerenciável: list/clear + pacote do operador v2 por tópicos |
@@ -326,7 +334,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 
 ### hermes/server/app.py — 🌐 a API REST + GUI web (Flask/waitress): todos os endpoints, streaming do chat, aprovações, painel e páginas
 
-**75 endpoints HTTP:**
+**82 endpoints HTTP:**
 
 | Método e rota | O que faz |
 |---|---|
@@ -355,6 +363,13 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `POST /api/mcp/restart` | mcp_restart |
 | `GET /api/skills` | skills_list |
 | `GET /api/skills/content` | skills_content |
+| `GET /api/especialistas` | especialistas_state |
+| `GET /api/autonomia` | autonomia_get |
+| `POST /api/autonomia` | autonomia_set |
+| `GET /api/aprendizados` | aprendidos_get |
+| `POST /api/aprendidos` | aprendidos_post |
+| `GET /api/gerente` | gerente_get |
+| `POST /api/gerente` | gerente_post |
 | `POST /api/skills/toggle` | skills_toggle |
 | `POST /api/skills/install` | skills_install |
 | `GET /api/logs` | logs |
@@ -442,6 +457,13 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `cmd_tasks(args)` | — |
 | `cmd_config(args)` | — |
 | `cmd_provider(args)` | v3.17.0: provedores LLM externos GRATUITOS (memória nunca sai). |
+| `cmd_varredura(args)` | v4.0.0: varre segredos/dados pessoais — 1 se houver crítico. |
+| `cmd_init(args)` | v4.0.0: cria HERMES.md de partida no projeto. |
+| `cmd_autonomia(args)` | v4.0.0: vê/muda o nível de autonomia (cauteloso\|padrao\|autonomo). |
+| `cmd_gerente(args)` | v4.0.0 (M7, D5): gerente de código (Claude) — opt-in consciente. |
+| `cmd_aprendidos(args)` | v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador). |
+| `cmd_skills_aprender(args)` | v4.0.0 (M6.5): transforma documento/texto/URL em rascunho de skill. |
+| `cmd_conversas_buscar(args)` | v4.0.0 (M6.5): busca textual nas conversas passadas. |
 | `cmd_memory_list(args)` | v3.16.1: lista os fatos da memória do agente. |
 | `cmd_memory_clear(args)` | v3.16.1: apaga TODOS os fatos da memória (para reimportar um pacote organizado sem duplicatas). Pede confirmação, salvo… |
 | `cmd_models(args)` | — |
@@ -480,6 +502,9 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `esquecer(args, cfg)` | — |
 | `_backups_tool(args, cfg)` | — |
 | `git_run(args, cfg)` | v3.15.0 (PR#2): git com subcomandos permitidos, no projeto da task. |
+| `gerente_codigo_tool(args, cfg)` | v4.0.0 (M7, D5): delega uma task de CÓDIGO ao gerente Claude (só se o operador ativou com `hermes gerente on --yes`). |
+| `conversas_buscar(args, cfg)` | v4.0.0 (M6.5): busca nas conversas passadas (decisões antigas). |
+| `especialista_tool(args, cfg)` | v4.0.0 (M6): o cérebro invoca um especialista (revisor, debugger, pesquisador, seguranca) para um caso pontual — veredi… |
 | `knowledge_search(args, cfg)` | v3.15.0 (PR#2): RAG local — trechos verbatim com fonte. |
 | `execute_tool(name, arguments, cfg, source, agent)` | Executa uma ferramenta e devolve {'ok': bool, 'output': str}. v3.0: toda execução vai para a trilha de auditoria (data/… |
 | `tool_summary()` | — |
@@ -965,7 +990,7 @@ hermes server (Flask/waitress, porta 8080) ── CLI `hermes …`
 | `renderBrain()` | bloco 🔬 por baixo dos panos |
 | `toggleBrain()` | liga/desliga a visão 🔬 |
 
-*…e mais 76 funções de
+*…e mais 80 funções de
 renderização e utilidade (`mdFmt`, `bubble`, `toolBlock`, `fmtUp`…).*
 
 ## 7. Segurança

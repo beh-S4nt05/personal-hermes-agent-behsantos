@@ -194,3 +194,51 @@ semanal domingo 20:00: relatório de gastos com tendência do mês
 > que existe, teste que passou, commit com hash. Se um pedido voltar sem
 > evidência, reprove e peça de novo — o revisor da próxima tentativa cobra
 > junto com você.
+
+---
+
+## v4.0.0 — Agentes: autonomia, especialistas e aprendizado
+
+### 🎚 Níveis de autonomia (`hermes autonomia` ou `/autonomia` no chat)
+
+| Nível | Comportamento |
+|---|---|
+| **cauteloso** | confirma criação, entrega E cada comando na TUI |
+| **padrao** *(default)* | leitura livre; escrita aprovada (como sempre foi) |
+| **autonomo** | encadeia sem parar nos gates soft; varredura pré-entrega |
+
+Hard gates SEMPRE ativos: comandos perigosos, secrets/, escopo/sandbox e
+a regra D2 (código/memória nunca vão a provedores gratuitos).
+
+### 🧪 Especialistas
+
+O cérebro invoca `especialista(nome, caso)` quando quer segunda opinião:
+**revisor, debugger, pesquisador, seguranca**. Cada um roda com a skill
+certa num contexto limpo e devolve veredito com **evidência checada em
+disco** — sem evidência real, o veredito é descartado. Rodam no pool
+gratuito (groq→gemini→mistral→…) com fallback local; cada especialista
+passa por um **exame de competência** antes de ativar.
+
+### 📚 Aprendizado (sempre com sua aprovação)
+
+Missão complexa aprovada → rascunho de skill; missão reprovada → lição.
+Veja e decida: `hermes aprendidos` → `aprovar <id>` / `rejeitar <id>`.
+Transforme documento em skill: `hermes skills aprender <arquivo|URL|texto>`.
+Decisões antigas: `hermes conversas buscar "termo"`.
+
+### 👔 Gerente de código (Claude) — opt-in
+
+`hermes gerente on --yes` (leia o aviso: o código da task vai à nuvem
+Anthropic; memória e segredos nunca saem). O Hermes continua sendo o
+cérebro que decide quando delegar. `hermes gerente off` volta ao 100% local.
+
+### 🛡 Rotina pré-push
+
+`hermes varredura` antes de publicar código (exit 1 = crítico bloqueia).
+Nomes de terceiros: um por linha em `~/.hermes/varredura-nomes.txt`.
+
+### 🧱 Sandbox de kernel
+
+Se `bwrap` estiver instalado (`sudo apt install bubblewrap`), os comandos
+do agente rodam isolados no kernel automaticamente; sem ele, a denylist
+de aplicação segue valendo. `hermes doctor` mostra o estado.
