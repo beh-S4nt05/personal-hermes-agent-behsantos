@@ -219,7 +219,7 @@ def cmd_doctor(args) -> None:
         _p("  ✅ TUDO OK — conexão validada, pode trabalhar.\n")
     else:
         _p("  ❌ corrija os itens ✖ acima. Comandos úteis:")
-        _p("     sudo systemctl start ollama      # ligar o serviço")
+        _p("     " + __import__("betterme.plataforma", fromlist=["hint"]).hint("ollama_start"))
         _p("     ollama pull hermes3:8b           # baixar o modelo")
         _p("     betterme config set model hermes3:8b  # corrigir o modelo")
         _p("")
@@ -391,6 +391,12 @@ def cmd_daemon(args) -> None:
     from .daemon import run_daemon
 
     run_daemon(_cfg(args))
+
+
+def cmd_boot(args) -> None:
+    """v6.0.0: iniciar com o sistema (Windows | macOS | Linux)."""
+    from . import boot
+    boot.cmd(args, _cfg(args))
 
 
 def cmd_server(args) -> None:
@@ -923,6 +929,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("run", help="executa uma tarefa única")
     p.add_argument("task", nargs="+", help="descrição da tarefa")
     p.set_defaults(fn=cmd_run)
+
+    p = sub.add_parser("boot",
+                       help="🔘 iniciar com o sistema — Windows | macOS | "
+                            "Linux (v6.0.0; reversível)")
+    p.add_argument("acao", nargs="?", default="status",
+                   help="on|off|status")
+    p.set_defaults(fn=cmd_boot)
 
     p = sub.add_parser("daemon", help="roda o daemon em primeiro plano")
     p.set_defaults(fn=cmd_daemon)

@@ -24,8 +24,10 @@ _SEG = re.compile(
     r"\[(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)\s*-->\s*"
     r"(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)\]\s*(.*)")
 
-_MSG_FFMPEG = ("ffmpeg não encontrado — instale com `sudo apt install "
-               "ffmpeg` (ou aponte o caminho com --ffmpeg)")
+def _msg_ffmpeg() -> str:
+    from .plataforma import hint
+    return ("ffmpeg não encontrado — instale: " + hint("ffmpeg")
+            + " (ou aponte o caminho com --ffmpeg)")
 _MSG_WHISPER = ("whisper.cpp não encontrado — baixe/compile o binário "
                 "(github.com/ggerganov/whisper.cpp) e aponte com "
                 "--whisper; modelo ggml-*.bin em <data>/models/")
@@ -56,7 +58,7 @@ def transcrever(cfg, caminho, ffmpeg_bin: str | None = None,
         return {"ok": False, "msg": f"arquivo não encontrado: {src}"}
     ffmpeg = _which(ffmpeg_bin)
     if not ffmpeg:
-        return {"ok": False, "msg": _MSG_FFMPEG}
+        return {"ok": False, "msg": _msg_ffmpeg()}
     whisper = _which(whisper_bin)
     if not whisper:
         return {"ok": False, "msg": _MSG_WHISPER}

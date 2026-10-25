@@ -27,7 +27,6 @@ from __future__ import annotations
 import os
 import re
 import shutil
-import signal
 import subprocess
 import time
 from pathlib import Path
@@ -132,16 +131,19 @@ def _env(cfg) -> dict:
 
 
 def rodando(cfg) -> bool:
+    from . import plataforma
     pid_f = _pid_file(cfg)
     if not pid_f.is_file():
         return False
     try:
         pid = int(pid_f.read_text(encoding="utf-8").strip())
-        os.kill(pid, 0)
-        return True
-    except (ValueError, ProcessLookupError, PermissionError, OSError):
-        pid_f.unlink(missing_ok=True)     # pid morto → arquivo órfão
+    except (ValueError, OSError):
+        pid_f.unlink(missing_ok=True)     # pid ilegível → arquivo órfão
         return False
+    if plataforma.liveness(pid):
+        return True
+    pid_f.unlink(missing_ok=True)         # pid morto → arquivo órfão
+    return False
 
 
 def start(cfg) -> dict:
@@ -155,10 +157,11 @@ def start(cfg) -> dict:
     d = _dir(cfg)
     d.mkdir(parents=True, exist_ok=True)
     log = d / "n8n.log"
+    from . import plataforma
     with log.open("ab") as fh:
         proc = subprocess.Popen([str(bin_)], env=_env(cfg),
-                                stdout=fh, stderr=fh,
-                                start_new_session=True, cwd=str(d))
+                                stdout=fh, stderr=fh, cwd=str(d),
+                                **plataforma.popen_destacado_kwargs())
     _pid_file(cfg).write_text(str(proc.pid), encoding="utf-8")
     _PROCS[proc.pid] = proc
     try:
@@ -176,19 +179,19 @@ def stop(cfg) -> dict:
     pid_f = _pid_file(cfg)
     if not pid_f.is_file():
         return {"ok": True, "msg": "n8n não está rodando"}
+    from . import plataforma
     try:
         pid = int(pid_f.read_text(encoding="utf-8").strip())
-        os.kill(pid, signal.SIGTERM)
-        for _ in range(40):               # até 10 s para descer
-            time.sleep(0.25)
-            try:
-                os.kill(pid, 0)
-            except OSError:
-                break
-        else:
-            os.kill(pid, signal.SIGKILL)
-    except (ValueError, ProcessLookupError, PermissionError, OSError):
-        pass
+    except (ValueError, OSError):
+        pid_f.unlink(missing_ok=True)
+        return {"ok": True, "msg": "n8n parado"}
+    plataforma.matar(pid)
+    for _ in range(40):                   # até 10 s para descer
+        time.sleep(0.25)
+        if not plataforma.liveness(pid):
+            break
+    else:
+        plataforma.matar(pid, forcado=True)
     proc = _PROCS.pop(pid, None)
     if proc is not None:                 # reap do filho (anti-zumbi)
         try:

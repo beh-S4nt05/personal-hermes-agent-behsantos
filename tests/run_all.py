@@ -6594,6 +6594,165 @@ def T172_fluxos_remover_tool_e_gui():
     assert j["porta"] == 5678 and j["n8n_instalado"] is False
 
 
+# ══════════════════════ v6.0.0 (PR#12) — MULTIPLATAFORMA ══════════════════════
+
+@case
+def T173_plataforma_deteccao_liveness_e_hints():
+    """v6.0.0: camada de SO — detecção, liveness (nunca mata), popen,
+    shell por SO, hints de instalação por SO e taskkill no Windows."""
+    import platform as _platform
+
+    import betterme.plataforma as P
+
+    assert P.so() in ("linux", "macos", "windows")
+    assert P.liveness(os.getpid()) is True
+    assert P.liveness(999999) is False
+    assert P.liveness(None) is False and P.liveness(0) is False
+    assert P.hostname() == _platform.node()      # sem os.uname (Windows)
+    kw = P.popen_destacado_kwargs()
+    assert ("start_new_session" in kw) ^ ("creationflags" in kw)
+    # branch UNIX
+    if P.so() != "windows":
+        assert P.shell_argv("echo x")[0] in ("bash",)
+    # branch WINDOWS (sem tocar em nada de verdade — só despacho)
+    orig_run, P.subprocess.run = P.subprocess.run, None
+    P._SO_OVERRIDE = "windows"
+    capturado = []
+
+    class _R:
+        returncode = 0
+
+    P.subprocess.run = lambda argv, **kw2: (capturado.append(argv) or _R())
+    try:
+        assert P.matar(4242, forcado=True) is True
+        assert capturado[0] == ["taskkill", "/PID", "4242", "/F"], capturado
+        assert P.shell_argv("echo x") == ["cmd", "/c", "echo x"]
+        assert "winget" in P.hint("ffmpeg")
+        assert "ollama.com" in P.hint("ollama")
+        assert all(c.startswith("powershell")
+                   for _n, c, _t in P.diag_commands("windows"))
+        assert P.liveness(999999) is False      # sem windll → False s/ crash
+    finally:
+        P._SO_OVERRIDE = None
+        P.subprocess.run = orig_run
+    # branch MACOS
+    P._SO_OVERRIDE = "macos"
+    try:
+        assert "brew" in P.hint("ollama")
+        assert any("sw_vers" in c for _n, c, _t in P.diag_commands())
+        assert P.shell_argv("x")[0] == "bash"
+    finally:
+        P._SO_OVERRIDE = None
+
+
+@case
+def T174_boot_autostart_nos_tres_sos():
+    """v6.0.0: `betterme boot` — Linux: unit systemd user + systemctl;
+    macOS: LaunchAgent plist; Windows: .bat na Inicialização. Tudo
+    reversível (off remove o arquivo)."""
+    from unittest import mock
+
+    from betterme import boot
+
+    # specs puros (windows/macOS) — sem tocar no sistema
+    w = boot._spec("windows")
+    assert w["arquivo"].name == "betterme-agent.bat"
+    assert "Startup" in str(w["arquivo"])
+    assert w["conteudo"].startswith("@echo off")
+    assert "-m betterme daemon" in w["conteudo"]
+    m = boot._spec("macos")
+    assert m["arquivo"].name == "com.betterme.agent.plist"
+    assert "<plist" in m["conteudo"] and "<true/>" in m["conteudo"]
+    assert m["habilitar"][:2] == ["launchctl", "load"]
+    # fluxo REAL do Linux com HOME falso + systemctl falso
+    cfg = fresh()
+    fake_home = Path(tempfile.mkdtemp(prefix="boot-home-"))
+    cmds = []
+
+    class _R:
+        returncode = 0
+
+    with mock.patch.object(Path, "home", return_value=fake_home), \
+            mock.patch.object(boot.subprocess, "run",
+                              lambda c, **kw: (cmds.append(c) or _R())):
+        r = boot.on(cfg)
+        assert r["ok"], r
+        unit = fake_home / ".config" / "systemd" / "user" \
+            / "betterme-agent.service"
+        conteudo = unit.read_text(encoding="utf-8")
+        assert "ExecStart=" in conteudo and "betterme daemon" in conteudo
+        assert "WantedBy=default.target" in conteudo
+        assert cmds and cmds[0][:3] == ["systemctl", "--user", "enable"]
+        st = boot.status(cfg)
+        assert st["registrado"] is True and st["so"] == "linux"
+        r2 = boot.off(cfg)
+        assert r2["ok"] and not unit.exists()
+        assert cmds[-1][:3] == ["systemctl", "--user", "disable"]
+        assert boot.status(cfg)["registrado"] is False
+        # off sem registro não quebra
+        assert boot.off(cfg)["ok"]
+
+
+@case
+def T175_run_command_por_so_e_perigos_windows():
+    """v6.0.0: run_command usa o shell do SO (bash -c / cmd /c) e a
+    denylist ganha os destrutivos do Windows — bloqueio em QUALQUER SO."""
+    from betterme import plataforma
+    from betterme.tools import execute_tool, is_dangerous
+
+    cfg = fresh()
+    r = execute_tool("run_command", {"command": "echo crossplat"}, cfg)
+    assert r["ok"] and "crossplat" in r["output"], r
+    # Unix clássico segue bloqueado
+    assert is_dangerous("rm -rf /")
+    assert is_dangerous("mkfs.ext4 /dev/sda1")
+    # Windows destrutivo — bloqueado em qualquer SO
+    for c in ("rd /s /q C:\\", "del /f /s /q C:\\*", "format c:",
+              "Remove-Item -Recurse -Force ~/docs",
+              "reg delete HKLM\\X /f", "diskpart"):
+        assert is_dangerous(c), c
+    # comando normal do Windows NÃO é bloqueado
+    assert not is_dangerous("del arquivo.txt")
+    assert not is_dangerous("dir /b")
+    # diagnóstico por SO traz comandos reais
+    assert all(n for n, _c, _t in plataforma.diag_commands("windows"))
+
+
+@case
+def T176_manager_e_fluxos_via_plataforma():
+    """v6.0.0: manager/fluxos passam pela camada de plataforma — nenhum
+    os.kill direto no código (no Windows os.kill(pid,0) MATARIA)."""
+    import betterme.fluxos as F
+    import betterme.manager as M
+    import betterme.plataforma as P
+
+    assert M._pid_alive(os.getpid()) is True
+    assert M._pid_alive(999999) is False
+    # nenhum os.kill cru fora da plataforma
+    for mod in (M, F):
+        src = Path(mod.__file__).read_text(encoding="utf-8")
+        assert "os.kill" not in src, mod.__name__
+    src = Path(P.__file__).read_text(encoding="utf-8")
+    assert "os.kill" in src                       # só a plataforma usa
+    # fluxos.rodando respeita liveness da plataforma (pid morto → limpa)
+    cfg = fresh()
+    F._pid_file(cfg).parent.mkdir(parents=True, exist_ok=True)
+    F._pid_file(cfg).write_text("999999", encoding="utf-8")
+    assert F.rodando(cfg) is False
+    assert not F._pid_file(cfg).exists()
+    # CLI boot status ponta a ponta
+    venv_py = ROOT / ".venv" / "bin" / "python"
+    py = str(venv_py) if venv_py.exists() else sys.executable
+    env = dict(os.environ,
+               BETTERME_DATA_DIR=tempfile.mkdtemp(prefix="betterme-boot-"),
+               BETTERME_MOCK="1")
+    import subprocess
+    r = subprocess.run([py, "-m", "betterme", "boot", "status"],
+                       capture_output=True, text=True, env=env,
+                       timeout=120, cwd=str(ROOT))
+    assert r.returncode == 0 and "boot" in r.stdout, r.stdout[:200]
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())

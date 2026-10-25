@@ -1,6 +1,6 @@
 # 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
-**Versão 5.1.0** · gerado em 25/10/2026 · este documento é extraído do
+**Versão 6.0.0** · gerado em 25/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -118,6 +118,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `betterme agenda` | agenda Google Calendar — somente leitura (MCP agenda_*) |
 | `betterme status` | status do agente e do Ollama |
 | `betterme run` | executa uma tarefa única |
+| `betterme boot` | 🔘 iniciar com o sistema — Windows | macOS |  |
 | `betterme daemon` | roda o daemon em primeiro plano |
 | `betterme server` | sobe a GUI web de controle |
 | `betterme agent` | controla o agente (ligar/desligar) |
@@ -131,7 +132,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `betterme skills audit` (auditar o catálogo), `betterme config set/get`, `betterme server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v5.1.0)
+## 3. Modificações — o que foi feito (v1.0.0 → v6.0.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -139,6 +140,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v6.0.0** | 🖥️ MULTIPLATAFORMA: Windows | macOS | Linux (PR #12) |
 | **v5.1.0** | ⚙️ FLUXOS N8N LOCAIS (PR #11) |
 | **v5.0.0** | 🌅 MODO VIDA (PR #10) |
 | **v4.6.0** | 🎙️ MULTIMODAL LOCAL (PR #9, E5) |
@@ -475,6 +477,7 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `cmd_selftest(args)` | v3.13.3: bateria de aceitação com LLM REAL (pula sem Ollama). |
 | `cmd_skills_audit(args)` | v3.11: audita o catálogo de skills (estrutura, tamanho, injeção). |
 | `cmd_daemon(args)` | — |
+| `cmd_boot(args)` | v6.0.0: iniciar com o sistema (Windows \| macOS \| Linux). |
 | `cmd_server(args)` | — |
 | `cmd_schedule(args)` | — |
 | `cmd_tasks(args)` | — |
@@ -743,7 +746,7 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 
 | Função | O que faz |
 |---|---|
-| `_pid_alive(pid)` | — |
+| `_pid_alive(pid)` | v6.0.0: delega à camada de plataforma — sinais diretos são exclusivos do Unix (no Windows, kill(pid, 0) TERMINA o proce… |
 | `_run(cmd, timeout)` | — |
 | `python_env_check()` | Confere se as dependências Python estão íntegras. Detecta o caso do PyYAML 'quebrado': `import yaml` funciona mas o pac… |
 

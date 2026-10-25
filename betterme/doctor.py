@@ -22,7 +22,7 @@ def run_checks(cfg) -> list[dict]:
         detail = str(exc)[:120]
     checks.append({
         "id": "ollama", "name": "Servidor Ollama", "ok": ok, "detail": detail,
-        "fix": "systemctl start ollama  (ou ative «ligar automaticamente» na aba Ollama)",
+        "fix": __import__("betterme.plataforma", fromlist=["hint"]).hint("ollama_start"),
     })
 
     # 2) Modelo configurado está instalado?

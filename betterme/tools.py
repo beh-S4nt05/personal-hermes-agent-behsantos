@@ -15,6 +15,8 @@ import platform
 import re
 import shutil
 import subprocess
+
+from . import plataforma
 import threading
 from contextlib import contextmanager
 from pathlib import Path
@@ -37,6 +39,13 @@ DANGEROUS_PATTERNS = [
     r"\bmv\s+/\s+\S",
     r"chmod\s+[0-7]{3,4}\s+/dev/sd",
     r"insmod|rmmod\s+-[a-z]*a",
+    # v6.0.0: destrutivos do Windows (cmd/PowerShell) — bloqueio em ANY SO
+    r"\brd\s+[^|;&]*/[sq]",
+    r"\bdel\s+[^|;&]*/[fsq]",
+    r"\bformat(\.com)?\s+[a-z]:",
+    r"\breg\s+delete\s+[^|;&]*\s/f",
+    r"remove-item\s+[^|;&]*(-recurse[^|;&]*-force|-force[^|;&]*-recurse)",
+    r"\bdiskpart\b",
 ]
 
 
@@ -548,7 +557,8 @@ def run_command(args: dict, cfg) -> str:
         # segunda camada — defesa em profundidade; sem bwrap, segue app
         from .sandbox_kernel import envolver_comando, fechar_fds
         _wd = str(scope_dir() or cfg.workdir)
-        argv, _fds = envolver_comando(cfg, ["bash", "-c", command], _wd)
+        argv, _fds = envolver_comando(cfg, plataforma.shell_argv(command),
+                                    _wd)
         try:
             proc = subprocess.run(
                 argv,
@@ -655,26 +665,13 @@ def _human_uptime(seconds: float) -> str:
 
 # v3.13.2: bateria fixa e SOMENTE-LEITURA — o modelo não injeta
 # comandos aqui; ele recebe o digesto pronto para interpretar
-_DIAG_BATERIA = [
-    ("sistema", "uname -sr && (head -2 /etc/os-release | cut -d'\"' -f2 | tr '\n' ' '; echo)", 5),
-    ("disco", "df -h | head -7", 5),
-    ("memória", "free -h", 5),
-    ("top RAM", "ps aux --sort=-%mem | head -7", 5),
-    ("top CPU", "ps aux --sort=-%cpu | head -5", 5),
-    ("maiores pastas da home", "du -xh --max-depth=1 ~ 2>/dev/null | sort -rh | head -10", 25),
-    ("bateria", "for b in /sys/class/power_supply/BAT*; do echo $(cat $b/capacity 2>/dev/null)% $(cat $b/status 2>/dev/null); done", 3),
-    ("GPU", "nvidia-smi --query-gpu=name,memory.total,memory.used,utilization.gpu --format=csv,noheader 2>/dev/null || echo (sem nvidia-smi)", 8),
-    ("uptime e carga", "uptime", 3),
-    ("últimos logins", "last -n 4 -w 2>/dev/null | head -5 || echo (last indisponível)", 5),
-]
-
-
 def diagnostico_sistema(_args: dict, cfg) -> str:
     """v3.13.2: o diagnóstico inteiro NUMA chamada só. Devolve digesto
     real e compacto — o executor interpreta, não flailha em dezenas de
     sys_info/df/free (e não precisa inventar dado: ele está aqui)."""
     secoes = []
-    for nome, cmd, tmax in _DIAG_BATERIA:
+    from . import plataforma as _plat
+    for nome, cmd, tmax in _plat.diag_commands():
         try:
             r = subprocess.run(cmd, shell=True, capture_output=True,
                                text=True, timeout=tmax, check=False)
@@ -692,7 +689,7 @@ def diagnostico_sistema(_args: dict, cfg) -> str:
 
 def sys_info(_args: dict, cfg) -> str:
     info = {
-        "hostname": platform.node() or os.uname().nodename,
+        "hostname": plataforma.hostname() or "desconhecido",
         "sistema": f"{platform.system()} {platform.release()}",
         "distribuição": " ".join(
             l.strip() for l in (_read_proc("/etc/os-release") or "").splitlines()

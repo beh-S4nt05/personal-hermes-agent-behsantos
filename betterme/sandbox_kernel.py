@@ -126,7 +126,8 @@ def nivel(cfg) -> str | None:
             from . import activity
             activity.log(cfg, "sandbox",
                          "⚠ sandbox de kernel exigido mas indisponível "
-                         "(bwrap ausente/userns bloqueado) — usando denylist")
+                         "(bwrap ausente/userns bloqueado; sandbox de kernel é "
+                         "exclusivo do Linux — neste SO usa denylist)")
         except Exception:  # noqa: BLE001
             pass
     return p

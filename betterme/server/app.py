@@ -1846,7 +1846,8 @@ def serve(cfg: Config, host: str, port: int) -> None:
             pass
         if not diag["ok"]:
             print("  ⚠ corrija os itens ✖ acima — comandos úteis:")
-            print("     sudo systemctl start ollama          # ligar o serviço")
+            from ..plataforma import hint as _hint_ollama
+            print("     " + _hint_ollama("ollama_start"))
             print(f"     ollama pull {cfg.model:<20}      # baixar o modelo")
             print("     betterme config set model <nome>        # usar um modelo de `ollama list`")
     print("  ➜ CTRL+C para encerrar\n")

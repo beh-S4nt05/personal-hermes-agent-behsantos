@@ -14,12 +14,12 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
 
+from . import plataforma
 from .config import VERSION
 from .ollama_client import OllamaClient
 
@@ -28,26 +28,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _pid_alive(pid: int | None) -> bool:
-    if not pid or pid <= 1:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    # processo zumbi (pai não fez wait) é considerado morto
-    try:
-        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
-            tail = fh.read().rsplit(")", 1)
-        state = tail[1].split()[0] if len(tail) > 1 and tail[1].split() else ""
-        if state == "Z":
-            return False
-    except OSError:
-        pass
-    return True
+    """v6.0.0: delega à camada de plataforma — sinais diretos são
+    exclusivos do Unix (no Windows, kill(pid, 0) TERMINA o processo!)."""
+    return plataforma.liveness(pid)
 
 
 def _run(cmd: list[str], timeout: int = 15) -> subprocess.CompletedProcess:
@@ -141,7 +124,7 @@ class DaemonManager:
                 cwd=str(PROJECT_ROOT),
                 stdout=lf,
                 stderr=subprocess.STDOUT,
-                start_new_session=True,
+                **plataforma.popen_destacado_kwargs(),
             )
         deadline = time.time() + 12
         while time.time() < deadline:
@@ -162,22 +145,17 @@ class DaemonManager:
             self.cfg.heartbeat_path.unlink(missing_ok=True)
             return {"ok": True, "msg": "o agente já estava desligado"}
         pid = st["pid"]
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except OSError as exc:
-            return {"ok": False, "msg": f"falha ao sinalizar pid {pid}: {exc}"}
+        if not plataforma.matar(pid):
+            return {"ok": False, "msg": f"falha ao sinalizar pid {pid}"}
         deadline = time.time() + 12
         while time.time() < deadline:
             if not _pid_alive(pid):
                 self.cfg.heartbeat_path.unlink(missing_ok=True)
                 return {"ok": True, "msg": f"agente desligado (pid {pid})"}
             time.sleep(0.25)
-        try:
-            os.kill(pid, signal.SIGKILL)
-            self.cfg.heartbeat_path.unlink(missing_ok=True)
-            return {"ok": True, "msg": f"agente encerrado à força (pid {pid})"}
-        except OSError:
-            return {"ok": False, "msg": f"não consegui encerrar o pid {pid}"}
+        plataforma.matar(pid, forcado=True)
+        self.cfg.heartbeat_path.unlink(missing_ok=True)
+        return {"ok": True, "msg": f"agente encerrado à força (pid {pid})"}
 
     def restart(self) -> dict:
         self.stop()
@@ -332,8 +310,8 @@ class OllamaManager:
         if not shutil.which("ollama"):
             return {
                 "ok": False,
-                "msg": "Ollama não instalado. Instale com: curl -fsSL https://ollama.com/install.sh | sh "
-                       "(ou rode ./install.sh do projeto)",
+                "msg": "Ollama não instalado. Instale com: "
+                       + plataforma.hint("ollama"),
             }
         if self.client.is_running():
             return {"ok": False, "msg": "Ollama já está ligado"}
@@ -351,7 +329,7 @@ class OllamaManager:
                     ["ollama", "serve"],
                     stdout=logf,
                     stderr=subprocess.STDOUT,
-                    start_new_session=True,
+                    **plataforma.popen_destacado_kwargs(),
                 )
             finally:
                 logf.close()  # v3.14.2: o filho herda o fd; o pai fecha o seu
@@ -377,20 +355,20 @@ class OllamaManager:
             return {"ok": True, "msg": "Ollama desligado (systemd)"}
         pid = self._spawned_pid()
         if _pid_alive(pid):
-            os.kill(pid, signal.SIGTERM)
+            plataforma.matar(pid)
             deadline = time.time() + 10
             while time.time() < deadline:
                 if not _pid_alive(pid):
                     break
                 time.sleep(0.3)
             if _pid_alive(pid):
-                os.kill(pid, signal.SIGKILL)
+                plataforma.matar(pid, forcado=True)
             self.cfg.ollama_pidfile.unlink(missing_ok=True)
             return {"ok": True, "msg": "Ollama desligado"}
         return {
             "ok": False,
-            "msg": "o Ollama foi iniciado fora do Betterme; encerre-o manualmente "
-                   "(ex.: pkill ollama)",
+            "msg": "o Ollama foi iniciado fora do Betterme; encerre-o "
+                   "manualmente (ex.: " + plataforma.hint("ollama_stop") + ")",
         }
 
     def restart(self) -> dict:

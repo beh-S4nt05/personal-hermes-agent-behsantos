@@ -1,5 +1,39 @@
 # Changelog
 
+## v6.0.0 — 🖥️ MULTIPLATAFORMA: Windows | macOS | Linux (PR #12)
+
+Pedido do operador: o Betterme rodando em qualquer desktop, **em modo
+local**. Nada de nuvem — só a camada certa de SO.
+
+- **`betterme/plataforma.py`** — camada ÚNICA de compatibilidade:
+  - `liveness`/`matar` cross-platform (Windows: OpenProcess/taskkill —
+    **nunca os.kill**, que lá TERMINA o processo em vez de testá-lo);
+  - `popen_destacado_kwargs` (start_new_session no Unix ·
+    CREATE_NEW_PROCESS_GROUP no Windows) para daemon e n8n;
+  - `shell_argv` (bash -c · cmd /c) usado pelo run_command;
+  - `hint` de instalação POR SO (apt · brew · winget) para ffmpeg,
+    poppler, node, ollama;
+  - `diag_commands` reais por SO (PowerShell no Windows, sw_vers/
+    pmset no macOS, o conjunto completo de 10 seções no Linux).
+- **`betterme/boot.py` + `betterme boot on|off|status`** — iniciar com
+  o sistema, reversível: Linux = unit systemd de usuário (sem root) ·
+  macOS = LaunchAgent (launchctl) · Windows = .bat na pasta
+  Inicialização (sem administrador).
+- **Patches de compatibilidade:** manager (daemon e Ollama via
+  plataforma; hints de instalação/parada por SO) · fluxos n8n idem ·
+  `sys_info` sem `os.uname` · doctor/CLI/GUI com hint por SO ·
+  multimodal (ffmpeg por SO) · sandbox honesto (kernel bwrap é
+  exclusivo do Linux; nos demais, denylist + aprovação).
+- **Segurança ganhou também:** denylist de comandos agora inclui os
+  destrutivos do Windows (rd /s, del /f, format c:, reg delete /f,
+  Remove-Item -Recurse -Force, diskpart) — bloqueados em QUALQUER SO.
+- pyproject com classifiers dos três sistemas.
+
+**Testes:** T173–T176 (camada de SO: detecção, liveness, taskkill
+Windows, hints · boot nos 3 SOs com HOME falso e systemctl/launchctl
+falsos · run_command por SO + perigos Windows · manager/fluxos sem
+nenhum os.kill fora da plataforma + CLI boot) — **176/176**.
+
 ## v5.1.0 — ⚙️ FLUXOS N8N LOCAIS (PR #11)
 
 O editor de automações visuais EMBUTIDO no Betterme — grátis, local,
