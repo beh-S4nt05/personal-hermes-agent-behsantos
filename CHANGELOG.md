@@ -1,5 +1,32 @@
 # Changelog
 
+## v3.17.1 — 🩹 hotfix: provedor externo nunca atendia (modelo errado no payload)
+
+**Achado de teste E2E real** (geração ao vivo via llm7): o `Agent` chama
+`chat_stream` com `cfg.model` (nome de modelo OLLAMA, ex. `hermes3:8b`) e o
+`ExternalClient` usava esse valor por causa de `model or self.model` — a
+requisição saía com modelo Ollama para a API externa → HTTP 400
+`model_unavailable` → fallback silencioso para o local em TODO chat. Ou
+seja: com `hermes provider set <p>` configurado, o provedor externo
+**nunca atendia de verdade** (o `provider test` mascarava, pois testa com
+o modelo certo).
+
+**Correção:** `ExternalClient.chat_stream` agora usa SEMPRE o modelo do
+provedor (`self.model`: default do registro ou `llm_model`) — nomes
+Ollama não existem em APIs externas. T127 trava o contrato: agente +
+provedor externo → payload com `gpt-oss:20b` (nunca `hermes3:8b`) e com
+`llm_model` customizado é ele quem vai.
+
+**Medidas reais registradas (llm7, anônimo, sem chave):** pedido pequeno
+OK (RTT ~1 s); prompt completo do agente sem tools OK; payload COM as 13
+ferramentas ≈ 2,6 mil tokens estoura a cota diária anônima → nota do
+registro atualizada (llm7 = só para provar que funciona; uso real =
+groq com chave grátis).
+
+**Extras:** `tui.py` — fechamento `on_event` agora amarra `state` por
+iteração (falso-positivo B023 do ruff ≥0.17 em `while`; comportamento
+idêntico). Suite: **127/127**.
+
 ## v3.17.0 — 🔌 provedores LLM externos GRATUITOS, com privacidade dura
 
 Pedido do operador: foco em provedores SEM custo; seus dados pessoais

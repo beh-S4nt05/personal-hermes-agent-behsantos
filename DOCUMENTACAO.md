@@ -1,6 +1,6 @@
 # 📘 Hermes Agent — Documentação viva: uso, evolução e funções
 
-**Versão 3.16.1** · gerado em 23/10/2026 · este documento é extraído do
+**Versão 3.17.1** · gerado em 25/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -113,7 +113,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `hermes skills audit` (auditar o catálogo), `hermes config set/get`, `hermes server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v3.16.1)
+## 3. Modificações — o que foi feito (v1.0.0 → v3.17.1)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -121,6 +121,8 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v3.17.1** | 🩹 hotfix: provedor externo nunca atendia (modelo errado no payload) |
+| **v3.17.0** | 🔌 provedores LLM externos GRATUITOS, com privacidade dura |
 | **v3.16.1** | 🧠 memória gerenciável: list/clear + pacote do operador v2 por tópicos |
 | **v3.16.0** | 🚀 MODO MISSÃO: autonomia com subtasks encadeadas |
 | **v3.15.1** | 📁 contrato do projeto: o agente sempre pede (ou recebe) o caminho |

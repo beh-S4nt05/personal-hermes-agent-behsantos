@@ -4635,6 +4635,41 @@ def T46_auth_hint_diagnostico_por_provedor():
     assert auth_hint("a@x.com", "timeout") == ""              # sem palpite indevido
 
 
+@case
+def T127_agente_externo_usa_modelo_do_provedor():
+    """v3.17.1: o Agent chama chat_stream com cfg.model (nome Ollama, ex.
+    "hermes3:8b"). O ExternalClient deve SEMPRE mandar o modelo do PROVEDOR
+    — nomes Ollama não existem na API externa e todo chat ia a HTTP 400
+    (model_unavailable), caindo no fallback silencioso: o provedor externo
+    configurado nunca atendia de verdade (achado de teste E2E real)."""
+    from hermes.agent import Agent
+    from hermes.llm_providers import ExternalClient
+
+    cfg = fresh()                                   # cfg.model = "hermes3:8b"
+    modelos, auths = [], []
+
+    def transporte(url, payload, headers):
+        assert url.endswith("/chat/completions")
+        modelos.append(payload["model"])
+        auths.append("Authorization" in headers)    # llm7: anônimo
+        yield 'data: ' + json.dumps({"choices": [
+            {"delta": {"content": "resposta do provedor"}}]})
+        yield "data: [DONE]"
+
+    ext = ExternalClient(cfg, "llm7", _transport=transporte)
+    ag = Agent(cfg, client=ext)
+    out = ag.run([{"role": "user", "content": "oi"}])
+    assert "resposta do provedor" in out
+    assert modelos and all(m == "gpt-oss:20b" for m in modelos), modelos
+    assert not any(auths)                            # sem chave → sem header
+    # com llm_model customizado, é ELE quem vai no payload
+    ext2 = ExternalClient(cfg, "groq", "llama-3.3-70b-versatile",
+                          _transport=transporte)
+    ag2 = Agent(cfg, client=ext2)
+    ag2.run([{"role": "user", "content": "oi"}])
+    assert modelos[-1] == "llama-3.3-70b-versatile", modelos[-1]
+
+
 if __name__ == "__main__":
     print("◈ Hermes Agent — suíte de testes (v3.0)\n")
     sys.exit(run_all())

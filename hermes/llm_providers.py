@@ -56,7 +56,9 @@ REGISTRY: dict[str, dict] = {
         "base": "https://api.llm7.io/v1",
         "key_env": "LLM7_API_KEY", "model": "gpt-oss:20b",
         "sem_chave": True, "rpm": None, "rpd": None,
-        "nota": "funciona SEM chave (anônimo) — para testar em 1 minuto",
+        "nota": "funciona SEM chave (anônimo) — cota diária mínima "
+                "(1 chat completo do agente ≈2,6k tokens já estoura): "
+                "use só para provar que funciona; para uso real, groq",
     },
     "zai": {
         "base": "https://open.bigmodel.cn/api/paas/v4",
@@ -149,7 +151,11 @@ class ExternalClient:
 
     def chat_stream(self, model, messages, tools=None, options=None,
                     cancel=None, keep_alive=None):
-        payload = {"model": model or self.model, "messages": messages,
+        # v3.17.1: o Agent passa cfg.model (nome de modelo OLLAMA, ex.
+        # "hermes3:8b"); para provedores externos o modelo é SEMPRE o do
+        # provedor (registro ou llm_model) — nomes Ollama não existem lá
+        # e causavam HTTP 400 → fallback silencioso em TODO chat.
+        payload = {"model": self.model or model, "messages": messages,
                    "stream": True}
         if tools:
             payload["tools"] = tools

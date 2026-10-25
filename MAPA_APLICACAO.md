@@ -64,7 +64,7 @@ tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 |---|---|
 | `server/app.py` | Servidor Flask: **76 rotas** (chat SSE, orchestrator, Ollama, MCP, skills, logs, tools, conversas, agendador, memória, settings, auditoria, backups, métricas, notificações, receitas, doctor, hooks). Imports lazy → boot rápido. |
 | `ollama_client.py` | Cliente HTTP do Ollama (chat, streaming, modelos, pull) + fábrica `get_client` (v3.17.0: provedor externo com fallback). |
-| `llm_providers.py` | Provedores LLM externos GRATUITOS (OpenAI-compat): registro groq/gemini/mistral/openrouter/llm7/zai/cohere, chave em secrets 600, fallback local — memória NUNCA sai (regra do operador). |
+| `llm_providers.py` | Provedores LLM externos GRATUITOS (OpenAI-compat): registro groq/gemini/mistral/openrouter/llm7/zai/cohere, chave em secrets 600, fallback local — memória NUNCA sai (regra do operador). v3.17.1: chat_stream usa SEMPRE o modelo do provedor (o Agent passa nome Ollama em cfg.model → 400 + fallback silencioso; T127). |
 | `manager.py` | Gerência do Ollama: boot/restart (systemd ou `ollama serve` com log), diagnóstico de ambiente. |
 | `autoselect.py` | Auto-atribuição de modelos por papel (lê SEMPRE a lista instalada). |
 | `conversations.py` | Sessões persistidas (`conversations/*.json`, atômico): histórico recuperável, busca, export. |
@@ -303,7 +303,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **122 casos** (v3.16.0), famílias:
+`tests/run_all.py` — **127 casos** (v3.17.1), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·

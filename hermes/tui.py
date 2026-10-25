@@ -84,7 +84,9 @@ def run_chat(cfg: Config) -> None:
 
         state = {"in_tool": False}
 
-        def on_event(event: dict) -> None:
+        # default=state: amarra o valor desta iteração (B023) — o dict é
+        # o mesmo objeto, mutado nunca reatribuído, comportamento idêntico
+        def on_event(event: dict, state: dict = state) -> None:
             etype = event.get("type")
             if etype == "token":
                 if state["in_tool"]:
