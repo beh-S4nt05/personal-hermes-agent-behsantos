@@ -344,13 +344,21 @@ class MockOllamaClient:
 _AVISO_AUTO_FEITO = False      # avisa 1x por processo
 
 
+def timeout_resposta(cfg) -> int:
+    """v6.4.0 (DRY): timeout das respostas LONGAS do modelo local
+    (revisão de diff, juiz da arena, gateway) — 5× o timeout de comando
+    + 120 s de folga. Política única, antes triplicada em código."""
+    return int(getattr(cfg, "cmd_timeout", 60) or 60) * 5 + 120
+
+
 def get_client(cfg):
     """Fábrica: devolve o cliente mock quando cfg.mock for verdadeiro.
     v3.17.0: com llm_provider externo configurado, devolve externo com
     FALLBACK local (inferência externa; ferramentas continuam locais)."""
     if cfg.mock:
         return MockOllamaClient()
-    local = OllamaClient(cfg.ollama_url, timeout=cfg.cmd_timeout * 5 + 120)
+    local = OllamaClient(cfg.ollama_url,
+                        timeout=timeout_resposta(cfg))
     provedor = str(getattr(cfg, "llm_provider", "local") or "local")
     # v6.3.0: ROTEADOR AUTOMÁTICO — nenhuma config externa + chave
     # guardada = o cérebro USA o provedor rápido (fallback local na

@@ -18,6 +18,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
+from .contratos import acao_de
 
 
 def _spec(_so_forcado: str | None = None) -> dict:
@@ -132,7 +133,7 @@ def status(cfg) -> dict:
 # ------------------------------------------------------------- CLI
 def cmd(args, cfg) -> None:
     """`betterme boot on|off|status`."""
-    acao = getattr(args, "acao", "status")
+    acao = acao_de(args)
     if acao == "on":
         r = on(cfg)
     elif acao == "off":

@@ -5,6 +5,9 @@ Cada item: {id, name, ok, detail, fix} — `fix` é o comando/ação sugerida.
 from __future__ import annotations
 
 import shutil
+from .contratos import (CHECK_CEREBRO, CHECK_CLAUDE,
+                          CHECK_DISPOSITIVO, CHECK_FLUXOS, CHECK_MODEL,
+                          CHECK_OLLAMA, CHECK_SECURITY, CHECK_STT)
 
 
 def run_checks(cfg) -> list[dict]:
@@ -25,7 +28,7 @@ def run_checks(cfg) -> list[dict]:
     arm = disp.get("arquitetura", "")
     nota_arm = " · ARM64 ✔" if "arm" in arm.lower() or "aarch" in arm.lower() else ""
     checks.append({
-        "id": "dispositivo", "name": "Dispositivo",
+        "id": CHECK_DISPOSITIVO, "name": "Dispositivo",
         "ok": True,
         "detail": f"{disp['so_label']} · {arm}{nota_arm} · "
                   f"RAM {ram if ram else '?'} MB · Python {disp['python']}"
@@ -60,7 +63,7 @@ def run_checks(cfg) -> list[dict]:
         fix = ("betterme provider set groq   # opcional: chave grátis = "
                "roteador automático + velocidade")
     checks.append({
-        "id": "cerebro", "name": "Cérebro (LLM)", "ok": ok,
+        "id": CHECK_CEREBRO, "name": "Cérebro (LLM)", "ok": ok,
         "detail": detail, "fix": fix,
     })
 
@@ -75,7 +78,7 @@ def run_checks(cfg) -> list[dict]:
     except Exception as exc:  # noqa: BLE001
         detail = str(exc)[:120]
     checks.append({
-        "id": "ollama", "name": "Servidor Ollama", "ok": ok, "detail": detail,
+        "id": CHECK_OLLAMA, "name": "Servidor Ollama", "ok": ok, "detail": detail,
         "fix": __import__("betterme.plataforma", fromlist=["hint"]).hint("ollama_start"),
     })
 
@@ -91,7 +94,7 @@ def run_checks(cfg) -> list[dict]:
         except Exception as exc:  # noqa: BLE001
             detail = str(exc)[:120]
     checks.append({
-        "id": "model", "name": "Modelo instalado", "ok": ok, "detail": detail,
+        "id": CHECK_MODEL, "name": "Modelo instalado", "ok": ok, "detail": detail,
         "fix": f"ollama pull {cfg.model}",
     })
 
@@ -102,7 +105,7 @@ def run_checks(cfg) -> list[dict]:
     except ImportError:
         ok, detail = False, "faster-whisper não instalado (voz desativada)"
     checks.append({
-        "id": "stt", "name": "Ditado por voz", "ok": ok, "detail": detail,
+        "id": CHECK_STT, "name": "Ditado por voz", "ok": ok, "detail": detail,
         "fix": './.venv/bin/pip install faster-whisper "av<19"',
         "optional": True,
     })
@@ -129,7 +132,7 @@ def run_checks(cfg) -> list[dict]:
         except Exception as exc:  # noqa: BLE001
             detail = str(exc)[:120]
     checks.append({
-        "id": "claude", "name": "Claude Code (2º agente)", "ok": ok,
+        "id": CHECK_CLAUDE, "name": "Claude Code (2º agente)", "ok": ok,
         "detail": detail, "fix": fix, "optional": True,
     })
 
@@ -153,7 +156,7 @@ def run_checks(cfg) -> list[dict]:
     except Exception as exc:  # noqa: BLE001
         ok, detail, fix = False, f"erro: {exc.__class__.__name__}", ""
     checks.append({
-        "id": "fluxos", "name": "⚙ Fluxos (n8n)", "ok": ok,
+        "id": CHECK_FLUXOS, "name": "⚙ Fluxos (n8n)", "ok": ok,
         "detail": detail, "fix": fix, "optional": True,
     })
 
@@ -165,7 +168,7 @@ def run_checks(cfg) -> list[dict]:
     detail = ("localhost (ok)" if not exposed else
               ("exposto com token (ok)" if has_token else "EXPOSTO SEM TOKEN"))
     checks.append({
-        "id": "security", "name": "Segurança do painel", "ok": ok, "detail": detail,
+        "id": CHECK_SECURITY, "name": "Segurança do painel", "ok": ok, "detail": detail,
         "fix": "defina um token em Ajustes (ou inicie com --token)",
     })
 

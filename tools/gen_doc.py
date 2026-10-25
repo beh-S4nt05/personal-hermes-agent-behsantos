@@ -28,6 +28,13 @@ PAPEL_MODULO = {
     "server/app.py": ("🌐", "a API REST + GUI web (Flask/waitress): todos os "
         "endpoints, streaming do chat, aprovações, painel e páginas"),
     "cli.py": ("⌨️", "todos os comandos `betterme` do terminal"),
+    "contratos.py": ("📜", "o vocabulário canônico do app (fonte única): "
+        "níveis de autonomia, tipos de task, especialistas, checks do "
+        "doctor e marcas DLP — mais normalizadores tolerantes "
+        "(Postel's Law)"),
+    "extrair.py": ("🧾", "o extrator ÚNICO de JSON da resposta de modelos "
+        "(chaves balanceadas com consciência de strings) — usado por "
+        "orquestrador, especialistas, revisor e arena"),
     "config.py": ("⚙️", "Config: defaults, leitura/escrita do config.yaml, "
         "skills_dirs, chaves tipadas"),
     "update.py": ("⬇", "autoatualização: consulta tags no GitHub, baixa o zip "

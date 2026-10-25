@@ -30,6 +30,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from .contratos import acao_de
 
 PORTA = 5678
 
@@ -336,7 +337,7 @@ def status(cfg, node_bin: str = "node") -> dict:
 # ------------------------------------------------------------- CLI
 def cmd(args, cfg) -> None:
     """`betterme fluxos status|setup|start|stop|remover`."""
-    acao = getattr(args, "acao", "status")
+    acao = acao_de(args)
     if acao == "status":
         st = status(cfg, node_bin=getattr(args, "node", None) or "node")
         print(f"⚙ FLUXOS n8n — porta {st['porta']}")

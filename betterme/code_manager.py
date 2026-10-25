@@ -10,6 +10,7 @@ máquina para a Anthropic — contraste deliberado com a regra D2 (o pool
 GRÁTIS nunca recebe código). Desligado por padrão.
 """
 from __future__ import annotations
+from .contratos import acao_de
 
 AVISO_PRIVACIDADE = (
     "⚠ PRIVACIDADE: ao ativar o gerente de código, as tarefas de código "
@@ -67,7 +68,7 @@ def delegar(cfg, task: str, history: list[dict] | None = None,
 
 def cmd(args, cfg) -> None:
     """`betterme gerente on|off|status`."""
-    acao = str(getattr(args, "acao", "status") or "status").lower()
+    acao = acao_de(args)
     if acao in ("status", ""):
         estado = "ATIVO (Claude Code)" if ativo(cfg) else "desligado"
         print(f"\n👔 gerente de código: {estado}")

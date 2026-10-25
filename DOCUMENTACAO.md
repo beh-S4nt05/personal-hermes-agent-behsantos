@@ -1,6 +1,6 @@
 # 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
-**Versão 6.3.3** · gerado em 25/10/2026 · este documento é extraído do
+**Versão 6.4.0** · gerado em 25/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -97,7 +97,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `betterme off` | volta ao Ollama local |
 | `betterme varredura` | varre segredos/dados pessoais antes de expor código (pré-push) |
 | `betterme init` | cria HERMES.md (instruções duráveis do projeto) |
-| `betterme autonomia` | nível de autonomia do agente (cauteloso|padrao|autonomo) |
+| `betterme autonomia` | nível de autonomia do agente ( |
 | `betterme gerente` | gerente de código (Claude Code) — opt-in consciente |
 | `betterme telegram` | canal Telegram: controle e aprovação pelo celular |
 | `betterme whatsapp` | canal WhatsApp via Playwright — grátis, local, removível |
@@ -132,7 +132,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `betterme skills audit` (auditar o catálogo), `betterme config set/get`, `betterme server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v6.3.3)
+## 3. Modificações — o que foi feito (v1.0.0 → v6.4.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -140,6 +140,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v6.4.0** | 🏗 CONTRATOS E ESTRUTURAS (princípios de desenvolvimento) |
 | **v6.3.3** | ✍️ PORTUGUÊS CORRIGIDO (varredura completa) |
 | **v6.3.2** | 🗺 INTEGRAÇÃO TOTAL ("nenhuma solução é ilha") |
 | **v6.3.1** | 📖 N8N PASSO A PASSO (TEMPLATE DE USO) |
@@ -308,7 +309,6 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `tasks_path(cfg)` | — |
 | `model_for(cfg, role)` | Modelo de um PAPEL (orquestrador/executor). Vazio = cfg.model. Um modelo por vez: o pipeline é SEQUENCIAL — o Ollama ca… |
 | `_fast(cfg, system, user, ntok, stage, model)` | Chamada rápida e curta ao modelo (orquestrador/revisor). Nunca lança; em modo mock devolve '' (o chamador cai na heurís… |
-| `_extract_json(text)` | Primeiro objeto JSON balanceado do texto (modelos pequenos cercam o JSON de prosa) — None se não achar nada válido. |
 | `_extra_criterios(message)` | Critérios estruturais por CLASSE de tarefa (v3.13.3): código só entrega com saída de execução real colada na resposta. |
 | `_heuristic(message)` | — |
 | `_plan_key(cfg, message)` | — |
@@ -793,6 +793,7 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 
 | Função | O que faz |
 |---|---|
+| `timeout_resposta(cfg)` | v6.4.0 (DRY): timeout das respostas LONGAS do modelo local (revisão de diff, juiz da arena, gateway) — 5× o timeout de … |
 | `get_client(cfg)` | Fábrica: devolve o cliente mock quando cfg.mock for verdadeiro. v3.17.0: com llm_provider externo configurado, devolve … |
 
 ### betterme/claude_agent.py — 🔌 agente Claude Code (2º cérebro, modo leve)
@@ -923,6 +924,21 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `register_mcp(cfg)` | Registra o servidor MCP 'agenda' (secrets via env — nada no config). |
 | `status(cfg)` | — |
 | `setup_interactive(cfg)` | `betterme agenda oauth` — assistente device code (uma vez por conta). |
+
+### betterme/contratos.py — 📜 o vocabulário canônico do app (fonte única): níveis de autonomia, tipos de task, especialistas, checks do doctor e marcas DLP — mais normalizadores tolerantes (Postel's Law)
+
+| Função | O que faz |
+|---|---|
+| `sem_acento(txt)` | minúsculas sem acentos ('Autônomo' → 'autonomo'). |
+| `nivel_valido(txt)` | Nível canônico de autonomia — aceita 'Autônomo', 'PADRÃO'… None se não for um nível válido. |
+| `especialista_de(txt)` | Nome canônico de especialista — aceita 'Segurança', 'REVISOR'… None se não existir. |
+| `acao_de(args, padrao)` | Ação de um subcomando CLI: leitura tolerante e uniforme (falta o atributo ou vazio → padrão; sempre strip+lower). |
+
+### betterme/extrair.py — 🧾 o extrator ÚNICO de JSON da resposta de modelos (chaves balanceadas com consciência de strings) — usado por orquestrador, especialistas, revisor e arena
+
+| Função | O que faz |
+|---|---|
+| `json_de(texto)` | Primeiro objeto JSON balanceado do texto (modelos pequenos cercam o JSON de prosa) — None se não achar nada válido. |
 
 ### betterme/activity.py — 📝 registro de atividade (o que aconteceu e quando)
 

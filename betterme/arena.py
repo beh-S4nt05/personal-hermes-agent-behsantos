@@ -120,8 +120,8 @@ def _julgar_local(cfg, prompt: str) -> str:
     assume, mantendo testes/demo determinísticos e rápidos)."""
     if cfg.mock:
         return ""
-    from .ollama_client import OllamaClient
-    cli = OllamaClient(cfg.ollama_url, timeout=cfg.cmd_timeout * 5 + 120)
+    from .ollama_client import OllamaClient, timeout_resposta
+    cli = OllamaClient(cfg.ollama_url, timeout=timeout_resposta(cfg))
     return _completion(cli, "", prompt)
 
 

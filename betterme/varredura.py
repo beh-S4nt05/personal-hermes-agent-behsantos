@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from .contratos import MARCA_CODIGO_BLOCO, MARCA_CODIGO_LINHA
 
 # ------------------------------------------------------------- padrões
 # (id, regex, severidade, descrição) — severidade: CRITICO bloqueia push
@@ -200,11 +201,11 @@ def mascarar(texto: str) -> str:
     Última linha de defesa antes de QUALQUER payload sair para um
     provedor gratuito (regra D2 + risco #2 do pre-mortem v4.0.0).
     """
-    saida = _FENCE.sub("[CÓDIGO LOCAL — não é enviado]", texto)
+    saida = _FENCE.sub(MARCA_CODIGO_BLOCO, texto)
     linhas_out = []
     for lin in saida.splitlines():
         if _LINHA_CODIGO.match(lin):
-            lin = "[CÓDIGO LOCAL]"
+            lin = MARCA_CODIGO_LINHA
         linhas_out.append(lin)
     saida = "\n".join(linhas_out)
     for id_, rx, _s, _d in _PADROES:

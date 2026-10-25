@@ -23,6 +23,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
+from .contratos import NOMES_ESPECIALISTAS, especialista_de
 
 MAX_TOOL_OUTPUT = 6000
 
@@ -122,8 +123,7 @@ TOOLS: list[dict] = [
                 "properties": {
                     "nome": {
                         "type": "string",
-                        "enum": ["revisor", "debugger", "pesquisador",
-                                 "seguranca"],
+                        "enum": list(NOMES_ESPECIALISTAS),
                         "description": "Qual especialista invocar",
                     },
                     "caso": {
@@ -919,11 +919,12 @@ def especialista_tool(args: dict, cfg) -> str:
     pesquisador, seguranca) para um caso pontual — veredito com evidência,
     nunca escreve no disco (single-writer)."""
     from .specialists import invocar
-    nome = str(args.get("nome", "")).strip().lower()
+    bruto = str(args.get("nome", "")).strip()
+    nome = especialista_de(bruto) or bruto.lower()   # Postel: 'Segurança' vale
     caso = str(args.get("caso", "")).strip()
     if not nome or not caso:
-        return ("ERRO: informe 'nome' (revisor|debugger|pesquisador|"
-                "seguranca) e 'caso' (descrição do problema).")
+        return (f"ERRO: informe 'nome' ({'|'.join(NOMES_ESPECIALISTAS)}) "
+                "e 'caso' (descrição do problema).")
     r = invocar(cfg, nome, caso)
     if not r.get("ok"):
         return (f"✖ especialista {nome}: REPROVADO — {r.get('motivo', '')} "

@@ -1,5 +1,31 @@
 # Changelog
 
+## v6.4.0 — 🏗 CONTRATOS E ESTRUTURAS (princípios de desenvolvimento)
+
+Varredura estrutural do interior do app aplicando bases reais de
+engenharia — sem mudar NENHUM valor persistido:
+
+- **Single Source of Truth — `betterme/contratos.py` (novo)**: o
+  vocabulário canônico em UM lugar — níveis de autonomia, tipos de task
+  (leitura/criação), especialistas, ids dos checks do doctor e marcas
+  DLP. Orchestrator, doctor, specialists, tools, app, varredura,
+  autonomy, cli IMPORTAM (fim das strings mágicas repetidas);
+  specialists valida o catálogo contra o contrato na importação
+  (divergência = fail fast).
+- **DRY**: `betterme/extrair.py` (novo) — extrator ÚNICO de JSON de
+  resposta de modelo (a implementação boa do orchestrator; a regex
+  gulosa frágil do specialists virou alias dela) · `timeout_resposta()`
+  elimina a fórmula `cmd_timeout*5+120` triplicada · `acao_de()`
+  uniformiza o padrão de subcomando repetido em 9 módulos.
+- **Postel's Law (robustez)**: entrada tolerante — `autonomia Autônomo`,
+  `/autonomia PADRÃO` e especialista `Segurança` são aceitos e
+  normalizados para o canônico; a emissão continua conservadora.
+- **Formatos persistidos CONGELADOS** (decisão explícita e documentada
+  no contratos.py): chaves de config.yaml, memória, tarefas, auditoria
+  e rascunhos não mudam; chaves de veredito seguem sem acento por
+  convenção de API.
+- T187 novo (SSOT + DRY + Postel + congelamento) — **187/187**.
+
 ## v6.3.3 — ✍️ PORTUGUÊS CORRIGIDO (varredura completa)
 
 Varredura ortográfica de TODAS as strings do app (AST em .py + texto

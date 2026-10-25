@@ -7313,8 +7313,99 @@ def T186_portugues_corrigido_contratos_intactos():
     assert "acao_proposta" in esp and "evidencia" in esp      # veredito JSON
     tls = Path("betterme/tools.py").read_text(encoding="utf-8")
     assert "gerente_codigo" in tls                           # nome da tool
-    orc = Path("betterme/orchestrator.py").read_text(encoding="utf-8")
-    assert '"tipo": "criacao"' in orc or '"criacao"' in orc   # enum do TRACE
+    from betterme import contratos as _C
+    # v6.4.0: enum do TRACE vive no SSOT — valores canônicos intactos
+    assert _C.TIPO_CRIACAO == "criacao" and _C.NIVEL_AUTONOMO == "autonomo"
+
+
+@case
+def T187_contratos_estruturas_principios():
+    """v6.4.0: princípios de desenvolvimento aplicados aos contratos
+    internos — Single Source of Truth (contratos.py), DRY (extrair.py
+    unifica os 2 parsers de JSON; timeout_resposta e acao_de únicos),
+    Postel's Law (entrada tolerante: 'Autônomo'/'Segurança' aceitos) e
+    formatos persistidos CONGELADOS (valores canônicos inalterados)."""
+    import contextlib
+    import io
+
+    from betterme import autonomy
+    from betterme import contratos as C
+    from betterme import orchestrator as orc
+    from betterme import specialists as S
+    from betterme.contratos import acao_de, especialista_de
+    from betterme.extrair import json_de
+    from betterme.ollama_client import timeout_resposta
+    from betterme.varredura import mascarar
+
+    # ── SSOT: o vocabulário vive em contratos.py e os módulos importam
+    assert C.NIVEIS_AUTONOMIA == ("cauteloso", "padrao", "autonomo")
+    assert autonomy.NIVEIS == C.NIVEIS_AUTONOMIA
+    assert set(S.ESPECIALISTAS) == set(C.NOMES_ESPECIALISTAS)
+    assert C.CHECKS_DOCTOR == ("dispositivo", "cerebro", "ollama", "model",
+                               "stt", "claude", "fluxos", "security")
+    assert C.TIPOS_TASK == ("leitura", "criacao")
+    src_doctor = Path("betterme/doctor.py").read_text(encoding="utf-8")
+    assert "from .contratos import" in src_doctor
+    assert "CHECK_CEREBRO" in src_doctor
+    src_orc = Path("betterme/orchestrator.py").read_text(encoding="utf-8")
+    assert "TIPO_CRIACAO" in src_orc
+    # ── Postel: tolerante na entrada, conservador na saída
+    assert C.sem_acento("  ÇÃO ") == "cao"
+    assert C.nivel_valido(" PADRÃO ") == "padrao"
+    assert C.nivel_valido("Cauteloso") == "cauteloso"
+    assert C.nivel_valido("doidão") is None
+    assert especialista_de("Segurança") == "seguranca"
+    assert especialista_de("REVISOR") == "revisor"
+    assert especialista_de("N/A") is None
+
+    class _A:
+        acao = " Setup "
+
+    class _B:
+        pass
+
+    assert acao_de(_A()) == "setup"
+    assert acao_de(_B(), "list") == "list"
+    cfg = fresh()
+    cfg.autonomia = "Autônimo"                  # inválido continua caindo
+    assert autonomy.nivel(cfg) == "padrao"      # no padrão (tolerante)
+    cfg.autonomia = "Autônomo"
+    assert autonomy.nivel(cfg) == "autonomo"    # acento aceito (Postel)
+
+    class _N:
+        nivel = " PADRÃO "
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        autonomy.cmd(_N(), cfg)
+    assert "autonomia agora: PADRAO" in buf.getvalue()   # canônico na saída
+    assert autonomy.nivel(cfg) == "padrao"
+    # ── DRY: extrator único — aliases apontam para a MESMA função
+    assert S._extrair_json is json_de
+    assert orc._extract_json is json_de
+    assert json_de('x {"a": {"b": "c}\\\"d"}} y') == {"a": {"b": 'c}"d'}}
+    assert json_de("sem json") is None
+    # ── DRY: timeout único (fórmula saiu de revisar/arena)
+    assert timeout_resposta(cfg) == cfg.cmd_timeout * 5 + 120
+    for mod in ("betterme/revisar.py", "betterme/arena.py"):
+        src = Path(mod).read_text(encoding="utf-8")
+        assert "timeout_resposta(cfg)" in src
+        assert "* 5 + 120" not in src
+    # ── DRY: acao_de adotado (nenhum getattr(args,"acao") cru)
+    for mod in ("betterme/vida.py", "betterme/boot.py", "betterme/fluxos.py",
+                "betterme/learning.py", "betterme/grafo.py",
+                "betterme/code_manager.py", "betterme/whatsapp_gw.py",
+                "betterme/telegram_gw.py", "betterme/cli.py"):
+        assert 'getattr(args, "acao"' not in Path(mod).read_text(
+            encoding="utf-8"), mod
+    # ── congelamento: valores canônicos (persistidos) INALTERADOS
+    assert C.MARCA_CODIGO_BLOCO == "[CÓDIGO LOCAL — não é enviado]"
+    assert C.MARCA_CODIGO_LINHA == "[CÓDIGO LOCAL]"
+    assert C.MARCA_CODIGO_BLOCO in mascarar(
+        "```python\ndef f(): pass\n```")
+    # ── /autonomia da GUI também tolerante
+    src_app = Path("betterme/server/app.py").read_text(encoding="utf-8")
+    assert "nivel_valido(args)" in src_app
 
 
 if __name__ == "__main__":

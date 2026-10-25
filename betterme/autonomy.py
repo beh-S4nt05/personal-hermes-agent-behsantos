@@ -13,7 +13,9 @@ sandbox e a regra D2 (código/memória nunca vão a provedores gratuitos).
 """
 from __future__ import annotations
 
-NIVEIS = ("cauteloso", "padrao", "autonomo")
+from .contratos import NIVEIS_AUTONOMIA, NIVEL_PADRAO, nivel_valido
+
+NIVEIS = NIVEIS_AUTONOMIA          # v6.4.0: fonte única (contratos.py)
 
 DESCRICOES = {
     "cauteloso": "toda ação relevante pede confirmação (criação, entrega "
@@ -33,8 +35,8 @@ HARD_GATES = (
 
 
 def nivel(cfg) -> str:
-    v = str(getattr(cfg, "autonomia", "padrao") or "padrao").strip().lower()
-    return v if v in NIVEIS else "padrao"
+    # v6.4.0: leitura tolerante (Postel) — 'Autônomo' no YAML também vale
+    return nivel_valido(getattr(cfg, "autonomia", "")) or NIVEL_PADRAO
 
 
 def pula_gate_criacao(cfg) -> bool:
@@ -67,8 +69,9 @@ def pre_entrega_varredura(cfg, raiz) -> str:
 
 def cmd(args, cfg) -> None:
     """`betterme autonomia [nivel]` — vê ou muda o nível."""
-    alvo = str(getattr(args, "nivel", "") or "").strip().lower()
-    if not alvo:
+    bruto = str(getattr(args, "nivel", "") or "").strip()
+    alvo = nivel_valido(bruto)          # 'Autônomo'/'PADRÃO' aceitos
+    if not bruto:
         print(f"\n🎚 autonomia atual: {nivel(cfg).upper()}")
         for n in NIVEIS:
             marca = "→" if n == nivel(cfg) else " "
@@ -77,8 +80,8 @@ def cmd(args, cfg) -> None:
         for h in HARD_GATES:
             print(f"     • {h}")
         return
-    if alvo not in NIVEIS:
-        print(f"✖ nível inválido: {alvo!r} — use: {', '.join(NIVEIS)}")
+    if alvo is None:
+        print(f"✖ nível inválido: {bruto!r} — use: {', '.join(NIVEIS)}")
         raise SystemExit(1)
     cfg.update({"autonomia": alvo})
     print(f"🎚 autonomia agora: {alvo.upper()} — {DESCRICOES[alvo]}")

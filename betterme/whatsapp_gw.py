@@ -21,6 +21,7 @@ import shutil
 import threading
 import time
 from pathlib import Path
+from .contratos import acao_de
 
 # ---- seletores (WhatsApp Web, out/2026 — ajuste aqui quando mudarem)
 SEL_QR = "canvas, svg[ref], div[data-ref]"
@@ -200,7 +201,7 @@ def remover(cfg) -> str:
 
 def cmd(args, cfg) -> None:
     """`betterme whatsapp status|start|stop|qr|autorizar|remover|setup`."""
-    acao = str(getattr(args, "acao", "status") or "status").lower()
+    acao = acao_de(args)
     if acao == "status":
         print("\n📱 WhatsApp (via Playwright — grátis, local, removível):")
         print(f"   playwright: {'instalado' if playwright_ok() else 'AUSENTE'}")

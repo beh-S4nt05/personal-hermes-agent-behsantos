@@ -14,7 +14,6 @@ invocar; o especialista PROPÕE, nunca escreve no disco (single-writer).
 from __future__ import annotations
 
 import json
-import re
 import time
 from pathlib import Path
 
@@ -50,6 +49,15 @@ ESPECIALISTAS: dict[str, dict] = {
                           "eyJhbGciOi' — isso é aceitável?",
     },
 }
+
+# v6.4.0: contrato — o catálogo cobre EXATAMENTE os nomes canônicos de
+# contratos.py (divergência = erro na importação: fail fast)
+from .contratos import NOMES_ESPECIALISTAS as _NOMES_CONTRATO
+if set(ESPECIALISTAS) != set(_NOMES_CONTRATO):
+    raise RuntimeError("catálogo de especialistas divergente do contrato: "
+                       f"{set(ESPECIALISTAS) ^ set(_NOMES_CONTRATO)}")
+
+
 
 KIT_SEGURANCA = """\
 # Especialista segurança — checklist
@@ -154,14 +162,7 @@ def _system_prompt(cfg, nome: str) -> str:
     )[:6000]
 
 
-def _extrair_json(texto: str) -> dict | None:
-    m = re.search(r"\{.*\}", texto, re.S)
-    if not m:
-        return None
-    try:
-        return json.loads(m.group(0))
-    except ValueError:
-        return None
+from .extrair import json_de as _extrair_json  # v6.4.0: DRY
 
 
 # ------------------------------------------------------------- pool (R7)

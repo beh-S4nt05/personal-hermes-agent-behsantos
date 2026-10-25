@@ -16,6 +16,7 @@ import json
 import re
 import time
 from pathlib import Path
+from .contratos import acao_de
 
 _MIN_TOOLS_PRA_SKILL = 5          # mesma régua do Betterme da Nous
 
@@ -173,7 +174,7 @@ def rejeitar(cfg, id_ap: str) -> tuple[bool, str]:
 
 def cmd(args, cfg) -> None:
     """`betterme aprendidos` — lista/aprova/rejeita rascunhos."""
-    acao = str(getattr(args, "acao", "") or "list").lower()
+    acao = acao_de(args, "list")
     alvo = str(getattr(args, "id", "") or "").strip()
     if acao == "list":
         ps = pendentes(cfg)

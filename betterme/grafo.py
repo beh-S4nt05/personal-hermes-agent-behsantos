@@ -24,6 +24,7 @@ import ast
 import sqlite3
 import time
 from pathlib import Path
+from .contratos import acao_de
 
 # pastas que nunca entram no grafo (dependências, caches, builds)
 _PULAR_DIRS = {
@@ -317,7 +318,7 @@ def path_text(cfg, de: str, para: str) -> str:
 # ------------------------------------------------------------ CLI
 def cmd(args, cfg) -> None:
     """`betterme grafo build|query|path`."""
-    acao = getattr(args, "acao", "build")
+    acao = acao_de(args, "build")
     if acao == "build":
         raiz = getattr(args, "raiz", None) or Path.cwd()
         st = build(cfg, Path(raiz))

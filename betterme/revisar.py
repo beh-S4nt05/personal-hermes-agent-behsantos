@@ -66,8 +66,8 @@ def _julgar_local(cfg, diff: str) -> dict:
     """Roda o revisor no LLM LOCAL (D2 — diff tem código, nada sai)."""
     if cfg.mock:
         return _veredito_simulado()
-    from .ollama_client import OllamaClient
-    cli = OllamaClient(cfg.ollama_url, timeout=cfg.cmd_timeout * 5 + 120)
+    from .ollama_client import OllamaClient, timeout_resposta
+    cli = OllamaClient(cfg.ollama_url, timeout=timeout_resposta(cfg))
     partes = []
     for ch in cli.chat_stream("", [{"role": "user",
                                     "content": _PROMPT.format(

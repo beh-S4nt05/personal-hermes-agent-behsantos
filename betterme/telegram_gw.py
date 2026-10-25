@@ -10,6 +10,7 @@ from __future__ import annotations
 import threading
 
 from .llm_providers import api_key, salvar_key
+from .contratos import acao_de
 
 _API = "https://api.telegram.bot"
 
@@ -119,7 +120,7 @@ class CanalTelegram:
 
 def cmd(args, cfg) -> None:
     """`betterme telegram status|start|stop|chat-id|autorizar`."""
-    acao = str(getattr(args, "acao", "status") or "status").lower()
+    acao = acao_de(args)
     if acao == "status":
         tem = bool(token(cfg))
         ligado = str(getattr(cfg, "telegram_on", False)).lower() in \

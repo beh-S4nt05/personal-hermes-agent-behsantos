@@ -173,37 +173,9 @@ def _fast(cfg, system: str, user: str, ntok: int = 200,
         return ""
 
 
-def _extract_json(text: str) -> dict | None:
-    """Primeiro objeto JSON balanceado do texto (modelos pequenos cercam
-    o JSON de prosa) — None se não achar nada válido."""
-    t = text or ""
-    i = t.find("{")
-    while i != -1:
-        prof, ini, em_str, esc = 0, i, False, False
-        for j in range(i, len(t)):
-            c = t[j]
-            if em_str:
-                if esc:                      # caractere escapado (\" \\ ...)
-                    esc = False
-                elif c == "\\":
-                    esc = True
-                elif c == '"':
-                    em_str = False
-                continue
-            if c == '"':
-                em_str = True
-            elif c == "{":
-                prof += 1
-            elif c == "}":
-                prof -= 1
-                if prof == 0:
-                    try:
-                        obj = json.loads(t[ini:j + 1])
-                        return obj if isinstance(obj, dict) else None
-                    except ValueError:
-                        break
-        i = t.find("{", i + 1)
-    return None
+from .extrair import json_de as _extract_json  # v6.4.0: DRY
+from .contratos import (TIPO_CRIACAO, TIPO_LEITURA,  # SSOT
+                        TIPOS_TASK)
 
 
 # ───────────────────────────── 🎯 plano ─────────────────────────────
@@ -243,7 +215,7 @@ def _heuristic(message: str) -> dict:
     if _ACAO_RE.search(msg):
         return {
             "rota": "executar",
-            "tipo": "criacao" if _CRIACAO_RE.search(msg) else "leitura",
+            "tipo": TIPO_CRIACAO if _CRIACAO_RE.search(msg) else TIPO_LEITURA,
             "objetivo": msg.strip()[:300],
             "passos": [],
             "criterios": ["a ação foi realmente executada e o resultado "
@@ -316,9 +288,9 @@ def plan(cfg, message: str, history: list[dict] | None = None) -> dict:
                 obj.setdefault("objetivo", message[:300])
                 obj.setdefault("passos", [])
                 obj.setdefault("criterios", [])
-                if obj.get("tipo") not in ("leitura", "criacao"):
-                    obj["tipo"] = ("criacao" if _CRIACAO_RE.search(message or "")
-                                   else "leitura")
+                if obj.get("tipo") not in TIPOS_TASK:
+                    obj["tipo"] = (TIPO_CRIACAO if _CRIACAO_RE.search(message or "")
+                                   else TIPO_LEITURA)
                 obj["passos"] = [str(p)[:160] for p in (obj.get("passos") or [])[:4]]
                 obj["criterios"] = [str(c)[:160] for c in (obj.get("criterios") or [])[:3]]
             _PLAN_CACHE[chave] = dict(obj)
@@ -864,7 +836,7 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     if forcar_executar and plano.get("rota") != "executar":
         # v3.15.1: o operador INFORMOU a pasta do projeto — executar, e o
         # planner não re-decide (robustez contra classificação vacilante)
-        plano = {"rota": "executar", "tipo": "criacao",
+        plano = {"rota": "executar", "tipo": TIPO_CRIACAO,
                  "objetivo": (pend_msg or message)[:300],
                  "passos": [], "criterios": []}
     ev({"type": "brain", "stage": "🎯 orquestrador",
@@ -890,12 +862,13 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     criterios += _skill_criterios(sks_antecipadas)  # v3.15.0: skill delega
     if extra_criterios:   # v3.16.0: critérios da SUBTASK da missão
         criterios += [str(c)[:160] for c in extra_criterios[:4]]
-    tipo = plano.get("tipo") if plano.get("tipo") in ("leitura", "criacao") else "leitura"
+    tipo = (plano.get("tipo") if plano.get("tipo") in TIPOS_TASK
+        else TIPO_LEITURA)
 
     # ── v3.15.1: projeto de criação SEM caminho → pergunta e espera ──
     if (_quer_projeto_sem_caminho(cfg, message, resume_plan)
             and not _cancelado()
-            and (tipo == "criacao" or _INICIAR_PROJ_RE.search(message))):
+            and (tipo == TIPO_CRIACAO or _INICIAR_PROJ_RE.search(message))):
         return _pedir_caminho(ev, message, goal, session_id)
 
     # ✦ skills ativas relevantes → instruções injetadas no executor
@@ -957,7 +930,7 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
     edit_snip, plano_editado = "", False   # v3.10: sinais de experiência
     # v4.0.0 (M5): AUTÔNOMO pula o gate soft de criação (hard gates ficam)
     from .autonomy import pula_gate_criacao, pre_entrega_varredura
-    exige_aprovacao = (tipo == "criacao"
+    exige_aprovacao = (tipo == TIPO_CRIACAO
                        and getattr(cfg, "creation_approval", True)
                        and not pula_gate_criacao(cfg))
     if resume_plan:                    # v3.11: já aprovado antes do restart
@@ -1192,7 +1165,7 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
 
     # v4.0.0 (M5): AUTÔNOMO entrega sem gate soft — em compensação, o
     # projeto criado passa pela varredura PRÉ-ENTREGA (risco #10)
-    if tipo == "criacao" and projeto is not None:
+    if tipo == TIPO_CRIACAO and projeto is not None:
         try:
             from .autonomy import nivel as _nivel_aut
             if _nivel_aut(cfg) == "autonomo":

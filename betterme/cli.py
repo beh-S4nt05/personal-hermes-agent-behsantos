@@ -21,6 +21,7 @@ import sys
 
 from . import VERSION
 from .config import DEFAULTS, Config
+from .contratos import NIVEIS_AUTONOMIA, acao_de
 
 
 # ------------------------------------------------------------------ helpers
@@ -491,7 +492,7 @@ def cmd_provider(args) -> None:
     """v3.17.0: provedores LLM externos GRATUITOS (memória nunca sai)."""
     import getpass as _gp
     from .llm_providers import REGISTRY, api_key, salvar_key, testar
-    acao = str(getattr(args, "acao", "list"))
+    acao = acao_de(args, "list")
     cfg = _cfg(args)
     if acao == "list":
         atual = str(getattr(cfg, "llm_provider", "local"))
@@ -809,7 +810,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="pasta do projeto (default: diretório atual)")
     p.set_defaults(fn=cmd_init)
     p = sub.add_parser("autonomia",
-                       help="nível de autonomia do agente (cauteloso|padrao|autonomo)")
+                       help="nível de autonomia do agente ("
+                            + "|".join(NIVEIS_AUTONOMIA) + ")")
     p.add_argument("nivel", nargs="?", default=None,
                    help="novo nível (vazio = mostra o atual)")
     p.set_defaults(fn=cmd_autonomia)

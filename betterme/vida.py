@@ -23,6 +23,7 @@ import json
 import time
 from collections import Counter
 from pathlib import Path
+from .contratos import acao_de
 
 _PREFIXO = "modo-vida:"
 _DIAS_CURADORIA = 7
@@ -276,7 +277,7 @@ def status(cfg) -> dict:
 # ------------------------------------------------------------- CLI
 def cmd(args, cfg) -> None:
     """`betterme vida status|relatorio|curadoria|registrar`."""
-    acao = getattr(args, "acao", "status")
+    acao = acao_de(args)
     if acao == "status":
         st = status(cfg)
         if not st["registrado"]:

@@ -34,6 +34,7 @@ from ..manager import DaemonManager, OllamaManager, python_env_check
 from ..mcp_client import get_manager
 from ..ollama_client import get_client
 from ..skills import SkillLoader
+from ..contratos import TIPO_CRIACAO, TIPO_LEITURA
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
@@ -347,19 +348,20 @@ self.addEventListener("fetch", (e) => {
                             "sem goal (botão ＋ nova abre outra)"})
         if cmd in ("/autonomia", "/autonomy"):
             from ..autonomy import NIVEIS, DESCRICOES, nivel as _nv
-            alvo = args.strip().lower()
-            if alvo and alvo in NIVEIS:
+            from ..contratos import nivel_valido
+            alvo = nivel_valido(args)     # Postel: 'Autônomo' vale
+            if args.strip() and alvo:
                 cfg.update({"autonomia": alvo})
                 out = (f"🎚 autonomia agora: {alvo.upper()} — "
                        f"{DESCRICOES[alvo]}")
-            elif alvo:
-                out = (f"✖ nível inválido: {alvo!r} — use: "
+            elif args.strip():
+                out = (f"✖ nível inválido: {args.strip()!r} — use: "
                        + ", ".join(NIVEIS))
             else:
                 out = (f"🎚 autonomia atual: {_nv(cfg).upper()}\n"
                        + "\n".join(f"  • {n}: {DESCRICOES[n]}"
                                    for n in NIVEIS)
-                       + "\nmude com: /autonomia cauteloso|padrao|autonomo")
+                       + "\nmude com: /autonomia " + "|".join(NIVEIS))
             return jsonify({"ok": True, "output": out})
         if cmd in ("/provider", "/provedor"):
             nome = str(getattr(cfg, "llm_provider", "local"))
@@ -459,7 +461,7 @@ self.addEventListener("fetch", (e) => {
                             "msg": "não há aprovação pendente com esse id"}), 404
         if action == "cancelar":
             orc.record(cfg, {"objetivo": str(pend.get("objetivo") or "")[:300],
-                             "tipo": pend.get("tipo") or "leitura",
+                             "tipo": pend.get("tipo") or TIPO_LEITURA,
                              "status": "cancelada", "tentativas": 0,
                              "dur_s": 0.0, "veredito": "—",
                              "problema": "cancelada após restart",
@@ -473,7 +475,7 @@ self.addEventListener("fetch", (e) => {
             if action == "editar" and not texto.strip():
                 return jsonify({"ok": False, "msg": "edição vazia"}), 400
             entry = {"objetivo": str(pend.get("objetivo") or "")[:300],
-                     "tipo": pend.get("tipo") or "leitura",
+                     "tipo": pend.get("tipo") or TIPO_LEITURA,
                      "status": "aprovada",
                      "tentativas": int(pend.get("tentativas") or 1),
                      "dur_s": 0.0, "veredito": "ok", "problema": "",
@@ -496,7 +498,7 @@ self.addEventListener("fetch", (e) => {
                              or pend.get("passos") or [])[:4]],
                  "criterios": [str(cr)[:160] for cr in
                                (pend.get("criterios") or [])[:3]],
-                 "tipo": pend.get("tipo") or "criacao"}
+                 "tipo": pend.get("tipo") or TIPO_CRIACAO}
         if action == "editar":
             plano["_editada"] = True
         st = {"events": [], "final": "", "done": False}
