@@ -321,7 +321,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **184 casos** (v6.3.1), famílias:
+`tests/run_all.py` — **185 casos** (v6.3.2), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·
@@ -365,3 +365,24 @@ Cobertura auditada: grafo de imports, 161 achados de lint triados (56
 try-except-pass **intencionais** — sandbox defensivo; 55 blind-except
 idem), persistência, scheduler (sem race de disparo duplo), auth de
 rotas (71/71), SSE, Popen cleanup, sandbox de caminhos, update, backups.
+
+## 🗺 Mapa de integração — v6.3.2 ("nenhuma solução é ilha")
+
+Varredura completa: cada solução do app e com quem ela fala.
+
+| Solução | Interligada a | Como |
+|---|---|---|
+| 💬 Chat/pipeline | cérebro, skills, memória, tools, gateways, tarefas | `run_pipeline` → `get_client` (roteador) |
+| 🧠 Roteador de cérebro | agent, WhatsApp/Telegram, learning, doctor, GUI (log por pedido) | `get_client()` v6.3.0 |
+| ⛓ n8n | chat (`fluxos_listar`+`fluxos_chamar`), tarefas (`/api/hooks/<id>`), doctor (check opcional), receitas, GUI ⚙ (templates B), guia | webhooks + API pública |
+| ⏰ Tarefas agendadas | n8n (gatilho webhook → dispara o agente), pipeline, receitas (1 clique) | scheduler → run |
+| 🩺 Doctor | dispositivo, cérebro, Ollama, modelo, STT, Claude, n8n, segurança | `/api/doctor` (GUI renderiza) |
+| 📚 Memória/conhecimento | pipeline (RAG verbatim), tools (`lembrar`/`esquecer`) | memory/knowledge |
+| 🔐 Claude Code | pipeline (2º agente, D5), doctor, GUI | gateway/claude_agent |
+| 🧭 Grafo, skills, especialistas | tools do cérebro (zero tokens p/ navegação) | grafo_query, especialista |
+| 📦 Instalação | tudo (playwright, Ollama, modelo, n8n, doctor final) | `install.py --full` |
+
+**Exceções por lei (D2 — código nunca sai)**: `revisar.py` (revisor de
+diff), `arena.py` (juiz) e o diagnóstico de servidor em `manager.py`
+usam o LLM **LOCAL de propósito**. Não integrar esses ao roteador é
+privacidade, não esquecimento — guardiado pelo T185.

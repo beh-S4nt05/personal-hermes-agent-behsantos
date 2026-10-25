@@ -1,6 +1,6 @@
 # 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
-**Versão 6.3.1** · gerado em 25/10/2026 · este documento é extraído do
+**Versão 6.3.2** · gerado em 25/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -132,7 +132,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `betterme skills audit` (auditar o catálogo), `betterme config set/get`, `betterme server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v6.3.1)
+## 3. Modificações — o que foi feito (v1.0.0 → v6.3.2)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -140,6 +140,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v6.3.2** | 🗺 INTEGRAÇÃO TOTAL ("nenhuma solução é ilha") |
 | **v6.3.1** | 📖 N8N PASSO A PASSO (TEMPLATE DE USO) |
 | **v6.3.0** | 🧠 ROTEADOR AUTOMÁTICO DE CÉREBRO + N8N BIDIRECIONAL |
 | **v6.2.0** | ⚡ PERFORMANCE + BOOTSTRAP COMPLETO (3º achado de campo) |
@@ -547,6 +548,7 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `especialista_tool(args, cfg)` | v4.0.0 (M6): o cérebro invoca um especialista (revisor, debugger, pesquisador, seguranca) para um caso pontual — veredi… |
 | `knowledge_search(args, cfg)` | v3.15.0 (PR#2): RAG local — trechos verbatim com fonte. |
 | `fluxos_chamar(args, cfg)` | v5.1.0 (PR#11): dispara workflow n8n local por webhook. |
+| `fluxos_listar(args, cfg)` | v6.3.2: lista os workflows do n8n local (nome, ativo, nós, webhooks) — o cérebro descobre o path e dispara com fluxos_c… |
 | `revisar_diff(args, cfg)` | v4.5.0 (PR#8): revisão de diff — veredito com arquivo:linha. |
 | `grafo_query(args, cfg)` | v4.4.0 (PR#7): grafo de código — onde está a lógica de X? (zero tokens). |
 | `execute_tool(name, arguments, cfg, source, agent)` | Executa uma ferramenta e devolve {'ok': bool, 'output': str}. v3.0: toda execução vai para a trilha de auditoria (data/… |

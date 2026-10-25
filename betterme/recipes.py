@@ -67,4 +67,17 @@ RECIPES = [
         "when": "sab 10:00",
         "agent": "betterme",
     },
+    {
+        "id": "n8n-fluxo-diario",
+        "icon": "⛓",
+        "title": "Disparar fluxo do n8n",
+        "desc": "Lista os workflows do n8n local, dispara o indicado e "
+                "relata a resposta (integração ⛓ Betterme ↔ n8n).",
+        "input": ("Use a ferramenta fluxos_listar para ver os workflows do "
+                  "n8n local, escolha o mais relevante (prefira o que eu "
+                  "indicar na época) e dispare com fluxos_chamar usando o "
+                  "path do webhook; relate a resposta recebida."),
+        "when": "diário 09:00",
+        "agent": "betterme",
+    },
 ]

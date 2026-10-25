@@ -394,8 +394,10 @@ TOOLS: list[dict] = [
             "description": (
                 "Dispara um workflow do n8n LOCAL por webhook "
                 "(http://127.0.0.1:5678/webhook/<caminho>). Use para "
-                "automções visuais construídas na aba ⚙ Fluxos do GUI. "
-                "Requer o n8n rodando (betterme fluxos start)."
+                "automações visuais construídas na aba ⚙ Fluxos do GUI. "
+                "Requer o n8n rodando (betterme fluxos start). Use "
+                "fluxos_listar antes para descobrir os workflows e "
+                "seus paths de webhook."
             ),
             "parameters": {
                 "type": "object",
@@ -407,6 +409,25 @@ TOOLS: list[dict] = [
                                 "description": "dados a enviar (JSON)"},
                 },
                 "required": ["caminho"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fluxos_listar",
+            "description": (
+                "v6.3.2: lista os workflows do n8n LOCAL (nome, ativo, "
+                "nº de nós e paths de webhook). Use ANTES de "
+                "fluxos_chamar para descobrir o path certo — ex.: o "
+                "operador pede 'dispare o Backup diário' e você encontra "
+                "o path aqui. Requer API key (betterme fluxos apikey) e "
+                "n8n rodando (betterme fluxos start)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
             },
         },
     },
@@ -954,6 +975,26 @@ def fluxos_chamar(args: dict, cfg) -> str:
            f"{str(r.get('msg', ''))[:300]}"
 
 
+def fluxos_listar(args: dict, cfg) -> str:
+    """v6.3.2: lista os workflows do n8n local (nome, ativo, nós,
+    webhooks) — o cérebro descobre o path e dispara com fluxos_chamar."""
+    from . import fluxos
+    r = fluxos.listar(cfg)
+    if not r.get("ok"):
+        return f"ERRO: {r.get('msg', 'n8n indisponível')}"
+    linhas = []
+    for w in r["workflows"]:
+        estado = "ATIVO" if w["ativo"] else "inativo"
+        hooks = ", ".join(w["webhooks"]) or "sem webhook"
+        linhas.append(f"· {w['nome']} [{estado}, {w['nos']} nós] — "
+                      f"webhook(s): {hooks}")
+    if not linhas:
+        return ("⛓ nenhum workflow no n8n local — crie um no editor "
+                "(aba ⚙ Fluxos) ou importe os templates prontos")
+    return ("⛓ workflows do n8n local (dispare com fluxos_chamar usando "
+            "o path do webhook):\n" + "\n".join(linhas))
+
+
 def revisar_diff(args: dict, cfg) -> str:
     """v4.5.0 (PR#8): revisão de diff — veredito com arquivo:linha."""
     from . import revisar
@@ -995,6 +1036,7 @@ EXECUTORS = {
     "grafo_query": grafo_query,
     "revisar_diff": revisar_diff,
     "fluxos_chamar": fluxos_chamar,
+    "fluxos_listar": fluxos_listar,
 }
 
 

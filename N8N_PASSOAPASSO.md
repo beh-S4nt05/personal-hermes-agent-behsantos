@@ -2,7 +2,7 @@
 
 > Guia para quem nunca usou o n8n. Tudo **local**: nada sai da sua
 > máquina, nenhuma conta em nuvem, uso pessoal/interno grátis
-> (Sustainable Use License). Versão: 6.3.1.
+> (Sustainable Use License). Versão: 6.3.2.
 
 O n8n é um editor visual de automações ("arrasta-e-solta nós e liga
 fios"). O Betterme o instala **dentro do seu data-dir** e conversa com
@@ -125,7 +125,9 @@ No chat do Betterme (GUI, aba 💬), peça:
 
 O cérebro usa a ferramenta `fluxos_chamar`, que faz
 `POST http://127.0.0.1:5678/webhook/betterme-eco` e **espera a
-resposta** (até 60 s). O que o nó *Respond to Webhook* devolver
+resposta** (até 60 s). Para descobrir o que existe, peça
+"quais são meus fluxos?" — a ferramenta `fluxos_listar` mostra nome,
+estado e o path de cada webhook. O que o nó *Respond to Webhook* devolver
 aparece na conversa. Para workflows mais longos, acrescente mais nós
 entre a entrada e a resposta — o chat espera.
 

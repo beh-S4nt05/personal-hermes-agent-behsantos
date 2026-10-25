@@ -51,9 +51,11 @@
 <details class="st" id="integracao" style="color:var(--dim)">
   <summary style="cursor:pointer">🔧 Integração nos 2 sentidos (Betterme ↔ n8n)</summary>
   <div id="int-corpo" style="padding:8px 0 4px;line-height:1.7">
-    <div>• <b>Do chat do Betterme</b>: peça "dispare o fluxo X" — a
-      ferramenta <code>fluxos_chamar</code> faz POST no webhook local
-      (espere a resposta com o nó "Respond to Webhook").</div>
+    <div>• <b>Do chat do Betterme</b>: peça "quais são meus fluxos?" —
+      a ferramenta <code>fluxos_listar</code> mostra os workflows e seus
+      paths — e "dispare o fluxo X" — a ferramenta <code>fluxos_chamar</code>
+      faz POST no webhook local (espere a resposta com o nó
+      "Respond to Webhook").</div>
     <div>• <b>Do n8n</b>: nó HTTP em POST para
       <code id="hook-url">http://127.0.0.1:8080/api/hooks/&lt;id&gt;</code>
       — crie uma tarefa agendada tipo <i>webhook</i> no Betterme

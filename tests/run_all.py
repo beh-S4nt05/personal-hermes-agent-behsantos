@@ -635,9 +635,9 @@ def T25_endpoints_leitura_v3():
     assert c.get("/api/audit").json["ok"]
     assert c.get("/api/metrics").json["ok"]
     assert c.get("/api/notifications").json["ok"]
-    assert len(c.get("/api/recipes").json["recipes"]) == 6
+    assert len(c.get("/api/recipes").json["recipes"]) == 7
     checks = c.get("/api/doctor").json["checks"]
-    assert [x["id"] for x in checks] == ["dispositivo", "cerebro", "ollama", "model", "stt", "claude", "security"]
+    assert [x["id"] for x in checks] == ["dispositivo", "cerebro", "ollama", "model", "stt", "claude", "fluxos", "security"]
 
 
 @case
@@ -7112,8 +7112,10 @@ def T183_n8n_integracao_melhorada():
             {"id": "w1", "name": "Backup", "active": True, "nodes": [1]},
             {"id": "w2", "name": "Email", "active": False, "nodes": []}]})
         assert r3["ok"] and r3["workflows"] == [
-            {"id": "w1", "nome": "Backup", "ativo": True, "nos": 1},
-            {"id": "w2", "nome": "Email", "ativo": False, "nos": 0}]
+            {"id": "w1", "nome": "Backup", "ativo": True, "nos": 1,
+             "webhooks": []},
+            {"id": "w2", "nome": "Email", "ativo": False, "nos": 0,
+             "webhooks": []}]
         # resposta inesperada → erro claro
         r4 = F.listar(cfg, _get=lambda u, k: {"erro": "bad"})
         assert r4["ok"] is False and "API key" in r4["msg"]
@@ -7196,6 +7198,84 @@ def T184_n8n_guia_passo_a_passo():
     assert "copiar('tpl-eco'" in html and "copiar('tpl-gat'" in html
     # sem segredos e sem dependências externas (vanilla)
     assert "https://" not in html
+
+
+@case
+def T185_integracao_nenhuma_ilha():
+    """v6.3.2: varredura de integração — cada solução interligada:
+    cérebro LISTA e dispara fluxos n8n (tools encadeadas), doctor vigia
+    o n8n (check opcional, fs-only), receita de automação n8n, criação
+    de tarefa webhook aponta o Template B — e revisar/arena/manager
+    seguem LOCAIS por lei (D2: código nunca sai)."""
+    from betterme import fluxos as F
+    from betterme.tools import TOOL_NAMES, execute_tool
+    from betterme import doctor
+
+    cfg = fresh()
+    # 1) tool no catálogo + degradação honesta (n8n ausente)
+    assert "fluxos_listar" in TOOL_NAMES
+    out = execute_tool("fluxos_listar", {}, cfg)
+    assert out["ok"] is False and "fluxos start" in out["output"]
+    # 2) listar extrai os paths de webhook de cada workflow
+    orig_rod, orig_lst = F.rodando, F.listar
+    F.rodando = lambda c: True
+    F.salvar_apikey(cfg, "n8n_key_T185")
+    try:
+        r = F.listar(cfg, _get=lambda u, k: {"data": [{
+            "id": "w1", "name": "Backup diário", "active": True,
+            "nodes": [
+                {"type": "n8n-nodes-base.webhook",
+                 "parameters": {"path": "backup-diario"}},
+                {"type": "n8n-nodes-base.httpRequest",
+                 "parameters": {"url": "x"}},
+                {"type": "n8n-nodes-base.webhook",
+                 "parameters": {"path": "backup-extra"}}]}]})
+        assert r["workflows"][0]["webhooks"] == ["backup-diario",
+                                                 "backup-extra"]
+        assert r["workflows"][0]["nos"] == 3
+        # 3) tool devolve a lista encadeada com fluxos_chamar
+        F.listar = lambda c, _get=None: r
+        out2 = execute_tool("fluxos_listar", {}, cfg)
+        assert out2["ok"] is True and out2["output"].startswith("⛓")
+        assert "Backup diário" in out2["output"]
+        assert "backup-diario" in out2["output"]
+        assert "fluxos_chamar" in out2["output"]
+    finally:
+        F.rodando, F.listar = orig_rod, orig_lst
+    # 4) doctor: check n8n opcional nos 3 estados (fs-only)
+    mapa = {x["id"]: x for x in doctor.run_checks(cfg)}
+    fl = mapa["fluxos"]
+    assert fl["optional"] is True and fl["ok"] is False
+    assert "setup" in fl["fix"]                      # não instalado
+    F.n8n_bin(cfg).parent.mkdir(parents=True, exist_ok=True)
+    F.n8n_bin(cfg).write_text("#!/bin/sh\n", encoding="utf-8")
+    fl2 = {x["id"]: x for x in doctor.run_checks(cfg)}["fluxos"]
+    assert fl2["ok"] is False and "fluxos start" in fl2["fix"]
+    orig2 = F.rodando
+    F.rodando = lambda c: True
+    try:
+        fl3 = {x["id"]: x for x in doctor.run_checks(cfg)}["fluxos"]
+        assert fl3["ok"] is True and "rodando" in fl3["detail"]
+    finally:
+        F.rodando = orig2
+    # 5) receita n8n encadeia as tools
+    from betterme.recipes import RECIPES
+    rec = [x for x in RECIPES if x["id"] == "n8n-fluxo-diario"]
+    assert rec and "fluxos_listar" in rec[0]["input"]
+    assert "fluxos_chamar" in rec[0]["input"]
+    # 6) criação de tarefa webhook aponta o template na GUI
+    src = Path("betterme/server/app.py").read_text(encoding="utf-8")
+    assert "Template B" in src
+    # 7) D2 guardado: revisor/juiz/manager LOCAIS (nada de roteador)
+    for mod in ("revisar.py", "arena.py"):
+        msrc = Path("betterme", mod).read_text(encoding="utf-8")
+        assert "get_client" not in msrc, mod
+    assert "OllamaClient" in Path(
+        "betterme/manager.py").read_text(encoding="utf-8")
+    # 8) o mapa de integração existe e documenta as exceções
+    mapa_md = Path("MAPA_APLICACAO.md").read_text(encoding="utf-8")
+    assert "Mapa de integração" in mapa_md
+    assert "nenhuma solução é ilha" in mapa_md
 
 
 if __name__ == "__main__":

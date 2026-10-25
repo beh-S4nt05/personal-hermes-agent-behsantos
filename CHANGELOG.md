@@ -1,5 +1,29 @@
 # Changelog
 
+## v6.3.2 — 🗺 INTEGRAÇÃO TOTAL ("nenhuma solução é ilha")
+
+Varredura completa do app e integração de cada solução:
+
+- **Cérebro ↔ n8n nas duas pontas**: nova tool `fluxos_listar` (nome,
+  ativo, nº de nós e **paths de webhook** extraídos dos nós) — o
+  operador pede "dispare o Backup diário" e o cérebro descobre o path
+  sozinho e encadeia com `fluxos_chamar`.
+- **Doctor ↔ n8n**: check opcional `⚙ Fluxos (n8n)` (fs-only, rápido)
+  nos 3 estados — não instalado → `fluxos setup` · parado →
+  `fluxos start` · rodando ✔ (com estado da API key).
+- **Tarefas ↔ n8n**: a criação de tarefa webhook agora aponta o
+  Template B na GUI ⚙ Fluxos.
+- **Receitas ↔ n8n**: 7ª receita "⛓ Disparar fluxo do n8n" (agendável
+  com 1 clique, encadeia listar→chamar).
+- **Auditado e guardado**: `revisar.py`/`arena.py` (D2 — diff/código
+  nunca sai) e `manager.py` (diagnóstico do servidor Ollama) seguem
+  LOCAIS de propósito — T185 vigia para ninguém "integrá-los" ao
+  roteador por engano.
+- **MAPA_APLICACAO.md**: nova seção "🗺 Mapa de integração" — matriz de
+  quem fala com quem + as exceções por lei.
+- T25 (checks/receitas) + T183 (webhooks) atualizados · **T185 novo —
+  185/185**.
+
 ## v6.3.1 — 📖 N8N PASSO A PASSO (TEMPLATE DE USO)
 
 - **`N8N_PASSOAPASSO.md`**: guia completo do zero à automação —

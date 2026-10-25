@@ -1474,7 +1474,8 @@ self.addEventListener("fetch", (e) => {
         if trigger and trigger["type"] == "webhook":
             base = request.host_url.rstrip("/")
             msg = (f"tarefa criada — dispare com: POST {base}/api/hooks/{entry['id']}"
-                   f" (adicione ?token=... se houver token)")
+                   f" (adicione ?token=... se houver token) · template do "
+                   f"n8n pronto na aba ⚙ Fluxos (Template B)")
         else:
             msg = f"tarefa agendada: {human_schedule(spec)}"
         return jsonify({"ok": True, "msg": msg, "schedule": entry["id"]})

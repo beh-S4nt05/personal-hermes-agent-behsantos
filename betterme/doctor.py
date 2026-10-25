@@ -133,6 +133,30 @@ def run_checks(cfg) -> list[dict]:
         "detail": detail, "fix": fix, "optional": True,
     })
 
+    # 4b) v6.3.2: n8n local (opcional) — interliga ⚙ Fluxos ↔ doctor
+    try:
+        from . import fluxos as _fluxos
+        if _fluxos.rodando(cfg):
+            _key = bool(_fluxos.ler_apikey(cfg))
+            ok = True
+            detail = (f"rodando (porta {_fluxos.PORTA}) · API key "
+                      f"{'✔' if _key else '✖ (necessária p/ fluxos listar)'}")
+            fix = ""
+        elif _fluxos.instalado_leve(cfg):
+            ok = False
+            detail = "instalado, mas parado"
+            fix = "betterme fluxos start"
+        else:
+            ok = False
+            detail = "não instalado"
+            fix = "betterme fluxos setup (ou python install.py --full)"
+    except Exception as exc:  # noqa: BLE001
+        ok, detail, fix = False, f"erro: {exc.__class__.__name__}", ""
+    checks.append({
+        "id": "fluxos", "name": "⚙ Fluxos (n8n)", "ok": ok,
+        "detail": detail, "fix": fix, "optional": True,
+    })
+
     # 5) Segurança: exposto na rede sem token?
     host = str(getattr(cfg, "host", "127.0.0.1"))
     exposed = host not in ("127.0.0.1", "localhost", "::1")

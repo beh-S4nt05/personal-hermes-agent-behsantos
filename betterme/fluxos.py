@@ -130,6 +130,11 @@ def _env(cfg) -> dict:
     return env
 
 
+def instalado_leve(cfg) -> bool:
+    """v6.3.2: n8n instalado? (só filesystem — rápido p/ doctor)."""
+    return n8n_bin(cfg).exists()
+
+
 def rodando(cfg) -> bool:
     from . import plataforma
     pid_f = _pid_file(cfg)
@@ -296,15 +301,25 @@ def listar(cfg, _get=None) -> dict:
     if "erro" in dados or not isinstance(dados.get("data"), list):
         return {"ok": False, "msg": "resposta inesperada da API do n8n — "
                                     "confira a API key"}
-    wfs = [{"id": w.get("id"), "nome": w.get("name"),
-            "ativo": bool(w.get("active")),
-            "nos": len(w.get("nodes") or [])} for w in dados["data"]]
+    wfs = []
+    for w in dados["data"]:
+        # v6.3.2: paths de webhook de cada workflow — permite o cérebro
+        # ir de "dispare o Backup diário" ao path certo (fluxos_listar)
+        hooks = sorted({str((n.get("parameters") or {}).get("path"))
+                        for n in (w.get("nodes") or [])
+                        if isinstance(n, dict)
+                        and str(n.get("type") or "").endswith("webhook")
+                        and (n.get("parameters") or {}).get("path")})
+        wfs.append({"id": w.get("id"), "nome": w.get("name"),
+                    "ativo": bool(w.get("active")),
+                    "nos": len(w.get("nodes") or []),
+                    "webhooks": hooks})
     return {"ok": True, "workflows": wfs}
 
 
 def status(cfg, node_bin: str = "node") -> dict:
     ok_node, msg_node = node_ok(node_bin)
-    instalado = n8n_bin(cfg).exists()
+    instalado = instalado_leve(cfg)
     return {"ok": True, "node_ok": ok_node, "node_msg": msg_node,
             "npm": bool(shutil.which("npm")),
             "n8n_instalado": instalado,
