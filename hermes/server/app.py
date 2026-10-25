@@ -789,6 +789,73 @@ self.addEventListener("fetch", (e) => {
         except (PermissionError, FileNotFoundError) as exc:
             return jsonify({"ok": False, "msg": str(exc)}), 400
 
+    # ------------------------------------------- v4.0.0 (M8): Agentes
+    @app.get("/api/especialistas")
+    @protected
+    def especialistas_state():
+        from ..specialists import disponiveis
+        return jsonify({"ok": True, "especialistas": disponiveis(cfg)})
+
+    @app.get("/api/autonomia")
+    @protected
+    def autonomia_get():
+        from ..autonomy import nivel
+        return jsonify({"ok": True, "nivel": nivel(cfg)})
+
+    @app.post("/api/autonomia")
+    @protected
+    def autonomia_set():
+        from ..autonomy import NIVEIS, nivel
+        payload = request.get_json(silent=True) or {}
+        alvo = str(payload.get("nivel", "")).strip().lower()
+        if alvo not in NIVEIS:
+            return jsonify({"ok": False,
+                            "msg": "nível inválido — use: " +
+                                   ", ".join(NIVEIS)}), 400
+        cfg.update({"autonomia": alvo})
+        return jsonify({"ok": True, "nivel": nivel(cfg)})
+
+    @app.get("/api/aprendizados")
+    @protected
+    def aprendidos_get():
+        from ..learning import pendentes
+        return jsonify({"ok": True, "pendentes": pendentes(cfg)})
+
+    @app.post("/api/aprendidos")
+    @protected
+    def aprendidos_post():
+        from ..learning import aprovar, rejeitar
+        payload = request.get_json(silent=True) or {}
+        aid = str(payload.get("id", "")).strip()
+        acao = str(payload.get("acao", "")).strip().lower()
+        if acao == "aprovar":
+            ok, msg = aprovar(cfg, aid)
+        elif acao == "rejeitar":
+            ok, msg = rejeitar(cfg, aid)
+        else:
+            return jsonify({"ok": False, "msg": "ação inválida"}), 400
+        return jsonify({"ok": ok, "msg": msg})
+
+    @app.get("/api/gerente")
+    @protected
+    def gerente_get():
+        from ..code_manager import ativo
+        return jsonify({"ok": True, "ativo": ativo(cfg)})
+
+    @app.post("/api/gerente")
+    @protected
+    def gerente_post():
+        from .. import code_manager as GM
+        payload = request.get_json(silent=True) or {}
+        acao = str(payload.get("acao", "")).strip().lower()
+        if acao in ("on", "ativar"):
+            ok, msg = GM.ativar(cfg, assumir=bool(payload.get("yes")))
+        elif acao in ("off", "desativar"):
+            msg = GM.desativar(cfg); ok = True
+        else:
+            return jsonify({"ok": False, "msg": "ação inválida"}), 400
+        return jsonify({"ok": ok, "msg": msg})
+
     @app.post("/api/skills/toggle")
     @protected
     def skills_toggle():

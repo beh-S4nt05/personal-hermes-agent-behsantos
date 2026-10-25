@@ -5365,6 +5365,56 @@ def T139_gerente_de_codigo_optin_consciente():
     assert "D2" in GM.AVISO_PRIVACIDADE
 
 
+@case
+def T140_gui_agentes_endpoints_e_fonte():
+    """v4.0.0 M8: página 🧪 Agentes na GUI (especialistas, autonomia,
+    aprendizados, gerente) + endpoints correspondentes, tudo vanilla."""
+    cfg = fresh()
+    c = _app(cfg)
+
+    # ---- endpoints
+    r = c.get("/api/especialistas").get_json()
+    assert r["ok"] and {e["nome"] for e in r["especialistas"]} == {
+        "revisor", "debugger", "pesquisador", "seguranca"}
+    r2 = c.get("/api/autonomia").get_json()
+    assert r2["ok"] and r2["nivel"] == "padrao"
+    r3 = c.post("/api/autonomia", json={"nivel": "autonomo"}).get_json()
+    assert r3["ok"] and r3["nivel"] == "autonomo"
+    r3b = c.post("/api/autonomia", json={"nivel": "xpto"})
+    assert r3b.status_code == 400
+    r4 = c.get("/api/aprendizados").get_json()
+    assert r4["ok"] and r4["pendentes"] == []
+    r5 = c.get("/api/gerente").get_json()
+    assert r5["ok"] and r5["ativo"] is False
+    r6 = c.post("/api/gerente", json={"acao": "on"}).get_json()
+    assert r6["ok"] is False and "Anthropic" in r6["msg"]   # exige yes
+    r7 = c.post("/api/gerente", json={"acao": "on", "yes": True}).get_json()
+    assert r7["ok"] is True
+    r8 = c.post("/api/gerente", json={"acao": "off"}).get_json()
+    assert r8["ok"]
+
+    # ---- fluxo aprendizados pela API
+    from hermes import learning as LG
+    LG.observar(cfg, "missão rica da GUI x", "aprovada", "passos reais", 6)
+    pend = c.get("/api/aprendizados").get_json()["pendentes"]
+    assert len(pend) == 1
+    rA = c.post("/api/aprendidos",
+                json={"id": pend[0]["id"], "acao": "aprovar"}).get_json()
+    assert rA["ok"] and "instalada" in rA["msg"]
+    assert c.get("/api/aprendizados").get_json()["pendentes"] == []
+
+    # ---- fonte da GUI (zero-build, vanilla, inline)
+    html = Path("hermes/server/templates/index.html").read_text(
+        encoding="utf-8")
+    for marcador in ('id="page-agentes"', 'data-page="agentes"',
+                     "loadAgentes", "setAutonomia", "apDecide",
+                     "gerenteToggle", "/api/especialistas",
+                     "/api/aprendizados", "/api/gerente"):
+        assert marcador in html, marcador
+    # nav genérico carrega a página nova
+    assert 'state.page==="agentes"){ loadAgentes(); }' in html
+
+
 if __name__ == "__main__":
     print("◈ Hermes Agent — suíte de testes (v3.0)\n")
     sys.exit(run_all())

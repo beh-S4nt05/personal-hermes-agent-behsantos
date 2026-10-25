@@ -415,6 +415,7 @@
     <button data-page="ollama">🧠 Ollama</button>
     <button data-page="ferramentas">🛠 Ferramentas</button>
     <button data-page="skills">✦ Skills</button>
+    <button data-page="agentes">🧪 Agentes</button>
     <button data-page="memoria">📔 Memória</button>
     <button data-page="auditoria">🧾 Auditoria</button>
     <button data-page="ajustes">⚙ Ajustes</button>
@@ -769,6 +770,32 @@
   </section>
 
   <!-- ══════════════════════ AUDITORIA (v3.0) ══════════════════════ -->
+  <section class="page" id="page-agentes">
+    <div class="card">
+      <h3><span class="ic">🧪</span> Especialistas <span class="hint" style="margin-left:auto" id="esp-badge"></span></h3>
+      <p class="hint">Subagentes escopados do cérebro main: veredito com evidência,
+      single-writer (só propõem), pool gratuito com fallback local e exame de competência.</p>
+      <div id="esp-list"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">🎚</span> Autonomia</h3>
+      <p class="hint">CAUTELOSO confirma tudo · PADRÃO leitura livre / escrita aprovada ·
+      AUTÔNOMO encadeia sem parar — hard gates sempre ativos em qualquer nível.</p>
+      <div id="aut-radios"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">📚</span> Aprendizados pendentes <span class="hint" style="margin-left:auto" id="ap-count"></span></h3>
+      <p class="hint">Rascunhos de skills/lições que o agente propôs trabalhando —
+      NADA entra no catálogo ou na memória sem sua aprovação.</p>
+      <div id="ap-list"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3><span class="ic">👔</span> Gerente de código (Claude)</h3>
+      <p class="hint" id="ger-status"></p>
+      <button class="b small" onclick="gerenteToggle(true)">ativar (código vai à nuvem Anthropic)</button>
+      <button class="b small ghost" onclick="gerenteToggle(false)">desligar</button>
+    </div>
+  </section>
   <section class="page" id="page-auditoria">
     <div class="card">
       <h3><span class="ic">🧾</span> Auditoria — trilha de ações do agente</h3>
@@ -994,6 +1021,7 @@ document.querySelectorAll("nav button").forEach(b=>{
     if (state.page==="chat"){ $("chatin").focus(); loadPending(); }
     if (state.page==="tarefas"){ loadTasks(); loadSchedules(); loadRecipes(); }
     if (state.page==="painel"){ loadPerf(); loadOrchStats(); }
+    if (state.page==="agentes"){ loadAgentes(); }
     if (state.page==="auditoria"){ loadAudit(); }
     if (state.page==="ollama") loadOllamaPage();
     if (state.page==="ferramentas") loadToolsPage();
@@ -2581,5 +2609,61 @@ async function doSearchConversations(){
     </div>
   </div>
 </div>
+
+<script>
+/* v4.0.0 (M8): página Agentes — especialistas, autonomia, aprendizados, gerente */
+async function loadAgentes(){
+  try{
+    const r = await api("/api/especialistas"); const d = await r.json();
+    const esp = d.especialistas || [];
+    const okN = esp.filter(e=>e.exame && e.exame.aprovado).length;
+    $("esp-badge").textContent = okN + "/" + esp.length + " exames ok";
+    $("esp-list").innerHTML = esp.map(e=>{
+      const ok = e.exame && e.exame.aprovado;
+      return '<div style="padding:6px 0;border-bottom:1px solid rgba(128,128,128,.25)">'
+        +'<b>'+esc(e.nome)+'</b> <span class="hint">'+esc(e.skill)+'</span>'
+        +'<span style="float:right" class="'+(ok?'hint':'hint')+'">'+(ok?'✔ exame ok':'✖ exame pendente')+'</span></div>';
+    }).join("") || '<p class="hint">nenhum especialista</p>';
+  }catch(_){}
+  try{
+    const r2 = await api("/api/autonomia"); const d2 = await r2.json();
+    $("aut-radios").innerHTML = ["cauteloso","padrao","autonomo"].map(n=>
+      '<label style="margin-right:14px;cursor:pointer"><input type="radio" name="autnivel" value="'+n+'" '
+      +(d2.nivel===n?"checked":"")+' onchange="setAutonomia(\''+n+'\')"> '+n+'</label>').join("");
+  }catch(_){}
+  try{
+    const r3 = await api("/api/aprendizados"); const d3 = await r3.json();
+    const ps = d3.pendentes || [];
+    $("ap-count").textContent = ps.length ? ps.length+" pendente(s)" : "";
+    $("ap-list").innerHTML = ps.map(e=>
+      '<div style="padding:6px 0;border-bottom:1px solid rgba(128,128,128,.25)">'
+      +'<b>['+esc(e.tipo)+']</b> '+esc(e.titulo)+' <span class="hint">'+esc(e.id)+'</span>'
+      +'<span style="float:right">'
+      +'<button class="b small" onclick="apDecide(\''+e.id+'\',\'aprovar\')">✔ aprovar</button> '
+      +'<button class="b small ghost" onclick="apDecide(\''+e.id+'\',\'rejeitar\')">✖ descartar</button></span></div>'
+    ).join("") || '<p class="hint">nenhum aprendizado pendente</p>';
+  }catch(_){}
+  try{
+    const r4 = await api("/api/gerente"); const d4 = await r4.json();
+    $("ger-status").textContent = d4.ativo
+      ? "ATIVO — o cérebro pode delegar tarefas de código ao Claude (o código sai da máquina)."
+      : "desligado — código 100% local (pool gratuito jamais recebe código).";
+  }catch(_){}
+}
+async function setAutonomia(n){
+  await api("/api/autonomia", {method:"POST", body: JSON.stringify({nivel:n})});
+  loadAgentes();
+}
+async function apDecide(id, acao){
+  const r = await api("/api/aprendidos", {method:"POST", body: JSON.stringify({id:id, acao:acao})});
+  await r.json();
+  loadAgentes();
+}
+async function gerenteToggle(on){
+  if (on && !confirm("AVISO DE PRIVACIDADE: o código das tarefas delegadas será processado pelo Claude Code (nuvem Anthropic). Memória e segredos nunca saem. Ativar?")) return;
+  await api("/api/gerente", {method:"POST", body: JSON.stringify({acao: on?"on":"off", yes: on})});
+  loadAgentes();
+}
+</script>
 </body>
 </html>
