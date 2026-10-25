@@ -4834,6 +4834,39 @@ def T129_hermes_md_contexto_de_projeto():
         shutil.rmtree(proj, ignore_errors=True)
 
 
+@case
+def T130_skills_de_metodologia_ptbr():
+    """v4.0.0 M3 (D4): as 6 skills essenciais adaptadas do superpowers,
+    reescritas em PT-BR no NOSSO modelo (fases do pipeline, nunca
+    subagentes/comandos do Claude), sempre ativas e auditadas."""
+    from hermes.skills import SkillLoader
+    from hermes.skills_audit import run_audit
+
+    cfg = fresh()
+    nomes = {"tdd", "debug-sistematico", "verificacao-antes-de-concluir",
+             "code-review", "brainstorming", "writing-plans"}
+    loader = SkillLoader(cfg)
+    cat = loader.catalog("corrigir o bug do teste que falhou")
+    # gatilhos: cada skill é achada por palavras do seu domínio
+    assert "debug-sistematico" in cat
+    assert "tdd" in loader.catalog("ciclo tdd vermelho verde refatora teste antes")
+    assert "verificacao-antes-de-concluir" in loader.catalog(
+        "verificação antes de concluir a entrega validado pronto")
+    assert "code-review" in loader.catalog("code review do diff aprovar reprovar achado")
+    assert "brainstorming" in loader.catalog("brainstorming ideia ambíguo escolher abordagem")
+    assert "writing-plans" in loader.catalog("plano executável roadmap fases passos verificáveis")
+    # conteúdo: PT-BR, sem mecanismos do Claude Code
+    for n in nomes:
+        md = (Path("skills") / n / "SKILL.md").read_text(encoding="utf-8")
+        assert len(md) > 400, (n, "skill rasa demais")
+        low = md.lower()
+        for proibido in ("claude code", "subagent", "slash command",
+                         "/plugin", "task tool"):
+            assert proibido not in low, (n, proibido)
+    # auditoria do catálogo inteiro segue limpa com as novas
+    assert run_audit(cfg, print_fn=lambda *_: None) == 0
+
+
 if __name__ == "__main__":
     print("◈ Hermes Agent — suíte de testes (v3.0)\n")
     sys.exit(run_all())

@@ -1,23 +1,40 @@
 ---
 name: debug-sistematico
-description: Depuração e debug sistemático de erro, bug, falha, crash, exceção, traceback, runtime, script, python, código, exit code, comportamento estranho, não funciona, quebrado ou corrompido — formular hipóteses e isolar a causa com evidências antes de corrigir.
+description: Debug em 4 fases — reproduzir o erro de forma determinística, isolar a causa com evidência, corrigir UMA hipótese por vez e verificar a correção de ponta a ponta. Use quando algo falhar, erro, exception, traceback, bug, não funciona, comportamento estranho, crash, teste vermelho, regressão ou diagnóstico.
 ---
 
-# Debug sistemático (nada de chute)
+# Debug sistemático (não chute — evidência)
 
-Você depura como um sênior: hipótese → evidência → isolamento → correção →
-verificação. CHUTAR correção é proibido.
+Chute consome tokens e enterra a causa real. O ciclo de 4 fases é mais
+barato até no modelo 8B local.
 
-## Método
-1. **Reproduza**: execute o que falha (run_command) e capture o erro REAL
-   (mensagem completa, traceback, exit code).
-2. **Formule 2-3 hipóteses** de causa e diga qual testa primeiro e por quê.
-3. **Isole**: um comando/verificação por hipótese (logs, arquivo de config,
-   versão, permissão, rede) — uma variável por vez.
-4. **Corrija a CAUSA**, não o sintoma (se o disco encheu, apagar log não é
-   a correção — achar quem enche é).
-5. **Verifique**: rode de novo e mostre a saída funcionando.
+## Fase 1 — REPRODUZIR
 
-## Na entrega
-- Causa raiz em uma frase · evidências (saídas coladas) · o que mudou ·
-  prova de que resolvido.
+Reproduza o erro com o MENOR comando/arquivo possível, de forma
+determinística. Sem reprodução estável não existe debug — existe
+adivinhação. Cole a saída REAL do erro (traceback completo).
+
+## Fase 2 — ISOLAR
+
+Encurte o ciclo: comente/bisseque o código até a menor unidade que ainda
+falha. Leia a MENSAGEM do erro e o NÚMERO DA LINHA antes de qualquer
+hipótese. Pergunte: "o que eu ASSUMO que é verdade aqui?" e teste a
+assunção mais barata primeiro (printf/log no ponto exato).
+
+## Fase 3 — HIPÓTESE ÚNICA
+
+Formule UMA hipótese causal ("X é None porque Y não inicializa") e
+corrija SÓ ela. Se a hipótese exigir mudar três coisas ao mesmo tempo,
+ela está errada — volte à fase 2.
+
+## Fase 4 — VERIFICAR
+
+1. O caso mínimo agora passa (saída colada).
+2. A suíte inteira continua verde (nada quebrou em volta).
+3. O erro original, do jeito que o operador relatou, não volta.
+
+## Proibido
+
+- "Correção" sem causa identificada (coberturas try/except pass).
+- Mudar duas variáveis numa tacada.
+- Concluir "está corrigido" sem rodar nada.
