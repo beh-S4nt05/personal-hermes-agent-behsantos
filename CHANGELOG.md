@@ -1,5 +1,30 @@
 # Changelog
 
+## v6.1.0 — 🧩 DISPOSITIVO UNIVERSAL (Windows | macOS | Linux, x86-64 e ARM64)
+
+Diretriz permanente do operador: **o Betterme é um agente para
+QUALQUER dispositivo** com Linux, macOS ou Windows — PC, notebook,
+Mac (Intel/Apple Silicon), mini PC, Raspberry Pi.
+
+- **`install.py`** — instalador UNIVERSAL em Python puro (sem bash):
+  confere Python ≥ 3.9, cria o `.venv`, atualiza pip/setuptools
+  (PEP 660 — lição do v6.0.2), instala editável e orienta o Ollama
+  **por SO** (curl · brew · winget). O `install.sh` clássico segue
+  para Linux com systemd.
+- **`plataforma.dispositivo()`** — retrato do dispositivo: SO,
+  arquitetura (ARM64 anotado ✔), RAM (lida por SO: `/proc/meminfo` ·
+  `sysctl hw.memsize` · `GlobalMemoryStatusEx`) e Python.
+- **Doctor ganha o check "Dispositivo"** (primeiro da lista, sempre
+  informativo): `Linux · x86_64 · RAM 1982 MB · Python 3.13` +
+  **recomendação de modelo pela RAM** (≥12 GB → 8b local · 6–12 GB →
+  3b · <6 GB → 3b com num_ctx 4096 ou pool grátis).
+- **README**: seção "Instalação universal (qualquer dispositivo)" com
+  a tabela de Ollama por SO.
+
+**Testes:** T179 (dispositivo + RAM por SO com sysctl falso +
+doctor check com recomendação + install.py universal + README) e T25
+atualizado para a nova lista de checks — **179/179**.
+
 ## v6.0.2 — 🔧 INSTALAÇÃO EDITÁVEL ROBUSTA (correção de teste real #2)
 
 **Achado do operador:** ao recriar o ambiente, `pip install -e .`

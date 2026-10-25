@@ -637,7 +637,7 @@ def T25_endpoints_leitura_v3():
     assert c.get("/api/notifications").json["ok"]
     assert len(c.get("/api/recipes").json["recipes"]) == 6
     checks = c.get("/api/doctor").json["checks"]
-    assert [x["id"] for x in checks] == ["ollama", "model", "stt", "claude", "security"]
+    assert [x["id"] for x in checks] == ["dispositivo", "ollama", "model", "stt", "claude", "security"]
 
 
 @case
@@ -6878,6 +6878,56 @@ def T178_instalacao_editavel_robusta():
     # (iii) README orienta o upgrade numa instalação nova
     rd = Path("README.md").read_text(encoding="utf-8")
     assert "upgrade pip setuptools" in rd
+
+
+# ══════════════════════ v6.1.0 — DISPOSITIVO UNIVERSAL ══════════════════════
+
+@case
+def T179_dispositivo_universal_instalador_e_doctor():
+    """v6.1.0: 'agente para QUALQUER dispositivo Linux|macOS|Windows' —
+    retrato do dispositivo (SO·arquitetura·RAM, x86-64 e ARM64), RAM
+    lida por SO (/proc · sysctl · GlobalMemoryStatusEx), instalador
+    Python puro (install.py, sem bash) e doctor com check Dispositivo."""
+    from betterme import doctor, plataforma
+
+    # dispositivo: retrato completo no SO REAL
+    d = plataforma.dispositivo()
+    assert d["so"] in ("linux", "macos", "windows")
+    assert d["so_label"] in ("Linux", "macOS", "Windows")
+    assert d["arquitetura"] and d["python"]
+    assert d["ram_mb"] is None or d["ram_mb"] > 0
+    # RAM real no Linux do sandbox; branch macOS via sysctl falso
+    assert plataforma.memoria_total_mb() > 0
+    orig_run = plataforma.subprocess.run
+    plataforma._SO_OVERRIDE = "macos"
+    try:
+
+        class _R:
+            stdout = "17179869184\n"      # 16 GB em bytes
+
+        plataforma.subprocess.run = lambda *a, **k: _R()
+        assert plataforma.memoria_total_mb() == 16 * 1024
+    finally:
+        plataforma.subprocess.run = orig_run
+        plataforma._SO_OVERRIDE = None
+    # doctor: check Dispositivo em 1º lugar, com recomendação por RAM
+    cfg = fresh()
+    checks = doctor.run_checks(cfg)
+    c0 = checks[0]
+    assert c0["id"] == "dispositivo" and c0["ok"] is True
+    assert "RAM" in c0["detail"] and "recomendado" in c0["detail"]
+    assert any(w in c0["detail"] for w in ("hermes3", "pool"))
+    # install.py: universal — Python puro, sem bash-ismo, orienta por SO
+    inst = Path("install.py").read_text(encoding="utf-8")
+    assert "venv" in inst and "--upgrade" in inst and "-e" in inst
+    assert "sys.platform" in inst
+    for alvo in ("winget", "brew install ollama", "install.sh"):
+        assert alvo in inst, alvo            # hints dos 3 SOs dentro
+    assert "betterme" in inst and "doctor" in inst
+    # README: seção universal + tabela Ollama por SO
+    rd = Path("README.md").read_text(encoding="utf-8")
+    assert "install.py" in rd and "qualquer dispositivo" in rd
+    assert "winget" in rd and "brew install ollama" in rd
 
 
 if __name__ == "__main__":

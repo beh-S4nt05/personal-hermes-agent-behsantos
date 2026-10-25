@@ -47,6 +47,54 @@ def hostname() -> str:
         return ""
 
 
+# ------------------------------------------------------------- dispositivo
+def memoria_total_mb() -> int | None:
+    """RAM total do dispositivo em MB (None = não descobriu)."""
+    s = so()
+    try:
+        if s == "linux":
+            with open("/proc/meminfo", encoding="utf-8") as fh:
+                for lin in fh:
+                    if lin.startswith("MemTotal:"):
+                        return int(lin.split()[1]) // 1024
+        if s == "macos":
+            r = subprocess.run(["sysctl", "-n", "hw.memsize"],
+                               capture_output=True, text=True, timeout=5)
+            return int((r.stdout or "0").strip()) // (1024 * 1024)
+        if s == "windows":
+            import ctypes
+
+            class _MSX(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong),
+                            ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong),
+                            ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong),
+                            ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong),
+                            ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+            stat = _MSX()
+            stat.dwLength = ctypes.sizeof(_MSX)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(  # type: ignore[attr-defined]
+                ctypes.byref(stat))
+            return int(stat.ullTotalPhys) // (1024 * 1024)
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def dispositivo() -> dict:
+    """v6.1.0: retrato do dispositivo p/ doctor/GUI — SO, arquitetura,
+    RAM e Python (x86-64 e ARM64 são cidadãos de primeira)."""
+    ram = memoria_total_mb()
+    rotulo = {"linux": "Linux", "macos": "macOS", "windows": "Windows"}
+    return {"so": so(), "so_label": rotulo.get(so(), so()),
+            "arquitetura": _platform.machine() or "?",
+            "ram_mb": ram, "python": _platform.python_version()}
+
+
 # ------------------------------------------------------------- processos
 def _liveness_unix(pid: int) -> bool:
     import os

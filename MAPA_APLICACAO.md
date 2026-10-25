@@ -81,7 +81,7 @@ tem as ferramentas próprias (Bash/Read/Edit) e executa por fora do pipeline.
 | `multimodal.py` | 🎙️ Multimodal local (v4.6.0, E5): ffmpeg → whisper.cpp LOCAL (timestamps) → transcrição vira livro `.txt` na biblioteca RAG (fonte citada); modelos em <data>/models; degradação honesta sem binários. CLI `betterme audio\|video transcrever`. |
 | `vida.py` | 🌅 Modo Vida (v5.0.0): missões agendadas `modo-vida:` determinísticas (dispatcher no scheduler ANTES do LLM — zero tokens); relatório diário (atividades 24h + rascunhos + aprovações) entregue via Telegram c/ DLP no texto inteiro; curadoria semanal (envelhecidos → resumo em lote + arquivados, nada apagado). CLI `betterme vida status\|relatorio\|curadoria\|registrar`. |
 | `fluxos.py` | ⚙️ Fluxos n8n locais (v5.1.0): setup via npm --prefix no data-dir, runtime c/ telemetria OFF e N8N_USER_FOLDER próprio, pid-file c/ reap anti-zumbi; remover = rmtree total; tool `fluxos_chamar` (webhook local) + rotas `/fluxos` (iframe) e `/api/fluxos/status`; Node 20.19–24.x exigido, degradação honesta. |
-| `plataforma.py` | 🖥️ Camada de SO (v6.0.0): detecção, liveness/matar cross-platform (Windows: OpenProcess/taskkill — nunca os.kill), popen destacado, shell por SO, hints apt/brew/winget, diagnóstico real por SO. Único lugar onde Unix-ismos vivem. |
+| `plataforma.py` | 🖥️ Camada de SO (v6.0.0): detecção, liveness/matar cross-platform (Windows: OpenProcess/taskkill — nunca os.kill), popen destacado, shell por SO, hints apt/brew/winget, diagnóstico real por SO. Único lugar onde Unix-ismos vivem. v6.1.0: `dispositivo()` (SO·arquitetura·RAM por SO — /proc, sysctl, GlobalMemoryStatusEx) + `memoria_total_mb()`. |
 | `boot.py` | 🔘 Autostart reversível (v6.0.0): Linux systemd user · macOS LaunchAgent · Windows .bat na Inicialização. CLI `betterme boot on\|off\|status`. |
 | `manager.py` | Gerência do Ollama: boot/restart (systemd ou `ollama serve` com log), diagnóstico de ambiente. |
 | `autoselect.py` | Auto-atribuição de modelos por papel (lê SEMPRE a lista instalada). |
@@ -321,7 +321,7 @@ Conta Gmail/Workspace em **somente leitura** (IMAP). Credenciais em
 
 ## 13. Testes — a rede de proteção
 
-`tests/run_all.py` — **178 casos** (v6.0.2), famílias:
+`tests/run_all.py` — **179 casos** (v6.1.0), famílias:
 unidades de módulo · sandbox/segurança · pipeline E2E (chat real com
 Ollama) · skills (precisão, estresse 30, auditoria) · Claude Code
 (persona, skills, goal, guard) · GUI (fonte) · scheduler · conversas ·

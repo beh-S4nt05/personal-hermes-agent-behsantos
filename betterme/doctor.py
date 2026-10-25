@@ -10,6 +10,29 @@ import shutil
 def run_checks(cfg) -> list[dict]:
     checks: list[dict] = []
 
+    # 0) Dispositivo — em qualquer SO (v6.1.0): SO · arquitetura · RAM
+    from . import plataforma
+    disp = plataforma.dispositivo()
+    ram = disp.get("ram_mb")
+    if ram and ram >= 12000:
+        reco = "hermes3:8b local (ou pool grátis)"
+    elif ram and ram >= 6000:
+        reco = "hermes3:3b local (o 8b pode faltar RAM)"
+    elif ram:
+        reco = "hermes3:3b c/ num_ctx 4096 — ou pool grátis (betterme provider set groq)"
+    else:
+        reco = "RAM não detectada"
+    arm = disp.get("arquitetura", "")
+    nota_arm = " · ARM64 ✔" if "arm" in arm.lower() or "aarch" in arm.lower() else ""
+    checks.append({
+        "id": "dispositivo", "name": "Dispositivo",
+        "ok": True,
+        "detail": f"{disp['so_label']} · {arm}{nota_arm} · "
+                  f"RAM {ram if ram else '?'} MB · Python {disp['python']}"
+                  f" — modelo recomendado: {reco}",
+        "fix": "",
+    })
+
     # 1) Ollama acessível?
     ok, detail = False, "servidor não responde"
     try:

@@ -65,21 +65,27 @@ Para instalar como serviço que sobe junto do sistema:
 | RAM | 8 GB (`hermes3:3b`) · 12 GB+ (`hermes3:8b`) · 64 GB+ (`hermes3:70b`) |
 | Disco | ~5 GB (modelo 8b) + 1 GB (Betterme) |
 
-### Instalação manual (sem install.sh)
+### Instalação universal (qualquer dispositivo — Windows | macOS | Linux)
 
 ```bash
-# 1. Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull hermes3:8b
-
-# 2. Betterme Agent
-python3 -m venv .venv && . .venv/bin/activate
-pip install --upgrade pip setuptools   # setuptools >= 64 (instalação editável/PEP 660)
-pip install -e .
-
-# 3. Use
-betterme server
+python3 install.py    # venv + pip/setuptools + betterme + guia do Ollama
+betterme doctor       # checa dispositivo (SO, arquitetura, RAM), Ollama, modelo
+betterme server       # GUI em http://127.0.0.1:8080
 ```
+
+`install.py` é Python puro — roda em PC, notebook, Mac (Intel/Apple
+Silicon), mini PC e Raspberry Pi (ARM64). O Ollama, se faltar, é
+orientado por SO:
+
+| Sistema | Ollama |
+|---|---|
+| Linux | `curl -fsSL https://ollama.com/install.sh \| sh` |
+| macOS | `brew install ollama` (ou o app de ollama.com) |
+| Windows | `OllamaSetup.exe` de ollama.com (ou `winget install Ollama.Ollama`) |
+
+No Linux o `install.sh` clássico (com systemd opcional) segue
+disponível. Instalação manual: `python3 -m venv .venv` →
+`pip install --upgrade pip setuptools` → `pip install -e .`.
 
 ---
 
