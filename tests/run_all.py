@@ -5049,6 +5049,190 @@ def T132_autonomia_tres_niveis():
     assert AU.nivel(cfg4) == "autonomo"          # nível inválido não muda
 
 
+def _veredito_falso(nome="debugger", conf=0.9, evid=None):
+    import json as _j
+    return _j.dumps({
+        "especialista": nome, "caso": "caso",
+        "veredito": {"diagnostico": "causa raiz X",
+                     "acao_proposta": "fazer Y",
+                     "evidencia": evid if evid is not None else
+                     [{"arquivo": "", "linha": 0,
+                       "trecho": "saída real colada"}],
+                     "confianca": conf}})
+
+
+class _PoolFake:
+    """Pool injetável: captura payloads e devolve resposta scriptada."""
+    def __init__(self, resposta, nome="groq"):
+        self.resposta = resposta
+        self.nome = nome
+        self.payloads = []
+
+    def invocar(self, messages):
+        import json as _j
+        self.payloads.append(_j.dumps(messages, ensure_ascii=False))
+        return self.nome, self.resposta
+
+
+@case
+def T133_contrato_de_veredito_e_evidencia():
+    """v4.0.0 M6 (R3): schema do veredito, confiança mínima, evidência
+    obrigatória e checagem DETERMINÍSTICA em disco (risco #7)."""
+    from hermes.specialists import (checar_evidencia, invocar, validar,
+                                    _extrair_json)
+
+    bom = _extrair_json(_veredito_falso())
+    ok, motivo = validar(bom)
+    assert ok, motivo
+    # sem evidência / confiança baixa / campos vazios -> reprovado
+    sem_ev = _extrair_json(_veredito_falso(evid=[]))
+    assert validar(sem_ev)[0] is False
+    baixa = _extrair_json(_veredito_falso(conf=0.3))
+    assert validar(baixa)[0] is False
+    vazio = _extrair_json(_veredito_falso().replace("causa raiz X", ""))
+    assert validar(vazio)[0] is False
+    assert _extrair_json("não sou json") is None
+
+    # evidência em disco: arquivo:linha existe e contém o trecho
+    cfg = fresh()
+    d = Path.home() / f".hermes-t133-{os.getpid()}"
+    shutil.rmtree(d, ignore_errors=True)
+    d.mkdir(parents=True)
+    try:
+        (d / "cod.py").write_text("a = 1\nb = 2\nc = soma(a, b)\n",
+                                  encoding="utf-8")
+        acerta = _extrair_json(_veredito_falso(evid=[
+            {"arquivo": str(d / "cod.py"), "linha": 3, "trecho": "c = soma"}]))
+        assert checar_evidencia(acerta, d)[0] is True
+        linha_errada = _extrair_json(_veredito_falso(evid=[
+            {"arquivo": str(d / "cod.py"), "linha": 99,
+             "trecho": "c = soma"}]))
+        assert checar_evidencia(linha_errada, d)[0] is False
+        trecho_forjado = _extrair_json(_veredito_falso(evid=[
+            {"arquivo": str(d / "cod.py"), "linha": 3,
+             "trecho": "trecho que não existe no arquivo"}]))
+        assert checar_evidencia(trecho_forjado, d)[0] is False
+        arq_fantasma = _extrair_json(_veredito_falso(evid=[
+            {"arquivo": str(d / "nao_existe.py"), "linha": 1,
+             "trecho": "x"}]))
+        assert checar_evidencia(arq_fantasma, d)[0] is False
+
+        # invocar E2E com pool fake: veredito bom passa
+        pool = _PoolFake(_veredito_falso(evid=[
+            {"arquivo": str(d / "cod.py"), "linha": 3,
+             "trecho": "c = soma"}]))
+        r = invocar(cfg, "debugger", "caso de teste", _pool=pool,
+                    pular_exame=True, raiz=d)
+        assert r["ok"] and r["provedor"] == "groq" and r["latencia_s"] >= 0
+        # evidência forjada -> reprovado na checagem de disco
+        pool2 = _PoolFake(_veredito_falso(evid=[
+            {"arquivo": str(d / "cod.py"), "linha": 3,
+             "trecho": "trecho inexistente"}]))
+        r2 = invocar(cfg, "debugger", "caso", _pool=pool2,
+                     pular_exame=True, raiz=d)
+        assert not r2["ok"] and "evidência" in r2["motivo"]
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+@case
+def T134_dlp_codigo_e_segredos_nao_saim_no_pool():
+    """v4.0.0 M6 (R6/D2): o caso enviado ao pool externo passa pelo DLP —
+    código e segredos NUNCA saem; prosa permanece."""
+    from hermes.specialists import invocar
+
+    cfg = fresh()
+    caso = ("o script é:\n```python\ndef banco():\n    return 1\n"
+            "```\ne a chave gsk_" + "K" * 30 +
+            "\nprosa normal: o serviço caiu 3 vezes hoje")
+    pool = _PoolFake(_veredito_falso())
+    r = invocar(cfg, "debugger", caso, _pool=pool, pular_exame=True)
+    assert r["ok"]
+    enviado = pool.payloads[0]
+    assert "def banco" not in enviado and "gsk_" not in enviado
+    assert "CODIGO LOCAL" in enviado and "[REDACTED:segredo]" in enviado
+    assert "o serviço caiu 3 vezes hoje" in enviado   # prosa preservada
+
+
+@case
+def T135_pool_de_provedores_rotacao_e_fallback():
+    """v4.0.0 M6 (R7): externo falha -> rotaciona -> todos caem -> local."""
+    from hermes.specialists import Pool
+
+    cfg = fresh()
+
+    class _Falha:
+        def chat_stream(self, model, messages, **k):
+            raise RuntimeError("429 rate limit")
+
+    class _Lento:
+        def chat_stream(self, model, messages, **k):
+            yield {"message": {"content": "resposta do gemini"}}
+
+    class _Local:
+        simulated = False
+        def chat_stream(self, model, messages, **k):
+            yield {"message": {"content": "resposta local"}}
+
+    # 1º falha, 2º atende
+    pool = Pool(cfg, _extra=[("groq", _Falha()), ("gemini", _Lento())])
+    nome, texto = pool.invocar([{"role": "user", "content": "oi"}])
+    assert nome == "gemini" and "gemini" in texto
+    # todos falham -> fallback local (get_client do cfg mock)
+    pool2 = Pool(cfg, _extra=[("groq", _Falha()), ("zai", _Falha())])
+    nome2, texto2 = pool2.invocar([{"role": "user", "content": "oi"}])
+    assert nome2 == "local" and texto2
+    # rate limit: 30 chamadas/min no groq esgotam e pulam para o próximo
+    class _Conta:
+        def __init__(self):
+            self.n = 0
+        def chat_stream(self, model, messages, **k):
+            self.n += 1
+            yield {"message": {"content": "ok"}}
+    conta = _Conta()
+    pool3 = Pool(cfg, _extra=[("groq", conta), ("gemini", _Lento())])
+    for _ in range(35):
+        nm, _tx = pool3.invocar([{"role": "user", "content": "x"}])
+    assert conta.n <= 31                     # groq respeitou o bucket
+
+
+@case
+def T136_exames_de_competencia_e_degradacao():
+    """v4.0.0 M6 (R8/R5): casos-ouro com cache; reprovado desativa o
+    especialista SEM quebrar o pipeline (regra 8 do ADR-001)."""
+    from hermes.specialists import _arquivo_exames, disponiveis, exame, \
+        invocar
+
+    cfg = fresh()
+    arq = _arquivo_exames(cfg)
+    assert not arq.exists() or "debugger" not in arq.read_text(
+        encoding="utf-8")
+    # exame bom (debugger precisa citar 'finally' no veredito)
+    resposta = _veredito_falso().replace("causa raiz X",
+                                         "o finally apaga a pasta antes")
+    pool = _PoolFake(resposta)
+    ex = exame(cfg, "debugger", _pool=pool)
+    assert ex["aprovado"], ex
+    cache = json.loads(arq.read_text(encoding="utf-8"))
+    assert cache["debugger"]["aprovado"] is True
+    # 2ª chamada usa cache (pool novo não é chamado — payload vazio)
+    pool2 = _PoolFake(resposta)
+    ex2 = exame(cfg, "debugger", _pool=pool2)
+    assert ex2["aprovado"] and not pool2.payloads
+    # veredito que não cita o requisito -> reprovado
+    cfg2 = fresh()
+    ex3 = exame(cfg2, "debugger", _pool=_PoolFake(_veredito_falso()))
+    assert not ex3["aprovado"]
+    # especialista reprovado: invocar degrada com motivo claro (não exceção)
+    r = invocar(cfg2, "debugger", "qualquer caso",
+                _pool=_PoolFake(_veredito_falso()))
+    assert not r["ok"] and "exame" in r["motivo"]
+    # disponiveis() lista os 4 com estado do exame
+    disp = {d["nome"]: d for d in disponiveis(cfg2)}
+    assert set(disp) == {"revisor", "debugger", "pesquisador", "seguranca"}
+    assert disp["debugger"]["exame"]["aprovado"] is False
+
+
 if __name__ == "__main__":
     print("◈ Hermes Agent — suíte de testes (v3.0)\n")
     sys.exit(run_all())

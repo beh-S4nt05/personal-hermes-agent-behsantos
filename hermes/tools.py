@@ -57,6 +57,40 @@ TOOLS: list[dict] = [
     {
         "type": "function",
         "function": {
+            "name": "especialista",
+            "description": (
+                "Invoca um ESPECIALISTA (subagente escopado) para um caso "
+                "pontual e recebe um veredito estruturado com evidência. "
+                "Use quando quiser uma segunda opinião especializada: "
+                "revisar trabalho pronto, diagnosticar erro difícil, "
+                "sintetizar fontes ou auditar segurança. O especialista "
+                "apenas PROPÕE ações — não executa nada."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nome": {
+                        "type": "string",
+                        "enum": ["revisor", "debugger", "pesquisador",
+                                 "seguranca"],
+                        "description": "Qual especialista invocar",
+                    },
+                    "caso": {
+                        "type": "string",
+                        "description": (
+                            "Descrição autônoma do caso: contexto, o que "
+                            "aconteceu, arquivos/linhas/saídas relevantes "
+                            "(sem dados pessoais)"
+                        ),
+                    },
+                },
+                "required": ["nome", "caso"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "run_command",
             "description": (
                 "Executa um comando bash no Linux e retorna a saída combinada "
@@ -722,6 +756,33 @@ def git_run(args: dict, cfg) -> str:
     return f"$ git {acao} {extra}".strip() + f"\n{out[:4000] if out else '(sem saída)'}"
 
 
+def especialista_tool(args: dict, cfg) -> str:
+    """v4.0.0 (M6): o cérebro invoca um especialista (revisor, debugger,
+    pesquisador, seguranca) para um caso pontual — veredito com evidência,
+    nunca escreve no disco (single-writer)."""
+    from .specialists import invocar
+    nome = str(args.get("nome", "")).strip().lower()
+    caso = str(args.get("caso", "")).strip()
+    if not nome or not caso:
+        return ("ERRO: informe 'nome' (revisor|debugger|pesquisador|"
+                "seguranca) e 'caso' (descrição do problema).")
+    r = invocar(cfg, nome, caso)
+    if not r.get("ok"):
+        return (f"✖ especialista {nome}: REPROVADO — {r.get('motivo', '')} "
+                f"(provedor {r.get('provedor')}; o pipeline segue sem ele)")
+    v = r["veredito"]["veredito"]
+    ev = "\n".join(
+        f"  • {e.get('arquivo', '(sem arquivo)')}"
+        f"{':' + str(e['linha']) if e.get('linha') else ''}: "
+        f"{str(e.get('trecho', ''))[:100]}"
+        for e in v.get("evidencia", []))
+    return (f"🧪 especialista {nome} ({r.get('provedor')}, "
+            f"{r.get('latencia_s')}s, confiança {v.get('confianca')}):\n"
+            f"DIAGNÓSTICO: {v.get('diagnostico')}\n"
+            f"AÇÃO PROPOSTA: {v.get('acao_proposta')}\n"
+            f"EVIDÊNCIA:\n{ev or '  (sem arquivos)'}")
+
+
 def knowledge_search(args: dict, cfg) -> str:
     """v3.15.0 (PR#2): RAG local — trechos verbatim com fonte."""
     from . import knowledge
@@ -756,6 +817,7 @@ EXECUTORS = {
     "web_search": web_search,
     "web_fetch": web_fetch,
     "backups": _backups_tool,
+    "especialista": especialista_tool,
 }
 
 
