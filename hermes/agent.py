@@ -203,6 +203,14 @@ class Agent:
                 parts.append(f"mem:{st.st_mtime_ns}:{st.st_size}")
         except OSError:
             pass
+        # contexto do projeto (M2): escopo + conteúdo (hash) dos arquivos
+        try:
+            from .project_context import secao as _pc_secao
+            _pcs = _pc_secao(self.cfg)
+            if _pcs:
+                parts.append(f"pc:{hash(_pcs)}")
+        except Exception:  # noqa: BLE001
+            pass
         try:
             parts.append("mcp:" + ",".join(sorted(self.mcp._map.keys())))
         except Exception:  # noqa: BLE001
@@ -253,6 +261,18 @@ class Agent:
             catalog = self.skills.catalog(query)
             if catalog:
                 prompt += "\n\n" + catalog
+        except Exception:
+            pass
+        # contexto do projeto (v4.0.0 M2): HERMES.md/AGENTS.md descoberto
+        # no escopo da task + global da máquina — externo recebe versão
+        # filtrada pelo DLP (segredos/código censurados, regra D2)
+        try:
+            from .project_context import secao as _pc_secao, versao_externa
+            _pc = _pc_secao(self.cfg)
+            if _pc:
+                if getattr(self.client, "is_external", False):
+                    _pc = versao_externa(_pc)
+                prompt += _pc
         except Exception:
             pass
         # memória persistente: fatos sobre o usuário valem para todas as

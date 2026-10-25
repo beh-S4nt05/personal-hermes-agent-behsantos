@@ -4737,6 +4737,103 @@ def T128_varredura_de_segredos_e_dlp_mascarar():
     assert not achos, f"CRÍTICO no repo público: {achos[:3]}"
 
 
+@case
+def T129_hermes_md_contexto_de_projeto():
+    """v4.0.0 M2: HERMES.md/AGENTS.md descoberto (global + projeto),
+    HERMES.md vence AGENTS.md, cap 32 KiB, `hermes init` cria scaffold,
+    injeção no prompt LOCAL e versão DLP-mascarada no EXTERNO."""
+    from hermes import project_context as PC
+    from hermes.agent import Agent
+
+    cfg = fresh()
+    # sem arquivos -> seção vazia, prompt inalterado
+    assert PC.secao(cfg) == ""
+
+    # global + projeto; HERMES.md vence AGENTS.md no projeto
+    (cfg.data_dir / "HERMES.md").write_text(
+        "global: responder sempre em PT-BR", encoding="utf-8")
+    proj = Path.home() / f".hermes-t129-{os.getpid()}"
+    shutil.rmtree(proj, ignore_errors=True)
+    proj.mkdir(parents=True)
+    try:
+        (proj / "AGENTS.md").write_text("velho: use npm", encoding="utf-8")
+        (proj / "HERMES.md").write_text(
+            "projeto: testes com pytest; NUNCA toque em migrations",
+            encoding="utf-8")
+        ach = dict(PC.descobrir(cfg, proj))
+        assert "global: responder sempre em PT-BR" in \
+            ach.get("global (máquina)", "")
+        assert "pytest" in ach.get("HERMES.md do projeto", "")
+        assert "npm" not in ach.get("HERMES.md do projeto", "")
+        sec = PC.secao(cfg, proj)
+        assert "pytest" in sec and "Instruções do projeto" in sec
+        # sem HERMES.md no projeto -> AGENTS.md é aceito (compat Codex)
+        (proj / "HERMES.md").unlink()
+        sec2 = PC.secao(cfg, proj)
+        assert "npm" in sec2
+
+        # cap 32 KiB com marcador de truncatura
+        (proj / "HERMES.md").write_text("x" * 40_000, encoding="utf-8")
+        sec3 = PC.secao(cfg, proj)
+        assert len(sec3.encode("utf-8")) < 33_000
+        assert "truncado em 32 KiB" in sec3
+
+        # init: cria scaffold; de novo -> não altera
+        p2 = Path.home() / f".hermes-t129b-{os.getpid()}"
+        shutil.rmtree(p2, ignore_errors=True)
+        p2.mkdir(parents=True)
+        try:
+            alvo, criado = PC.scaffold(p2)
+            assert criado and alvo.exists() and "Comandos" in alvo.read_text(
+                encoding="utf-8")
+            _, criado2 = PC.scaffold(p2)
+            assert criado2 is False
+        finally:
+            shutil.rmtree(p2, ignore_errors=True)
+
+        # injeção no prompt do agente LOCAL (dentro do task_scope)
+        (proj / "HERMES.md").write_text(
+            "regra local do projeto hermes-md-t129", encoding="utf-8")
+        from hermes.tools import task_scope
+
+        class _Fala:
+            simulated = False
+            def chat_stream(self, model, messages, **k):
+                yield {"message": {"content": "ok"}}
+        ag = Agent(cfg, client=_Fala())
+        with task_scope(proj, cfg):
+            prompt = ag.system_prompt("algo")
+        assert "regra local do projeto hermes-md-t129" in prompt
+
+        # EXTERNO: seção vai, mas FILTRADA pelo DLP (código/segredo fora)
+        class _Ext:
+            is_external = True
+            simulated = False
+        (proj / "HERMES.md").write_text(
+            "regra: use token gsk_" + "Z" * 30 + " e o bloco:\n"
+            "```python\ndef segredo(): pass\n```\nfim", encoding="utf-8")
+        ag2 = Agent(cfg, client=_Ext())
+        with task_scope(proj, cfg):
+            prompt2 = ag2.system_prompt("algo")
+        assert "gsk_" not in prompt2 and "[REDACTED:segredo]" in prompt2
+        assert "def segredo" not in prompt2
+        assert "CODIGO LOCAL" in prompt2          # código censurado, regra D2
+
+        # cache do prompt invalida quando o HERMES.md muda
+        (proj / "HERMES.md").write_text("nova regra v2 t129", encoding="utf-8")
+        ag3 = Agent(cfg, client=_Fala())
+        with task_scope(proj, cfg):
+            ag3.system_prompt("algo")                # aquece o cache
+            k1 = ag3._prompt_cache[0]
+            (proj / "HERMES.md").write_text("nova regra v3 t129",
+                                            encoding="utf-8")
+            ag3.system_prompt("algo")
+            k2 = ag3._prompt_cache[0]
+        assert k1 != k2                              # chave mudou
+    finally:
+        shutil.rmtree(proj, ignore_errors=True)
+
+
 if __name__ == "__main__":
     print("◈ Hermes Agent — suíte de testes (v3.0)\n")
     sys.exit(run_all())
