@@ -7491,6 +7491,98 @@ def T188_nunca_mudo_e_dados_reais():
     assert "interrompida sem" in src_app and "thread morta" in src_app  # rede 2
 
 
+@case
+def T189_d2_no_transporte_do_roteador():
+    """v6.4.2 (P0 da revisão): BLUEPRINT §5.4 cumprido no caminho do
+    roteador — TODO payload externo passa pelo DLP mascarar() em nível
+    de TRANSPORTE (ExternalClient); pedido com código/segredo vai ao
+    cérebro LOCAL direto (análise de código é local, D2/§5.2); stream
+    único no FallbackClient (antes: 2 requisições); prompt do agente
+    não mente sobre o cérebro em uso."""
+    from betterme.agent import Agent
+    from betterme.llm_providers import (FallbackClient, dlp_messages,
+                                        payload_sensivel)
+    from betterme.ollama_client import OllamaClient
+
+    # transporte: canário real + código censurados no payload
+    # (canário de TESTE, formato real de chave — varredura:ok)
+    msgs = [{"role": "user", "content":
+             "chave gsk_ABCDEFGHIJKLMNOPQRSTUVWXYZ7890 e "  # varredura:ok
+             "```python\ndef f(): pass\n```"}]
+    c = " ".join(m["content"] for m in dlp_messages(msgs))
+    assert "gsk_ABCDEFGHIJ" not in c and "[REDACTED:segredo]" in c
+    assert "CÓDIGO LOCAL" in c
+    assert payload_sensivel(msgs) is True
+    assert payload_sensivel([{"role": "user", "content": "bom dia?"}]) is False
+    # idempotente p/ quem já mascara (arena/specialists)
+    ja = [{"role": "user", "content": "[CÓDIGO LOCAL — não é enviado]"}]
+    assert dlp_messages(ja) == ja
+
+    class _Ext:
+        is_external = True
+        simulated = False
+
+        def __init__(self, cfg):
+            self.cfg = cfg
+            self.chamadas = 0
+
+        def chat_stream(self, *a, **k):
+            self.chamadas += 1
+            yield {"message": {"content": "EXTERNA"}}
+
+        def is_running(self):
+            return True
+
+        def list_models(self):
+            return ["x"]
+
+    class _Loc:
+        def __init__(self):
+            self.chamadas = 0
+
+        def chat_stream(self, *a, **k):
+            self.chamadas += 1
+            yield {"message": {"content": "LOCAL"}}
+
+        def is_running(self):
+            return True
+
+        def list_models(self):
+            return ["local"]
+
+    cfg = fresh()
+    ext, loc = _Ext(cfg), _Loc()
+    fb = FallbackClient(ext, loc)
+    out = "".join((ch.get("message") or {}).get("content") or ""
+                  for ch in fb.chat_stream("m", msgs))
+    assert out == "LOCAL" and loc.chamadas == 1 and ext.chamadas == 0
+    ext2, loc2 = _Ext(cfg), _Loc()
+    out2 = "".join((ch.get("message") or {}).get("content") or ""
+                   for ch in FallbackClient(ext2, loc2).chat_stream(
+                       "m", [{"role": "user", "content": "oi"}]))
+    # stream ÚNICO: 1 chamada ao externo (antes eram 2) e resposta inteira
+    assert out2 == "EXTERNA" and ext2.chamadas == 1 and loc2.chamadas == 0
+    # prompt não mente sobre o cérebro
+    ag = Agent(cfg)
+    ag.client = OllamaClient(cfg.ollama_url)
+    assert "roda localmente sobre o Ollama" in ag.system_prompt("oi")
+    ag2 = Agent(cfg)                      # novo agente: sem cache de prompt
+    ag2.client = ext
+    sp2 = ag2.system_prompt("oi")
+    assert "inferência remota SEGURA" in sp2 and "NUNCA saem" in sp2
+
+
+@case
+def T190_full_instala_stt():
+    """v6.4.2 (P1 da revisão): --full carrega TUDO MESMO — incluindo o
+    ditado por voz (faster-whisper), com --skip-stt para abrir mão."""
+    src = Path("install.py").read_text(encoding="utf-8")
+    assert "--skip-stt" in src and "faster-whisper" in src
+    assert "não instalar o ditado" in src       # help honesto
+    # best-effort: falha do STT não derruba o --full
+    assert "voz fica desativada — o resto segue" in src
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())

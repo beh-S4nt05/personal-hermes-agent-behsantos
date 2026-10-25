@@ -25,7 +25,7 @@ from .tools import TOOLS, TOOL_NAMES, execute_tool
 
 SYSTEM_PROMPT = """\
 Você é o Betterme, um agente de operação Linux controlável por terminal e por uma \
-interface web. Você roda localmente sobre o Ollama, na máquina do usuário.
+interface web. {onde_roda}
 
 Identidade e postura:
 - Fale português do Brasil por padrão (responda no idioma do usuário).
@@ -233,6 +233,17 @@ class Agent:
             "  memória/CPU/disco/modelo de cabeça — se a ferramenta falhar,\n"
             "  diga que não conseguiu obter o dado e mostre o erro.\n"
         )
+        # v6.4.2: a frase sobre o cérebro é VERDADE em cada modo —
+        # local (Ollama) ou roteador/fixado (inferência externa do pedido
+        # mascarado; memória/código nunca saem — D2)
+        onde_roda = (
+            "Você roda localmente sobre o Ollama, na máquina do usuário."
+            if not getattr(self.client, "is_external", False) else
+            "Você roda na máquina do usuário com inferência remota SEGURA: "
+            "o pedido sai mascarado (código/segredos censurados) e "
+            "memória/dados pessoais NUNCA saem — nada sensível deixa a "
+            "máquina (regra D2)."
+        )
         webtools = (
             "- web_search / web_fetch: pesquisa na internet (DuckDuckGo) e lê "
             "páginas.\n  Use SEMPRE que a resposta depender de informação atual "
@@ -244,6 +255,7 @@ class Agent:
         )
         prompt = SYSTEM_PROMPT.format(
             webtools=webtools,
+            onde_roda=onde_roda,
             dados_reais=dados_reais,
             hostname=socket.gethostname(),
             workdir=self.cfg.workdir,

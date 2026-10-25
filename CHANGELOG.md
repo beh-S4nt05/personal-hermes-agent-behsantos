@@ -1,5 +1,28 @@
 # Changelog
 
+## v6.4.2 — 🔒 REVISÃO × ENTREGAS: D2 NO ROTEADOR (P0) + HONESTIDADE
+
+Revisão completa comparando promessas × entregas; 3 pendências fechadas:
+
+- **P0 — BLUEPRINT §5.4 no roteador**: `ExternalClient` agora aplica o
+  DLP `mascarar()` em TODO payload, no TRANSPORTE (defesa em
+  profundidade, idempotente com arena/specialists). E mais: pedido com
+  código/segredo vai ao cérebro **LOCAL direto** (§5.2 — análise de
+  código nunca sai; o externo nem é tentado, com log no activity).
+- **Stream único no FallbackClient**: a v6.3.0 fazia DUAS requisições
+  ao externo (next + yield from) — corrigido para 1 stream só.
+- **P1 — prompt honesto**: "Você roda localmente sobre o Ollama" era
+  falso com roteador ativo (provável causa do "não estou conectado ao
+  seu computador") — agora dinâmico: local diz local; externo diz
+  "inferência remota SEGURA (pedido mascarado; memória/código nunca
+  saem)".
+- **P1 — --full carrega TUDO mesmo**: ditado por voz (faster-whisper,
+  ~200 MB) incluso, best-effort, com `--skip-stt`.
+- **P2 — docs em dia**: README (roteador + n8n), N8N_PASSOAPASSO
+  6.4.2, BLUEPRINT encerrado com estado final real.
+- T189 (D2 transporte + local-direto + stream único + prompt honesto) ·
+  T190 (--full STT) — **190/190**.
+
 ## v6.4.1 — 🩺 4º ACHADO DE CAMPO: O AGENTE CUMPRE A FUNÇÃO
 
 Transcript real do operador: "relatório completo do uso do meu PC" →

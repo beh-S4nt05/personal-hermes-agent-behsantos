@@ -2,7 +2,7 @@
 
 > Guia para quem nunca usou o n8n. Tudo **local**: nada sai da sua
 > máquina, nenhuma conta em nuvem, uso pessoal/interno grátis
-> (Sustainable Use License). Versão: 6.3.2.
+> (Sustainable Use License). Versão: 6.4.2.
 
 O n8n é um editor visual de automações ("arrasta-e-solta nós e liga
 fios"). O Betterme o instala **dentro do seu data-dir** e conversa com

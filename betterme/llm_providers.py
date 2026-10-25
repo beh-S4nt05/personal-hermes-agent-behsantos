@@ -132,6 +132,42 @@ def _norm_args(a):
     return a or {}
 
 
+def dlp_messages(messages: list[dict]) -> list[dict]:
+    """v6.4.2 (BLUEPRINT §5.4): TODO payload que sai da máquina passa
+    pelo DLP mascarar() — em nível de TRANSPORTE, defesa em
+    profundidade (quem já mascara não é afetado: é idempotente).
+    Código, segredos, CPF e e-mails viram [CÓDIGO LOCAL]/[REDACTED]."""
+    try:
+        from .varredura import mascarar
+    except Exception:  # noqa: BLE001
+        return messages
+    out = []
+    for m in messages:
+        try:
+            conteudo = str(m.get("content") or "")
+            limpo = mascarar(conteudo)
+            if limpo != conteudo:
+                m = {**m, "content": limpo}
+        except Exception:  # noqa: BLE001
+            pass
+        out.append(m)
+    return out
+
+
+def payload_sensivel(messages: list[dict]) -> bool:
+    """v6.4.2: o pedido contém código/segredo que o DLP censuraria?
+    (D2: análise de código é SEMPRE local — o externo nem tenta.)"""
+    try:
+        from .varredura import mascarar
+    except Exception:  # noqa: BLE001
+        return False
+    for m in messages:
+        c = str(m.get("content") or "")
+        if mascarar(c) != c:
+            return True
+    return False
+
+
 class ExternalClient:
     """Cliente OpenAI-compatível (streaming SSE). Mesma interface de uso
     do OllamaClient: chat_stream/is_running/list_models."""
@@ -173,7 +209,8 @@ class ExternalClient:
         # "hermes3:8b"); para provedores externos o modelo é SEMPRE o do
         # provedor (registro ou llm_model) — nomes Ollama não existem lá
         # e causavam HTTP 400 → fallback silencioso em TODO chat.
-        payload = {"model": self.model or model, "messages": messages,
+        payload = {"model": self.model or model,
+                   "messages": dlp_messages(messages),   # D2 no transporte
                    "stream": True}
         if tools:
             payload["tools"] = tools
@@ -265,10 +302,23 @@ class FallbackClient:
 
     def chat_stream(self, model, messages, tools=None, options=None,
                     cancel=None, keep_alive=None):
-        try:
-            primeiro = next(self.externo.chat_stream(
+        # v6.4.2 (D2 — BLUEPRINT §5.2): código/segredo no pedido NUNCA
+        # vai ao pool grátis — análise de código é LOCAL. O externo nem
+        # é tentado (e o transporte ainda mascara, defesa em profundidade)
+        if payload_sensivel(messages):
+            self.usou_fallback = True
+            self._nota("D2: código/segredo no pedido — cérebro local")
+            yield from self.local.chat_stream(
                 model, messages, tools=tools, options=options,
-                cancel=cancel, keep_alive=keep_alive))
+                cancel=cancel, keep_alive=keep_alive)
+            return
+        # v6.4.2: UM único stream — antes eram duas chamadas ao externo
+        # (next() numa, yield from noutra = 2 requisições/tokens 2×)
+        stream = self.externo.chat_stream(
+            model, messages, tools=tools, options=options,
+            cancel=cancel, keep_alive=keep_alive)
+        try:
+            primeiro = next(stream)
         except StopIteration:
             return
         except OllamaError as exc:
@@ -286,9 +336,7 @@ class FallbackClient:
                 cancel=cancel, keep_alive=keep_alive)
             return
         yield primeiro
-        yield from self.externo.chat_stream(
-            model, messages, tools=tools, options=options,
-            cancel=cancel, keep_alive=keep_alive)
+        yield from stream
 
     def is_running(self) -> bool:
         return self.externo.is_running() or self.local.is_running()

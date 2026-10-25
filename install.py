@@ -65,13 +65,16 @@ def main() -> int:
     ap.add_argument("--skip-ollama-check", action="store_true",
                     help="não checar o Ollama ao final")
     ap.add_argument("--full", action="store_true",
-                    help="carrega TUDO para iniciar plenamente: playwright "
+                    help="carrega TUDO p/ início pleno: ditado por voz, playwright "
                          "(WhatsApp), Ollama (instala se faltar), modelo, "
                          "n8n (fluxos) e doctor final")
     ap.add_argument("--skip-n8n", action="store_true",
                     help="(com --full) não instalar o n8n")
     ap.add_argument("--skip-playwright", action="store_true",
                     help="(com --full) não instalar playwright/chromium")
+    ap.add_argument("--skip-stt", action="store_true",
+                    help="(com --full) não instalar o ditado por voz "
+                         "(faster-whisper, ~200 MB)")
     args = ap.parse_args()
 
     print("🧩 Betterme Agent — instalador universal")
@@ -127,6 +130,14 @@ def main() -> int:
             print("  ✔ playwright (canal WhatsApp) …")
             rodar([py, "-m", "pip", "install", "-q", "-e", ".[whatsapp]"])
             rodar([py, "-m", "playwright", "install", "chromium"])
+        # (a2) v6.4.2: ditado por voz (faster-whisper) — best-effort
+        if not args.skip_stt:
+            print("  ✔ ditado por voz (faster-whisper, ~200 MB) …")
+            try:
+                rodar([py, "-m", "pip", "install", "-q",
+                       "faster-whisper"])
+            except SystemExit:
+                print("  ⚠ falhou (voz fica desativada — o resto segue)")
         # (b) Ollama — instala se faltar (por SO, best-effort)
         if not args.skip_ollama_check:
             if shutil.which("ollama"):

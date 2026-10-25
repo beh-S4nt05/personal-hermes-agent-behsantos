@@ -89,6 +89,21 @@ disponível. Instalação manual: `python3 -m venv .venv` →
 
 ---
 
+## 🧠 Cérebro com roteador automático (v6.3+)
+
+Guarde uma chave grátis (`betterme provider set groq` + chave) e o agente
+**usa o provedor rápido por padrão** — com fallback local se falhar.
+Pedido com código/segredo? Fica no Ollama local (regra D2: análise de
+código nunca sai). `betterme provider off` = 100% local. Cada resposta
+registra no log qual cérebro usou; `betterme doctor` mostra o estado.
+
+## ⚙ Automações com n8n (v6.3+)
+
+`betterme fluxos setup|start` sobe um n8n **local** (grátis, uso
+pessoal). Do chat: "quais são meus fluxos?" e "dispare o X". Do n8n: POST
+em `/api/hooks/<id>` dispara o agente. Guia completo com templates
+prontos: **N8N_PASSOAPASSO.md**.
+
 ## 🖥 CLI (terminal)
 
 | Comando | O que faz |

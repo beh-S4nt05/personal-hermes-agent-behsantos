@@ -1,6 +1,6 @@
 # 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
-**Versão 6.4.1** · gerado em 25/10/2026 · este documento é extraído do
+**Versão 6.4.2** · gerado em 25/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -132,7 +132,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `betterme skills audit` (auditar o catálogo), `betterme config set/get`, `betterme server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v6.4.1)
+## 3. Modificações — o que foi feito (v1.0.0 → v6.4.2)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -140,6 +140,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v6.4.2** | 🔒 REVISÃO × ENTREGAS: D2 NO ROTEADOR (P0) + HONESTIDADE |
 | **v6.4.1** | 🩺 4º ACHADO DE CAMPO: O AGENTE CUMPRE A FUNÇÃO |
 | **v6.4.0** | 🏗 CONTRATOS E ESTRUTURAS (princípios de desenvolvimento) |
 | **v6.3.3** | ✍️ PORTUGUÊS CORRIGIDO (varredura completa) |
