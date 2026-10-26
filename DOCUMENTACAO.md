@@ -1,6 +1,6 @@
 # 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
-**Versão 6.5.0** · gerado em 26/10/2026 · este documento é extraído do
+**Versão 6.6.0** · gerado em 26/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -133,7 +133,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `betterme skills audit` (auditar o catálogo), `betterme config set/get`, `betterme server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v6.5.0)
+## 3. Modificações — o que foi feito (v1.0.0 → v6.6.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -141,6 +141,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v6.6.0** | ⚡ FLUXO LEVE: ORQUESTRAÇÃO ADAPTATIVA EM 3 NÍVEIS |
 | **v6.5.0** | 🔀 PROVEDORES 100% VERIFICÁVEIS + OMNIROUTE (gateway keyless) |
 | **v6.4.2** | 🔒 REVISÃO × ENTREGAS: D2 NO ROTEADOR (P0) + HONESTIDADE |
 | **v6.4.1** | 🩺 4º ACHADO DE CAMPO: O AGENTE CUMPRE A FUNÇÃO |
@@ -939,6 +940,14 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `nivel_valido(txt)` | Nível canônico de autonomia — aceita 'Autônomo', 'PADRÃO'… None se não for um nível válido. |
 | `especialista_de(txt)` | Nome canônico de especialista — aceita 'Segurança', 'REVISOR'… None se não existir. |
 | `acao_de(args, padrao)` | Ação de um subcomando CLI: leitura tolerante e uniforme (falta o atributo ou vazio → padrão; sempre strip+lower). |
+
+### betterme/fluxo.py — ⚡ o fluxo adaptativo em 3 níveis (v6.6.0): conversa → resposta direta; tarefa → ciclo clássico; complexa → etapas focadas com contexto acumulado (padrão Plandex, nativo e leve)
+
+| Função | O que faz |
+|---|---|
+| `eh_conversa(msg)` | Nível 0? Mensagem é conversa pura (nenhuma ação sobre a máquina, nenhum assunto técnico) → pode responder direto. |
+| `decompor(msg, passos)` | Quebra a task em etapas FOCADAS. Fonte preferida: os passos que o próprio planner devolveu; senão heurística estrutural… |
+| `consolidar(etapas)` | Junta os resultados das etapas num relatório único com rastro (o que saiu de cada parte) — é isso que o revisor avalia. |
 
 ### betterme/extrair.py — 🧾 o extrator ÚNICO de JSON da resposta de modelos (chaves balanceadas com consciência de strings) — usado por orquestrador, especialistas, revisor e arena
 

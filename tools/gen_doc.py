@@ -32,6 +32,9 @@ PAPEL_MODULO = {
         "níveis de autonomia, tipos de task, especialistas, checks do "
         "doctor e marcas DLP — mais normalizadores tolerantes "
         "(Postel's Law)"),
+    "fluxo.py": ("⚡", "o fluxo adaptativo em 3 níveis (v6.6.0): conversa "
+        "→ resposta direta; tarefa → ciclo clássico; complexa → etapas "
+        "focadas com contexto acumulado (padrão Plandex, nativo e leve)"),
     "extrair.py": ("🧾", "o extrator ÚNICO de JSON da resposta de modelos "
         "(chaves balanceadas com consciência de strings) — usado por "
         "orquestrador, especialistas, revisor e arena"),

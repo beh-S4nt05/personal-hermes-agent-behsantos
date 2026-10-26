@@ -174,6 +174,7 @@ def _fast(cfg, system: str, user: str, ntok: int = 200,
 
 
 from .extrair import json_de as _extract_json  # v6.4.0: DRY
+from . import fluxo as _flx
 from .contratos import (TIPO_CRIACAO, TIPO_LEITURA,  # SSOT
                         TIPOS_TASK)
 
@@ -828,6 +829,20 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
                 with _PEND_PROJ_LOCK:
                     _PEND_PROJETO.pop(session_id, None)
 
+    # ── v6.6.0 ⚡ FLUXO LEVE nível 0: conversa pura → resposta direta.
+    # O planner custava 1 ida inteira ao modelo antes de qualquer "oi";
+    # conversa não precisa de plano nem de revisão (o executor mantém
+    # todas as ferramentas e regras — só o PLANEJAMENTO é pulado).
+    if (getattr(cfg, "fluxo_leve", True) and not resume_plan
+            and not forcar_executar and _flx.eh_conversa(message)):
+        ev({"type": "note",
+            "message": "⚡ fluxo leve: conversa — resposta direta "
+                       "(planejamento e revisão pulados; −2 idas ao modelo)"})
+        activity.log(cfg, "chat", "⚡ fluxo leve nível 0 (conversa)")
+        return agent.run(history + [{"role": "user",
+                                     "content": message + goal_txt}],
+                         on_event=on_event, cancel=cancel)
+
     if resume_plan:                    # v3.11: retomada pós-restart
         plano = dict(resume_plan)
         plano["rota"] = "executar"     # o plano já foi aprovado
@@ -856,6 +871,11 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
 
     objetivo = str(plano.get("objetivo") or message)[:300]
     passos = [str(p)[:160] for p in (plano.get("passos") or [])[:4]]
+    # v6.6.0 🧩 nível 2: decomposição (padrão Plandex nativo) — só para
+    # task com 2+ etapas de verdade; missão/retomada não entra aqui
+    etapas_n2 = (_flx.decompor(message, passos)
+                 if (getattr(cfg, "fluxo_leve", True) and not resume_tid
+                     and not extra_criterios) else [])
     criterios = [str(c)[:160] for c in (plano.get("criterios") or [])[:3]]
     criterios += _extra_criterios(message)      # v3.13.3: rastro obrigatório
     sks_antecipadas = skills_for(cfg, message + " " + objetivo)
@@ -1077,6 +1097,87 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
                                f"— entregando com ressalva: {prob[:120]}"})
         return resultado, verd, prob, tent
 
+    def _ciclo_etapas(etapas: list[str], msgs: list[dict],
+                      max_t: int) -> tuple[str, str, str, int]:
+        """🧩 v6.6.0 (nível 2, padrão Plandex nativo): task complexa
+        quebrada em etapas FOCADAS — cada uma é uma execução enxuta
+        com o contexto acumulado das anteriores; UMA revisão única no
+        consolidado (+1 refazer se reprovar). Regulação barata: não
+        existe 1 revisão por etapa (isso multiplicaria a latência)."""
+        resultado, verd, prob, tent = "", "ok", "", 0
+        colhidos: list[tuple[str, str]] = []
+        n = len(etapas)
+        for i, etapa in enumerate(etapas, 1):
+            if _cancelado():
+                break
+            t_e = time.time()
+            ev({"type": "note",
+                "message": f"🧩 etapa {i}/{n}: {etapa[:90]}"})
+            contexto = (""
+                        if not colhidos else
+                        "\n\n[RESULTADOS DAS ETAPAS ANTERIORES (aproveite, "
+                        "não repita):\n"
+                        + "\n".join(f"— etapa {j}: {r[:400]}"
+                                    for j, (_, r) in enumerate(colhidos, 1))
+                        + "]")
+            m_etapa = [msgs[0],
+                       {"role": "user",
+                        "content": (f"[ETAPA {i}/{n} do objetivo: "
+                                    f"{objetivo}]\n{etapa}{contexto}")}]
+            saida = _run_executor(m_etapa)
+            colhidos.append((etapa, saida))
+            dur = round(time.time() - t_e, 1)
+            ev({"type": "brain", "stage": f"🧩 etapa {i}",
+                "data": {"etapa": etapa[:120], "dur_s": dur}})
+            activity.log(cfg, "chat",
+                         f"🧩 etapa {i}/{n} concluída ({dur}s)")
+        resultado = _flx.consolidar(colhidos)
+        # regulação ÚNICA no consolidado (+1 refazer, leve)
+        for tentativa in (1, 2):
+            tent = tentativa
+            if _cancelado():
+                break
+            ver = review(cfg, objetivo, criterios, resultado)
+            verd = ver.get("veredito", "ok")
+            prob = ver.get("problema", "")
+            if verd == "ok":
+                if tentativa > 1:
+                    ev({"type": "note",
+                        "message": "🔍 revisor: aprovada na 2ª tentativa ✔"})
+                break
+            if tentativa == 1:
+                ev({"type": "note",
+                    "message": f"🔍 revisor reprovou ({prob[:120]}) — "
+                               "concluindo o que falta"})
+                m_refazer = [msgs[0],
+                             {"role": "assistant",
+                              "content": resultado[:2500]},
+                             {"role": "user",
+                              "content": (
+                                  f"O REVISOR SÊNIOR reprovou: {prob}\n\n"
+                                  "CONCLUA AGORA o que falta (sem repetir o "
+                                  "que já está feito acima), com a "
+                                  "EVIDÊNCIA REAL colada na resposta.\n\n"
+                                  f"PEDIDO ORIGINAL: {message}")}]
+                extra = _run_executor(m_refazer)
+                colhidos.append(("conclusão", extra))
+                resultado = _flx.consolidar(colhidos)
+            else:
+                ev({"type": "note",
+                    "message": f"⚠ revisor ainda reprovou — entregando com "
+                               f"ressalva: {prob[:120]}"})
+        return resultado, verd, prob, tent
+
+    def _executar_ciclo(msgs: list[dict], max_t: int):
+        """v6.6.0: seletor do fluxo adaptativo — etapas (nível 2) ou
+        ciclo clássico (nível 1)."""
+        if len(etapas_n2) >= 2:
+            ev({"type": "note",
+                "message": f"🧩 task decomposta em {len(etapas_n2)} "
+                           "etapas focadas (fluxo Plandex nativo)"})
+            return _ciclo_etapas(etapas_n2, msgs, max_t)
+        return _ciclo(msgs, max_t)
+
     mensagens = history[-6:] + [{"role": "user",
                                  "content": f"{message}\n\n{_plano_txt()}"}]
     if projeto is not None:
@@ -1088,14 +1189,15 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
                 ev({"type": "note",
                     "message": f"📁 workspace da task: {projeto} — pasta "
                                "percorrida/criada pelo Betterme"})
-                resultado, veredito, problema, tentativas = _ciclo(
+                resultado, veredito, problema, tentativas = _executar_ciclo(
                     mensagens, max_tentativas)
         except ToolError as exc:
             ev({"type": "note", "message": f"⚠ {exc} — workspace padrão"})
-            resultado, veredito, problema, tentativas = _ciclo(
+            resultado, veredito, problema, tentativas = _executar_ciclo(
                 mensagens, max_tentativas)
     else:
-        resultado, veredito, problema, tentativas = _ciclo(mensagens, max_tentativas)
+        resultado, veredito, problema, tentativas = _executar_ciclo(
+            mensagens, max_tentativas)
     execucoes = tentativas
 
     # ── 🔒 portão 2: entrega editável (só criação aprovada) ──

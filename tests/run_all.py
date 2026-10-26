@@ -7736,6 +7736,140 @@ def T192_omniroute_gateway_local():
     assert '"omniroute"' in cli_src and "cmd_omniroute" in cli_src
 
 
+@case
+def T193_fluxo_leve_modulo():
+    """v6.6.0: módulo do fluxo adaptativo (padrão Plandex extraído,
+    nativo) — classificação conservadora de conversa, decomposição
+    estrutural e consolidação com rastro."""
+    from betterme import fluxo as FL
+
+    # ── nível 0: conversa pura
+    for msg in ("oi, tudo bem?", "quem é você?", "o que é Python?",
+                "me explique como funciona um LLM", "obrigado!"):
+        assert FL.eh_conversa(msg), msg
+    # ── NÃO é conversa (conservador: verbo de ação, assunto técnico,
+    # caminho, código, followup, projeto, longa)
+    for msg in ("verifique o disco", "liste os arquivos", "me mostre o uso",
+                "faça um relatório do sistema", "qual a versão do app?",
+                "rode df -h", "salve em /tmp/x.txt", "```python\nx=1\n```",
+                "conclua o pedido anterior", "quero iniciar um projeto",
+                "como está a memória do servidor?", "x" * 600):
+        assert not FL.eh_conversa(msg), msg
+    # ── decomposição: passos do planner vencem
+    et = FL.decompor("diagnóstico", ["df -h", "free -h", "top"])
+    assert et == ["df -h", "free -h", "top"]
+    # heurística: lista numerada
+    et2 = FL.decompor("1. ver disco\n2. ver memória\n3. ver top", [])
+    assert len(et2) == 3 and et2[0] == "ver disco"
+    # heurística: «;» e «e depois»
+    assert len(FL.decompor("ver disco; ver memória", [])) == 2
+    assert len(FL.decompor("ver disco e depois ver memória", [])) == 2
+    # não dá para decompor → [] (segue fluxo normal)
+    assert FL.decompor("verifique o disco", []) == []
+    assert FL.decompor("verifique o disco", ["único passo"]) == []
+    # cap 6
+    assert len(FL.decompor("x", [f"p{i}" for i in range(10)])) == 6
+    # ── consolidação com rastro por etapa
+    c = FL.consolidar([("disco", "70%"), ("memória", "livre")])
+    assert "### Etapa 1 — disco" in c and "### Etapa 2 — memória" in c
+    assert "70%" in c and "livre" in c
+    assert FL.consolidar([]) == ""
+    assert FL.consolidar([("única", "ok")]) == "ok"
+
+
+@case
+def T194_fluxo_leve_pipeline():
+    """v6.6.0: o pipeline usa o fluxo adaptativo — N0 conversa pula o
+    planner (provado com bomba), N2 decomposta executa 1 vez por
+    etapa com contexto acumulado e UMA revisão no consolidado, N1
+    segue o ciclo clássico, kill-switch desliga tudo."""
+    from betterme import orchestrator as orc
+    from betterme.agent import Agent
+
+    cfg = fresh()
+    # ── N0: planner NÃO é chamado (bomba no plan)
+    ag = Agent(cfg)
+    evs = []
+
+    def _bomba(*a, **k):
+        raise AssertionError("planner não deveria ser chamado em conversa")
+    orc.plan = _bomba
+    try:
+        final = orc.run_pipeline(ag, cfg, "oi, tudo bem?", [],
+                                 on_event=evs.append)
+        notas = [e.get("message", "") for e in evs
+                 if e.get("type") == "note"]
+        assert final and any("fluxo leve" in n for n in notas)
+    finally:
+        del orc.plan
+    # ── N2: 2 passos → 2 execuções focadas + consolidado com rastro
+    corridas = []
+
+    class _AgFake:
+        def run(self, msgs, on_event=None, cancel=None):
+            corridas.append(msgs[-1]["content"])
+            return f"saída da execução {len(corridas)}"
+
+    def _plan2(cfg, message, history=None):
+        return {"rota": "executar", "tipo": "leitura",
+                "objetivo": "diagnóstico",
+                "passos": ["verificar disco", "verificar memória"],
+                "criterios": ["evidência real"]}
+    orc.plan = _plan2
+    try:
+        evs2 = []
+        final2 = orc.run_pipeline(_AgFake(), cfg, "faça o diagnóstico", [],
+                                  on_event=evs2.append)
+        assert len(corridas) == 2
+        assert "[ETAPA 1/2" in corridas[0]
+        assert "[ETAPA 2/2" in corridas[1]
+        # contexto acumulado: etapa 2 vê o resultado da 1
+        assert "RESULTADOS DAS ETAPAS ANTERIORES" in corridas[1]
+        assert "saída da execução 1" in corridas[1]
+        notas2 = [e.get("message", "") for e in evs2
+                  if e.get("type") == "note"]
+        assert any("decomposta em 2" in n for n in notas2)
+        assert any("etapa 1/2" in n for n in notas2)
+        assert "### Etapa 1 — verificar disco" in final2
+        # revisão ÚNICA (não por etapa): review chamado 1× no mock?
+        # (mock reprova? não — review mock devolve ok)
+        assert any(e.get("type") == "done" for e in evs2)
+    finally:
+        del orc.plan
+    # ── N1: 1 passo → ciclo clássico (1 execução)
+    def _plan1(cfg, message, history=None):
+        return {"rota": "executar", "tipo": "leitura",
+                "objetivo": "ver disco", "passos": ["df -h"],
+                "criterios": []}
+    orc.plan = _plan1
+    try:
+        corridas.clear()
+        orc.run_pipeline(_AgFake(), cfg, "verifique o disco", [],
+                         on_event=lambda e: None)
+        assert len(corridas) == 1
+    finally:
+        del orc.plan
+    # ── kill-switch: fluxo_leve False → N2 desliga (1 execução única)
+    cfg.update({"fluxo_leve": False})
+    orc.plan = _plan2
+    try:
+        corridas.clear()
+        orc.run_pipeline(_AgFake(), cfg, "faça o diagnóstico", [],
+                         on_event=lambda e: None)
+        assert len(corridas) == 1
+    finally:
+        del orc.plan
+        cfg.update({"fluxo_leve": True})
+    # ── default do config: ligado
+    assert '"fluxo_leve": True' in Path(
+        "betterme/config.py").read_text(encoding="utf-8")
+    # ── seletor existe no orchestrator (3 níveis integrados)
+    src = Path("betterme/orchestrator.py").read_text(encoding="utf-8")
+    assert "_ciclo_etapas" in src and "_executar_ciclo" in src
+    assert src.count("_executar_ciclo(") >= 4     # def + 3 call sites
+    assert "from . import fluxo as _flx" in src
+
+
 if __name__ == "__main__":
     print("◈ Betterme — suíte de testes\n")
     sys.exit(run_all())

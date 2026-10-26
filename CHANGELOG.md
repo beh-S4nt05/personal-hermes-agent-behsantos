@@ -1,5 +1,36 @@
 # Changelog
 
+## v6.6.0 — ⚡ FLUXO LEVE: ORQUESTRAÇÃO ADAPTATIVA EM 3 NÍVEIS
+
+Pedido do operador: "pegue a parte [do Plandex] que funciona como
+orquestrador e que regula a tarefa quebrada em partes… um fluxo leve,
+simples e rápido". O PADRÃO foi extraído e reimplementado NATIVO
+(o Plandex em si está parado desde jul/2025 com CVE aberta — sem
+servidor, sem Docker, zero dependência):
+
+- **NÍVEL 0 — CONVERSA** (`fluxo.eh_conversa`): "oi", "quem é você?",
+  "me explique X" → resposta direta com **1 chamada ao cérebro** — o
+  planner custava 1 ida inteira ao modelo antes de qualquer conversa
+  (−2 idas: planejamento e revisão). Executor mantém todas as
+  ferramentas e regras.
+- **NÍVEL 1 — TAREFA**: fluxo clássico (planner enxuto → executor →
+  revisão, fast lane quando não há critérios).
+- **NÍVEL 2 — COMPLEXA** (`fluxo.decompor` + `_ciclo_etapas`): task
+  decomposta em **etapas focadas** (passos do planner ou lista
+  numerada/bullet/«;»/«e depois») — cada etapa é uma execução enxuta
+  com o **contexto acumulado** das anteriores; **UMA revisão única**
+  no consolidado (+1 refazer) — regulação barata, não 1 revisão por
+  etapa. Eventos `🧩 etapa i/N` com `dur_s` por etapa no TRACE.
+- **Módulo próprio** (`betterme/fluxo.py`): política isolada e
+  testável; orquestrador só consome. Conservador: na dúvida, cai para
+  o nível MAIOR. Kill-switch: `betterme config set fluxo_leve false`.
+- Bug pego pelos testes na hora: heurística de linhas tratava a
+  retomada de projeto (mensagem 2-linhas) como "etapas" — corrigido
+  para aceitar só listas de verdade (T120 voltou verde).
+- T193 (módulo: conversa/decomposição/consolidação) · T194 (pipeline:
+  N0 com bomba no planner, N2 com contexto acumulado, N1, kill-switch)
+  — **194/194**.
+
 ## v6.5.0 — 🔀 PROVEDORES 100% VERIFICÁVEIS + OMNIROUTE (gateway keyless)
 
 Pergunta do operador: "os provedores estão 100% ativos e funcionais?"
