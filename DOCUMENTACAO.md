@@ -1,6 +1,6 @@
 # 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
-**Versão 6.4.2** · gerado em 25/10/2026 · este documento é extraído do
+**Versão 6.5.0** · gerado em 26/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -93,7 +93,8 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 | `betterme provider` | provedores LLM externos gratuitos (memória nunca sai) |
 | `betterme list` | lista provedores gratuitos e o atual |
 | `betterme set` | ativa um provedor (pede a chave com segurança) |
-| `betterme test` | ping + 1 completion real do provedor ativo |
+| `betterme test` | 1 completion REAL por provedor  |
+| `betterme guia` | onde conseguir cada chave grátis |
 | `betterme off` | volta ao Ollama local |
 | `betterme varredura` | varre segredos/dados pessoais antes de expor código (pré-push) |
 | `betterme init` | cria HERMES.md (instruções duráveis do projeto) |
@@ -132,7 +133,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `betterme skills audit` (auditar o catálogo), `betterme config set/get`, `betterme server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v6.4.2)
+## 3. Modificações — o que foi feito (v1.0.0 → v6.5.0)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -140,6 +141,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v6.5.0** | 🔀 PROVEDORES 100% VERIFICÁVEIS + OMNIROUTE (gateway keyless) |
 | **v6.4.2** | 🔒 REVISÃO × ENTREGAS: D2 NO ROTEADOR (P0) + HONESTIDADE |
 | **v6.4.1** | 🩺 4º ACHADO DE CAMPO: O AGENTE CUMPRE A FUNÇÃO |
 | **v6.4.0** | 🏗 CONTRATOS E ESTRUTURAS (princípios de desenvolvimento) |
@@ -367,7 +369,7 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 
 ### betterme/server/app.py — 🌐 a API REST + GUI web (Flask/waitress): todos os endpoints, streaming do chat, aprovações, painel e páginas
 
-**84 endpoints HTTP:**
+**85 endpoints HTTP:**
 
 | Método e rota | O que faz |
 |---|---|
@@ -450,6 +452,7 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `GET /api/notifications` | notifications_list |
 | `POST /api/notifications/read` | notifications_read |
 | `GET /api/recipes` | recipes_list |
+| `POST /api/provider/test` | provider_test |
 | `GET /api/doctor` | doctor_check |
 | `POST /api/hooks/<sid>` | hook_run |
 | `GET /api/conversations/<sid>/export` | conversation_export |
@@ -504,6 +507,7 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `cmd_revisar(args)` | v4.5.0 (PR#8): revisão de diff — gate único pré-push. |
 | `cmd_multimodal(args)` | v4.6.0 (PR#9): transcrição local de áudio/vídeo (→ RAG). |
 | `cmd_vida(args)` | v5.0.0 (PR#10): Modo Vida — relatório diário + curadoria. |
+| `cmd_omniroute(args)` | v6.5.0: gateway local de LLMs grátis (padrão do ⚙ fluxos). |
 | `cmd_fluxos(args)` | v5.1.0 (PR#11): fluxos n8n locais (setup/start/stop/remover). |
 | `cmd_aprendidos(args)` | v4.0.0 (M6.5): rascunhos de aprendizado (aprovação do operador). |
 | `cmd_skills_aprender(args)` | v4.0.0 (M6.5): transforma documento/texto/URL em rascunho de skill. |

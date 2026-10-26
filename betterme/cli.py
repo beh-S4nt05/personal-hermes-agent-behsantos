@@ -491,7 +491,8 @@ def cmd_config(args) -> None:
 def cmd_provider(args) -> None:
     """v3.17.0: provedores LLM externos GRATUITOS (memória nunca sai)."""
     import getpass as _gp
-    from .llm_providers import REGISTRY, api_key, salvar_key, testar
+    from .llm_providers import (GUIAS, REGISTRY, api_key,
+                              salvar_key, testar, testar_todos)
     acao = acao_de(args, "list")
     cfg = _cfg(args)
     if acao == "list":
@@ -540,15 +541,49 @@ def cmd_provider(args) -> None:
         _p("   valide com: betterme provider test")
         return
     if acao == "test":
-        nome = str(getattr(cfg, "llm_provider", "local"))
-        if nome == "local":
-            _p("\n🔌 provedor atual: LOCAL (Ollama) — nada a testar fora")
+        # v6.5.0: sem argumento testa TUDO (chaves salvas + llm7 +
+        # omniroute se rodando); com argumento, só o pedido
+        alvo = str(getattr(args, "provedor", "") or "").strip().lower()
+        if alvo == "local":
+            _p("\n🔌 LOCAL (Ollama) — nada a testar fora")
             return
-        _p(f"\n🔌 testando {nome} (chamada real de 1 completion)…")
-        r = testar(cfg, nome, str(getattr(cfg, "llm_model", "") or ""))
-        _p(("  ✔ " if r["ok"] else "  ✖ ") + r["msg"])
-        if not r["ok"]:
+        if alvo:
+            if alvo not in REGISTRY:
+                _fail(f"provedor desconhecido: {alvo!r}")
+                raise SystemExit(1)
+            _p(f"\n🔌 testando {alvo} (chamada real de 1 completion)…")
+            r = testar(cfg, alvo)
+            _p(("  ✔ " if r["ok"] else "  ✖ ") + r["msg"])
+            if not r["ok"]:
+                raise SystemExit(1)
+            return
+        _p("\n🔌 testando TODOS os provedores usáveis (1 completion "
+           "real cada)…")
+        resultados = testar_todos(cfg)
+        if not resultados:
+            _p("  — nenhum provedor usável: salve uma chave "
+               "(betterme provider set groq) ou ligue o omniroute")
+            return
+        falhas = 0
+        for r in resultados:
+            _p(("  ✔ " if r["ok"] else "  ✖ ")
+               + f"{r['nome']:11s} {r['msg']}")
+            falhas += 0 if r["ok"] else 1
+        _p(f"\n  {len(resultados) - falhas}/{len(resultados)} "
+           "funcionando de verdade")
+        if falhas:
             raise SystemExit(1)
+        return
+    if acao == "guia":
+        alvo = str(getattr(args, "provedor", "") or "").strip().lower()
+        alvos = [alvo] if alvo in GUIAS else list(GUIAS)
+        _p("\n🔑 onde conseguir cada chave (tudo grátis, sem cartão):")
+        for nome in alvos:
+            url, passo = GUIAS[nome]
+            _p(f"  • {nome:11s} {url}")
+            _p(f"              {passo}")
+        _p("\n  depois: betterme provider set <nome> · "
+           "valide: betterme provider test")
         return
     if acao == "off":
         # v6.3.0: off de verdade — desliga também o roteador automático
@@ -627,6 +662,12 @@ def cmd_vida(args) -> None:
     """v5.0.0 (PR#10): Modo Vida — relatório diário + curadoria."""
     from . import vida
     vida.cmd(args, _cfg(args))
+
+
+def cmd_omniroute(args) -> None:
+    """v6.5.0: gateway local de LLMs grátis (padrão do ⚙ fluxos)."""
+    from . import omniroute
+    omniroute.cmd(args, _cfg(args))
 
 
 def cmd_fluxos(args) -> None:
@@ -793,7 +834,13 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--model", default="", help="modelo (default do provedor se vazio)")
     ps.add_argument("--key", default="", help="chave (se não passar, pede escondida)")
     ps.set_defaults(acao="set", fn=cmd_provider)
-    pt = psub.add_parser("test", help="ping + 1 completion real do provedor ativo")
+    pt = psub.add_parser("test", help="1 completion REAL por provedor "
+                          "(todos, ou só o informado)")
+    pt.add_argument("provedor", nargs="?", default=None,
+                    help="testar só este provedor (default: todos)")
+    pg = psub.add_parser("guia", help="onde conseguir cada chave grátis")
+    pg.add_argument("provedor", nargs="?", default=None,
+                    help="guia só deste provedor")
     pt.set_defaults(acao="test", fn=cmd_provider)
     po = psub.add_parser("off", help="volta ao Ollama local")
     po.set_defaults(acao="off", fn=cmd_provider)
@@ -899,6 +946,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--npm", default=None,
                    help="caminho do npm (default: PATH)")
     p.set_defaults(fn=cmd_fluxos)
+
+    # ------------------------------------------ 🔀 omniroute (v6.5.0)
+    p = sub.add_parser(
+        "omniroute",
+        help="gateway local de LLMs grátis (keyless) — status|setup|"
+             "start|stop|apikey|remover")
+    p.add_argument("acao", nargs="?", default="status",
+                   help="status|setup|start|stop|apikey|remover")
+    p.add_argument("id", nargs="?", default=None,
+                   help="chave local (para 'apikey')")
+    p.add_argument("--npm", default=None, help="caminho do npm")
+    p.set_defaults(fn=cmd_omniroute)
     p = sub.add_parser("aprendidos",
                        help="rascunhos de skills/lições esperando sua aprovação")
     pa = p.add_argument("acao", nargs="?", default="list",

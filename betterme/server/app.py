@@ -1742,6 +1742,14 @@ self.addEventListener("fetch", (e) => {
 
         return jsonify({"ok": True, "recipes": RECIPES})
 
+    # -------------------------------------- provider test (v6.5.0)
+    @app.post("/api/provider/test")
+    @protected
+    def provider_test():
+        from ..llm_providers import testar_todos
+        return jsonify({"ok": True,
+                        "resultados": testar_todos(cfg)})
+
     # ------------------------------------------------------------ doctor
     @app.get("/api/doctor")
     @protected

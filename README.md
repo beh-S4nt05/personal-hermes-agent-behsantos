@@ -105,6 +105,13 @@ Pedido com código/segredo? Fica no Ollama local (regra D2: análise de
 código nunca sai). `betterme provider off` = 100% local. Cada resposta
 registra no log qual cérebro usou; `betterme doctor` mostra o estado.
 
+**Sem chave nenhuma?** Dois caminhos: `betterme provider guia` (onde pegar
+cada chave grátis em 2 min) e **`betterme omniroute setup && betterme
+omniroute start`** — gateway local open-source que roteia para pools
+gratuitos keyless (requer Node 23+ e onboarding 1× no dashboard).
+**Valide tudo com `betterme provider test`** — 1 completion real por
+provedor, com latência e veredito.
+
 ## ⚙ Automações com n8n (v6.3+)
 
 `betterme fluxos setup|start` sobe um n8n **local** (grátis, uso

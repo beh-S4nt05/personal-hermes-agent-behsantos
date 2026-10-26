@@ -1,5 +1,31 @@
 # Changelog
 
+## v6.5.0 — 🔀 PROVEDORES 100% VERIFICÁVEIS + OMNIROUTE (gateway keyless)
+
+Pergunta do operador: "os provedores estão 100% ativos e funcionais?"
+Agora o app responde com EVIDÊNCIA, e ganhou um gateway sem chave:
+
+- **`betterme provider test`** — 1 completion REAL por provedor usável
+  (todas as chaves salvas + llm7 anônimo + omniroute rodando), com
+  latência e veredito por linha e contagem final "N/M funcionando de
+  verdade"; `provider test <nome>` testa um só; erros viram relatório
+  (nunca crash). Endpoint `POST /api/provider/test` para a GUI.
+- **`betterme provider guia`** — onde pegar cada chave grátis (URL +
+  passos por provedor); nada de caçar na internet.
+- **Omniroute embutido** (`betterme omniroute setup|start|stop|apikey|
+  remover|status`) — gateway local open-source (MIT) que roteia para
+  pools GRATUITOS, vários keyless (Pollinations, Cloudflare AI…).
+  Provedor `omniroute` (model 'auto') no REGISTRY: o roteador de cérebro
+  o usa automaticamente quando está rodando (última prioridade — chave
+  direta é sempre melhor que gateway); doctor vigia (check opcional);
+  D2 inalterada (transporte mascarado como qualquer externo).
+- **E2E REAL executado no desenvolvimento** (omniroute 3.8.52): instala
+  por npm ✔ · roda ✔ **com Node ≥23** (Node 20 quebra — o setup agora
+  recusa com aviso) · endpoint OpenAI ✔ · pools keyless exigem onboarding
+  1× no dashboard (documentado no `provider guia`).
+- T191 (provider test/guia) · T192 (omniroute completo) · T124/T25/T187
+  ajustados ao novo provedor — **192/192**.
+
 ## v6.4.2 — 🔒 REVISÃO × ENTREGAS: D2 NO ROTEADOR (P0) + HONESTIDADE
 
 Revisão completa comparando promessas × entregas; 3 pendências fechadas:

@@ -72,6 +72,16 @@ REGISTRY: dict[str, dict] = {
         "rpm": 20, "rpd": None,
         "nota": "1.000 chamadas/mês; uso não comercial",
     },
+    "omniroute": {
+        # v6.5.0: gateway LOCAL (open-source, MIT) que roteia p/ pools
+        # grátis — vários keyless. Sobe com `betterme omniroute start`.
+        "base": "http://127.0.0.1:20128/v1",
+        "key_env": "OMNIROUTE_API_KEY", "model": "auto",
+        "gateway_local": True, "rpm": None, "rpd": None,
+        "nota": "gateway local omniroute — pools grátis keyless "
+                "(Pollinations/Cloudflare/…); betterme omniroute "
+                "setup|start · chave local opcional (omniroute apikey)",
+    },
 }
 
 
@@ -108,13 +118,20 @@ def salvar_key(cfg, provedor: str, key: str) -> Path:
 # Prioridade = rapidez/estabilidade; llm7 (anônimo, cota mínima) fica
 # só para uso manual explícito.
 _AUTO_PRIORIDADE = ["groq", "mistral", "gemini", "openrouter",
-                    "cohere", "zai"]
+                    "cohere", "zai", "omniroute"]
 
 
 def melhor_provedor(cfg) -> str | None:
-    """Melhor provedor COM CHAVE em secrets/ (None = nenhum)."""
+    """Melhor provedor COM CHAVE em secrets/ (None = nenhum).
+    v6.5.0: omniroute (gateway local) entra se estiver RODANDO —
+    chave opcional (pools keyless); fica por último (direto > gateway)."""
     for nome in _AUTO_PRIORIDADE:
         try:
+            if nome == "omniroute":
+                from . import omniroute as _om
+                if _om.rodando(cfg):
+                    return nome
+                continue
             if api_key(cfg, nome):
                 return nome
         except Exception:  # noqa: BLE001
@@ -346,29 +363,82 @@ class FallbackClient:
         return m if m else self.local.list_models()
 
 
-def testar(cfg, provedor: str, model: str = "") -> dict:
-    """Ping + 1 completion mínimo real (relatório para o operador)."""
+def testar(cfg, provedor: str, model: str = "",
+            _transport=None) -> dict:
+    """Ping + 1 completion mínimo real (relatório para o operador).
+    v6.5.0: _transport injetável (testes sem rede)."""
     t0 = time.time()
     try:
-        cli = ExternalClient(cfg, provedor, model)
+        cli = ExternalClient(cfg, provedor, model, _transport=_transport)
     except ValueError as exc:
         return {"ok": False, "msg": str(exc)}
     key = api_key(cfg, provedor)
-    if not key:
+    gateway = bool(REGISTRY.get(provedor, {}).get("gateway_local"))
+    if not key and not gateway:      # omniroute keyless é válido
         return {"ok": False,
                 "msg": f"sem chave para {provedor} — rode: betterme provider "
                        f"set {provedor} (ou exporte {REGISTRY[provedor].get('key_env')})"}
-    if not cli.is_running():
+    if _transport is None and not cli.is_running():
         return {"ok": False, "msg": f"{provedor} não respondeu ao ping"}
     pedaco = []
-    for ch in cli.chat_stream(cli.model, [{"role": "user",
-                                           "content": "responda apenas: ok"}]):
-        t = (ch.get("message") or {}).get("content")
-        if t:
-            pedaco.append(t)
+    try:
+        for ch in cli.chat_stream(cli.model, [{"role": "user",
+                                               "content":
+                                               "responda apenas: ok"}]):
+            t = (ch.get("message") or {}).get("content")
+            if t:
+                pedaco.append(t)
+    except Exception as exc:  # noqa: BLE001 — erro vira relatório, não crash
+        return {"ok": False,
+                "msg": f"{provedor} falhou: {str(exc)[:140]}"}
     dt = round(time.time() - t0, 1)
     texto = "".join(pedaco).strip()
     if not texto:
         return {"ok": False, "msg": f"{provedor} não gerou resposta"}
     return {"ok": True, "msg": f"{provedor} · {cli.model} · respondeu "
                                f"{texto[:30]!r} em {dt}s"}
+
+
+def testar_todos(cfg) -> list[dict]:
+    """v6.5.0: testa TODOS os provedores usáveis — os com chave salva,
+    o llm7 (anônimo) e o omniroute (se rodando) — 1 completion real
+    cada. Relatório honesto p/ o operador saber o que está 100%."""
+    out = []
+    for nome in REGISTRY:
+        try:
+            if nome == "omniroute":
+                from . import omniroute as _om
+                if _om.rodando(cfg):
+                    r = testar(cfg, nome)
+                    out.append({"nome": nome, **r})
+                continue
+            if nome == "llm7" or api_key(cfg, nome):
+                r = testar(cfg, nome)
+                out.append({"nome": nome, **r})
+        except Exception as exc:  # noqa: BLE001
+            out.append({"nome": nome, "ok": False,
+                        "msg": f"falhou: {exc.__class__.__name__}"})
+    return out
+
+
+# v6.5.0: onde conseguir cada chave (onboarding em 1 comando)
+GUIAS = {
+    "groq": ("console.groq.com/keys",
+             "conta grátis (sem cartão) → API Keys → Create API Key — "
+             "14.400 req/dia, o 8B dezenas de vezes mais rápido"),
+    "mistral": ("console.mistral.ai/api-keys",
+                "conta grátis → API Keys — ~1B tokens/mês no tier free"),
+    "gemini": ("aistudio.google.com/apikey",
+               "conta Google → Get API Key — 1M de contexto, 1.500 req/dia"),
+    "openrouter": ("openrouter.ai/keys",
+                   "conta grátis → Keys — dezenas de modelos :free"),
+    "cohere": ("dashboard.cohere.com/api-keys",
+               "conta grátis → API Keys — 1.000 chamadas/mês"),
+    "zai": ("open.bigmodel.cn/usercenter/apikeys",
+            "conta → API Keys — GLM-4.7-Flash grátis"),
+    "llm7": ("api.llm7.io",
+             "funciona SEM chave (anônimo) — cota diária mínima"),
+    "omniroute": ("(local)",
+                  "betterme omniroute setup && betterme omniroute start "
+                  "— pools keyless, sem conta nenhuma"),
+}

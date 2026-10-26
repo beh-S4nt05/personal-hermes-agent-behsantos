@@ -5,7 +5,7 @@ Cada item: {id, name, ok, detail, fix} — `fix` é o comando/ação sugerida.
 from __future__ import annotations
 
 import shutil
-from .contratos import (CHECK_CEREBRO, CHECK_CLAUDE,
+from .contratos import (CHECK_CEREBRO, CHECK_CLAUDE, CHECK_OMNIROUTE,
                           CHECK_DISPOSITIVO, CHECK_FLUXOS, CHECK_MODEL,
                           CHECK_OLLAMA, CHECK_SECURITY, CHECK_STT)
 
@@ -158,6 +158,29 @@ def run_checks(cfg) -> list[dict]:
     checks.append({
         "id": CHECK_FLUXOS, "name": "⚙ Fluxos (n8n)", "ok": ok,
         "detail": detail, "fix": fix, "optional": True,
+    })
+
+    # 4c) v6.5.0: omniroute (gateway local de LLMs, opcional)
+    try:
+        from . import omniroute as _om
+        if _om.rodando(cfg):
+            ok = True
+            detail = (f"rodando (porta {_om.PORTA}) · keyless "
+                      f"{'+ key' if _om.ler_apikey(cfg) else '(sem key local)'}")
+            fix = ""
+        elif _om.instalado(cfg):
+            ok = False
+            detail = "instalado, mas parado"
+            fix = "betterme omniroute start"
+        else:
+            ok = False
+            detail = "não instalado (gateway keyless opcional)"
+            fix = "betterme omniroute setup (pools grátis sem conta)"
+    except Exception as exc:  # noqa: BLE001
+        ok, detail, fix = False, f"erro: {exc.__class__.__name__}", ""
+    checks.append({
+        "id": CHECK_OMNIROUTE, "name": "🔀 Omniroute (gateway LLM)",
+        "ok": ok, "detail": detail, "fix": fix, "optional": True,
     })
 
     # 5) Segurança: exposto na rede sem token?

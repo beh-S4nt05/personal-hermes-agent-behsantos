@@ -637,7 +637,7 @@ def T25_endpoints_leitura_v3():
     assert c.get("/api/notifications").json["ok"]
     assert len(c.get("/api/recipes").json["recipes"]) == 7
     checks = c.get("/api/doctor").json["checks"]
-    assert [x["id"] for x in checks] == ["dispositivo", "cerebro", "ollama", "model", "stt", "claude", "fluxos", "security"]
+    assert [x["id"] for x in checks] == ["dispositivo", "cerebro", "ollama", "model", "stt", "claude", "fluxos", "omniroute", "security"]
 
 
 @case
@@ -3555,7 +3555,10 @@ def T124_provedores_externos_gratuitos():
 
     # registro: só provedores gratuitos, com base/modelo; llm7 sem chave
     for nome, info in LP.REGISTRY.items():
-        assert info["base"].startswith("https://"), nome
+        # v6.5.0: gateway LOCAL (omniroute) é http://127.0.0.1 — o
+        # invariante é TLS p/ tudo que SAI da máquina; local pode ser http
+        assert (info["base"].startswith("https://")
+                or info["base"].startswith("http://127.0.0.1")), nome
         assert info.get("model"), nome
     assert LP.REGISTRY["llm7"].get("sem_chave") is True
     assert "cerebras" not in LP.REGISTRY      # exige cartão → fora
@@ -7342,7 +7345,8 @@ def T187_contratos_estruturas_principios():
     assert autonomy.NIVEIS == C.NIVEIS_AUTONOMIA
     assert set(S.ESPECIALISTAS) == set(C.NOMES_ESPECIALISTAS)
     assert C.CHECKS_DOCTOR == ("dispositivo", "cerebro", "ollama", "model",
-                               "stt", "claude", "fluxos", "security")
+                               "stt", "claude", "fluxos", "omniroute",
+                               "security")
     assert C.TIPOS_TASK == ("leitura", "criacao")
     src_doctor = Path("betterme/doctor.py").read_text(encoding="utf-8")
     assert "from .contratos import" in src_doctor
@@ -7581,6 +7585,155 @@ def T190_full_instala_stt():
     assert "não instalar o ditado" in src       # help honesto
     # best-effort: falha do STT não derruba o --full
     assert "voz fica desativada — o resto segue" in src
+
+
+@case
+def T191_provider_test_e_guia():
+    """v6.5.0: verificação REAL dos provedores — testar() com transporte
+    injetável (sem rede), testar_todos() cobre chaves salvas + llm7 +
+    omniroute rodando, guia de onde pegar cada chave, endpoint
+    /api/provider/test na GUI."""
+    from betterme import llm_providers as LP
+    from betterme.llm_providers import GUIAS, testar, testar_todos
+
+    cfg = fresh()
+    # sem chave → orientação clara
+    r = testar(cfg, "groq")
+    assert r["ok"] is False and "sem chave" in r["msg"]
+    # com transporte falso → sucesso com latência
+    def _tr_ok(url, payload, headers):
+        yield 'data: {"choices":[{"delta":{"content":"ok"}}]}'
+        yield "data: [DONE]"
+    LP.salvar_key(cfg, "groq", "gsk_falso_teste")  # varredura:ok
+    r2 = testar(cfg, "groq", _transport=_tr_ok)
+    assert r2["ok"] and "groq" in r2["msg"] and "respondeu" in r2["msg"]
+    # transporte que falha → erro honesto
+    def _tr_erro(url, payload, headers):
+        raise LP.OllamaError("groq HTTP 429: cota")
+        yield  # pragma: no cover
+    r3 = testar(cfg, "groq", _transport=_tr_erro)
+    assert r3["ok"] is False and "429" in r3["msg"]
+    # testar_todos: só o que é usável (groq com chave + llm7), sem rede
+    orig = LP.testar
+    chamados = []
+
+    def _fake(cfg_, nome, model="", _transport=None):
+        chamados.append(nome)
+        return {"ok": True, "msg": f"{nome} ok"}
+    LP.testar = _fake
+    try:
+        resultados = testar_todos(cfg)
+        nomes = [r["nome"] for r in resultados]
+        assert "groq" in nomes and "llm7" in nomes
+        assert "mistral" not in nomes       # sem chave → não testa
+        assert "omniroute" not in nomes     # não está rodando
+    finally:
+        LP.testar = orig
+    # guia: todos os provedores com URL
+    for nome in ("groq", "mistral", "gemini", "openrouter", "cohere",
+                 "zai", "llm7", "omniroute"):
+        assert nome in GUIAS and len(GUIAS[nome][0]) > 3, nome
+    # CLI: guia + test com argumento + saída todos
+    cli_src = Path("betterme/cli.py").read_text(encoding="utf-8")
+    assert "guia" in cli_src and "testar_todos" in cli_src
+    assert "funcionando de verdade" in cli_src
+    # endpoint da GUI
+    c = _app(cfg)
+
+    class _Args:
+        pass
+
+    orig_ep = LP.testar_todos
+    LP.testar_todos = lambda cfg_: [
+        {"nome": "groq", "ok": True, "msg": "groq ok"}]
+    try:
+        resp = c.post("/api/provider/test")
+        assert resp.status_code == 200
+        assert resp.json["resultados"][0]["nome"] == "groq"
+    finally:
+        LP.testar_todos = orig_ep
+
+
+@case
+def T192_omniroute_gateway_local():
+    """v6.5.0: omniroute (gateway local de LLMs grátis) — módulo no
+    padrão do n8n (status/setup/start/stop/apikey/remover), provedor no
+    REGISTRY (model 'auto'), roteador o usa quando RODANDO (última
+    prioridade), doctor vigia, setup exige Node 23+ (achado do E2E real
+    em out/2026: Node 20 quebra em markAsUncloneable)."""
+    import io
+    import contextlib
+
+    from betterme import llm_providers as LP
+    from betterme import omniroute as OM
+    from betterme.contratos import CHECKS_DOCTOR
+
+    cfg = fresh()
+    # módulo: estado inicial honesto
+    assert OM.PORTA == 20128
+    st = OM.status(cfg)
+    assert st["instalado"] is False and st["rodando"] is False
+    assert st["endpoint"].endswith("/v1 · model 'auto'")
+    # apikey 600 + lida de volta (mesmo convenio do llm_providers)
+    f = OM.salvar_apikey(cfg, "omni_key_T192")
+    assert f.stat().st_mode & 0o777 == 0o600
+    assert OM.ler_apikey(cfg) == "omni_key_T192"
+    assert f.name == "omniroute.key"     # REGISTRY.api_key acha o mesmo
+    assert LP.api_key(cfg, "omniroute") == "omni_key_T192"
+    # REGISTRY: gateway local, model auto
+    info = LP.REGISTRY["omniroute"]
+    assert info["base"].startswith("http://127.0.0.1:20128")
+    assert info["model"] == "auto" and info.get("gateway_local")
+    assert LP._AUTO_PRIORIDADE[-1] == "omniroute"   # último (direto > gateway)
+    # roteador: omniroute só quando RODANDO (sem chave precisa)
+    assert LP.melhor_provedor(cfg) is None
+    orig_rod = OM.rodando
+    OM.rodando = lambda c: True
+    try:
+        assert LP.melhor_provedor(cfg) == "omniroute"
+        LP.salvar_key(cfg, "groq", "gsk_falso_192")  # varredura:ok
+        assert LP.melhor_provedor(cfg) == "groq"     # chave direta vence
+        LP._secrets_dir(cfg).joinpath("groq.key").unlink()
+    finally:
+        OM.rodando = orig_rod
+    assert LP.melhor_provedor(cfg) is None
+    # doctor: check opcional nos 3 estados
+    from betterme import doctor
+    mapa = {x["id"]: x for x in doctor.run_checks(cfg)}
+    assert "omniroute" in mapa and mapa["omniroute"]["optional"] is True
+    assert "omniroute setup" in mapa["omniroute"]["fix"]
+    OM.bin_omniroute(cfg).parent.mkdir(parents=True, exist_ok=True)
+    OM.bin_omniroute(cfg).write_text("#!/bin/sh\n", encoding="utf-8")
+    mapa2 = {x["id"]: x for x in doctor.run_checks(cfg)}
+    assert "omniroute start" in mapa2["omniroute"]["fix"]
+    OM.rodando = lambda c: True
+    try:
+        mapa3 = {x["id"]: x for x in doctor.run_checks(cfg)}
+        assert mapa3["omniroute"]["ok"] and "rodando" in mapa3["omniroute"]["detail"]
+    finally:
+        OM.rodando = orig_rod
+    # setup: recusa Node velho (achado do E2E real)
+    from betterme import fluxos as FLX
+    orig_nv = FLX.node_versao
+    FLX.node_versao = lambda node_bin="node": (20, 20)
+    try:
+        r = OM.setup(cfg)
+        assert r["ok"] is False and "Node 23+" in r["msg"]
+    finally:
+        FLX.node_versao = orig_nv
+    # cmd: status legível + apikey via CLI
+    class _A:
+        acao, id, npm = "apikey", "omni_key_T192b", None
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        OM.cmd(_A(), cfg)
+    assert "salva" in buf.getvalue() and OM.ler_apikey(cfg) == "omni_key_T192b"
+    # contrato: check no CHECKS_DOCTOR
+    assert "omniroute" in CHECKS_DOCTOR
+    # subparser CLI existe
+    cli_src = Path("betterme/cli.py").read_text(encoding="utf-8")
+    assert '"omniroute"' in cli_src and "cmd_omniroute" in cli_src
 
 
 if __name__ == "__main__":

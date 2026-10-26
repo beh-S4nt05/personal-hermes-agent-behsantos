@@ -45,9 +45,11 @@ CHECK_MODEL = "model"
 CHECK_STT = "stt"
 CHECK_CLAUDE = "claude"
 CHECK_FLUXOS = "fluxos"
+CHECK_OMNIROUTE = "omniroute"
 CHECK_SECURITY = "security"
 CHECKS_DOCTOR = (CHECK_DISPOSITIVO, CHECK_CEREBRO, CHECK_OLLAMA, CHECK_MODEL,
-                 CHECK_STT, CHECK_CLAUDE, CHECK_FLUXOS, CHECK_SECURITY)
+                 CHECK_STT, CHECK_CLAUDE, CHECK_FLUXOS, CHECK_OMNIROUTE,
+                 CHECK_SECURITY)
 
 # ── DLP (varredura): marcas que substituem código no pool externo (D2)
 MARCA_CODIGO_BLOCO = "[CÓDIGO LOCAL — não é enviado]"
