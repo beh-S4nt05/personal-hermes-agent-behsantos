@@ -113,3 +113,18 @@ def consolidar(etapas: list[tuple[str, str]]) -> str:
         partes.append(f"### Etapa {i} — {etapa[:100]}\n"
                       f"{(saida or '').strip()}")
     return "\n\n".join(partes)
+
+
+# ── v6.6.1: portão estrutural — tool call impresso como TEXTO ──
+_TOOLCALL_RE = re.compile(r'"\s*(function|tool|name)\s*"\s*:')
+_TOOLARGS_RE = re.compile(r'"\s*(arguments|args|parameters)\s*"\s*:')
+
+
+def tem_tool_call_texto(texto: str) -> bool:
+    """v6.6.1 (achado de campo T0013): o modelo imprimiu a chamada de
+    ferramenta ({"function": "write_file", "arguments": {...}}) como
+    TEXTO da resposta — nada foi executado e o revisor aprovou o JSON
+    cru como se fosse entrega. Detecta o padrão estruturalmente (0
+    tokens) para reprovar ANTES da revisão."""
+    t = (texto or "")[:4000]
+    return bool(_TOOLCALL_RE.search(t) and _TOOLARGS_RE.search(t))

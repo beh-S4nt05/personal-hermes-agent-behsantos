@@ -1,5 +1,33 @@
 # Changelog
 
+## v6.6.1 — 🔧 5º ACHADO DE CAMPO: TOOL CALL EM TEXTO + ESCOPO PERDIDO
+
+Log real do operador (v6.6.0, modelo local): "crie um app TypeScript em
+/media/Arquivos/.../type-calculator/" → a pasta foi criada, o arquivo
+NÃO. Três causas, três correções:
+
+- **Self-healing de tool call em texto** (`agent.py`): o modelo imprimiu
+  `{"function": "write_file", "arguments": {...}}` (function como STRING)
+  como texto da resposta — formato que nenhum fallback reconhecia (e o
+  parser ainda crashava com `AttributeError` em cerca de código). Agora
+  o formato é reconhecido e a ferramenta É EXECUTADA (a saída é sempre
+  a verdadeira — nada de dados fabricados).
+- **Portão estrutural (0 tokens)** (`fluxo.tem_tool_call_texto` +
+  `_ciclo`/`_ciclo_etapas`): resposta contendo tool call impresso como
+  texto é REPROVADA antes de gastar a revisão — o revisor do log havia
+  APROVADO JSON cru como se fosse entrega. Vale para o ciclo clássico e
+  para o consolidado das etapas; entrega honesta sai com ressalva,
+  jamais "aprovada" com lixo.
+- **Escopo sticky por sessão** (`_ULTIMO_PROJETO`, TTL 30 min): o
+  followup "pode verificar se o arquivo foi criado?" não citava o
+  caminho e PERDIA o workspace do projeto — o sandbox bloqueava tudo em
+  `/media/Arquivos/...`. Agora a sessão retoma o último workspace
+  ("📁 retomando workspace da sessão"); novo início de projeto continua
+  perguntando o caminho.
+- T195 (self-healing + parsers) · T196 (portão nos 2 ciclos, revisão
+  nunca gasta com lixo) · T197 (sticky + novo-projeto-pergunta + TTL) —
+  **197/197**.
+
 ## v6.6.0 — ⚡ FLUXO LEVE: ORQUESTRAÇÃO ADAPTATIVA EM 3 NÍVEIS
 
 Pedido do operador: "pegue a parte [do Plandex] que funciona como

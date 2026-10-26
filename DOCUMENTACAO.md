@@ -1,6 +1,6 @@
 # 📘 Betterme Agent — Documentação viva: uso, evolução e funções
 
-**Versão 6.6.0** · gerado em 26/10/2026 · este documento é extraído do
+**Versão 6.6.1** · gerado em 26/10/2026 · este documento é extraído do
 código-fonte (parser AST) e do CHANGELOG — funções, endpoints e versões
 refletem exatamente o que está instalado. O histórico detalhado, versão a
 versão, está no `CHANGELOG.md`; o manual completo de operação no `docs.md`.
@@ -133,7 +133,7 @@ sobrevivem a restart (v3.11). Máximo 2 tentativas automáticas.
 Subcomandos: `betterme skills audit` (auditar o catálogo), `betterme config set/get`, `betterme server --host/--port/--token`.
 
 
-## 3. Modificações — o que foi feito (v1.0.0 → v6.6.0)
+## 3. Modificações — o que foi feito (v1.0.0 → v6.6.1)
 
 40 releases. Tabela extraída do CHANGELOG (a versão detalhada de cada
 uma está lá):
@@ -141,6 +141,7 @@ uma está lá):
 | Versão | Marca |
 |---|---|
 
+| **v6.6.1** | 🔧 5º ACHADO DE CAMPO: TOOL CALL EM TEXTO + ESCOPO PERDIDO |
 | **v6.6.0** | ⚡ FLUXO LEVE: ORQUESTRAÇÃO ADAPTATIVA EM 3 NÍVEIS |
 | **v6.5.0** | 🔀 PROVEDORES 100% VERIFICÁVEIS + OMNIROUTE (gateway keyless) |
 | **v6.4.2** | 🔒 REVISÃO × ENTREGAS: D2 NO ROTEADOR (P0) + HONESTIDADE |
@@ -948,6 +949,7 @@ betterme server (Flask/waitress, porta 8080) ── CLI `betterme …`
 | `eh_conversa(msg)` | Nível 0? Mensagem é conversa pura (nenhuma ação sobre a máquina, nenhum assunto técnico) → pode responder direto. |
 | `decompor(msg, passos)` | Quebra a task em etapas FOCADAS. Fonte preferida: os passos que o próprio planner devolveu; senão heurística estrutural… |
 | `consolidar(etapas)` | Junta os resultados das etapas num relatório único com rastro (o que saiu de cada parte) — é isso que o revisor avalia. |
+| `tem_tool_call_texto(texto)` | v6.6.1 (achado de campo T0013): o modelo imprimiu a chamada de ferramenta ({"function": "write_file", "arguments": {...… |
 
 ### betterme/extrair.py — 🧾 o extrator ÚNICO de JSON da resposta de modelos (chaves balanceadas com consciência de strings) — usado por orquestrador, especialistas, revisor e arena
 

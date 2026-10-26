@@ -705,6 +705,11 @@ def approve(tid: str, action: str, edit: dict | None = None) -> bool:
 _PEND_PROJ_LOCK = _threading.Lock()
 _PEND_PROJETO: dict[str, dict] = {}
 _PEND_PROJ_TTL = 600.0          # 10 min para responder o caminho
+# v6.6.1 (achado de campo T0014): último workspace de projeto POR SESSÃO —
+# o followup "pode verificar?" não cita o caminho e perdia o escopo
+_ULTIMO_PROJ_LOCK = _threading.Lock()
+_ULTIMO_PROJETO: dict[str, dict] = {}
+_ULTIMO_PROJ_TTL = 1800.0       # 30 min de memória do workspace
 _MISSAO_RE = re.compile(
     r"(?i)^\s*(missão|missao|modo\s+miss[ãa]o)\s*[:\-—]\s*")
 _CANCELA_RE = re.compile(
@@ -925,6 +930,24 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
             "message": "⚠ pasta declarada no pedido não pôde ser usada "
                        "(sistema/configuração do Betterme) — executando no "
                        "workspace padrão"})
+    # v6.6.1: followup na MESMA sessão sem citar caminho → retoma o
+    # workspace da task anterior (antes: "pode verificar?" perdia o
+    # escopo e o sandbox bloqueava TUDO no projeto do operador).
+    # Novo início de projeto ("quero iniciar...") NÃO usa — pergunta.
+    if (projeto is None and not cands_proj and session_id
+            and not _INICIAR_PROJ_RE.search(message or "")):
+        with _ULTIMO_PROJ_LOCK:
+            ult = _ULTIMO_PROJETO.get(session_id)
+            if ult and time.time() - ult["t"] > _ULTIMO_PROJ_TTL:
+                _ULTIMO_PROJETO.pop(session_id, None)
+                ult = None
+        if ult:
+            try:
+                projeto = validar_escopo_projeto(ult["path"], cfg)
+                ev({"type": "note",
+                    "message": f"📁 retomando workspace da sessão: {projeto}"})
+            except ToolError:
+                pass
     projeto_txt = ("\n" + _ambiente_txt(projeto)) if projeto is not None else ""
 
     def _plano_txt() -> str:
@@ -1060,8 +1083,23 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
                     "message": "🔍 revisão pulada (resposta direta — "
                                "0 ferramentas; −1 ida ao modelo)"})
                 break
-            ver = review(cfg, objetivo, criterios, resultado)
-            verd, prob = ver.get("veredito", "ok"), ver.get("problema", "")
+            # v6.6.1 PORTÃO ESTRUTURAL (0 tokens): tool call impresso
+            # como TEXTO não é entrega (achado T0013: o modelo escreveu
+            # o JSON do write_file, nada rodou e o revisor aprovou) —
+            # reprova ANTES de gastar a revisão com o modelo
+            if _flx.tem_tool_call_texto(resultado):
+                verd = "reprovado"
+                prob = ("a resposta contém uma chamada de ferramenta "
+                        "impressa como TEXTO — nada foi executado. CHAME "
+                        "a ferramenta de verdade (write_file, run_command, "
+                        "…) e traga a evidência real do que rodou.")
+                ev({"type": "note",
+                    "message": "🚫 portão estrutural: ferramenta impressa "
+                               "como texto (não executada) — refazendo"})
+            else:
+                ver = review(cfg, objetivo, criterios, resultado)
+                verd, prob = (ver.get("veredito", "ok"),
+                              ver.get("problema", ""))
             if verd == "ok":
                 if tentativa > 1:
                     ev({"type": "note",
@@ -1137,9 +1175,20 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
             tent = tentativa
             if _cancelado():
                 break
-            ver = review(cfg, objetivo, criterios, resultado)
-            verd = ver.get("veredito", "ok")
-            prob = ver.get("problema", "")
+            # v6.6.1: mesmo portão estrutural do _ciclo (defesa em
+            # profundidade — o consolidado também não pode ser JSON cru)
+            if _flx.tem_tool_call_texto(resultado):
+                verd = "reprovado"
+                prob = ("a resposta contém chamada de ferramenta impressa "
+                        "como TEXTO — nada foi executado. CHAME a "
+                        "ferramenta de verdade e traga a evidência real.")
+                ev({"type": "note",
+                    "message": "🚫 portão estrutural: ferramenta impressa "
+                               "como texto (não executada) — refazendo"})
+            else:
+                ver = review(cfg, objetivo, criterios, resultado)
+                verd = ver.get("veredito", "ok")
+                prob = ver.get("problema", "")
             if verd == "ok":
                 if tentativa > 1:
                     ev({"type": "note",
@@ -1189,6 +1238,9 @@ def run_pipeline(agent, cfg, message: str, history: list[dict],
                 ev({"type": "note",
                     "message": f"📁 workspace da task: {projeto} — pasta "
                                "percorrida/criada pelo Betterme"})
+                with _ULTIMO_PROJ_LOCK:      # v6.6.1: lembrar p/ followup
+                    _ULTIMO_PROJETO[session_id or "default"] = {
+                        "path": projeto, "t": time.time()}
                 resultado, veredito, problema, tentativas = _executar_ciclo(
                     mensagens, max_tentativas)
         except ToolError as exc:

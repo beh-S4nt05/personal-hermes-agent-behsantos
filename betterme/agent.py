@@ -110,9 +110,9 @@ def _bare_tool_call(text: str) -> list[dict]:
     except json.JSONDecodeError:
         return []
     if (isinstance(obj, dict)
-            and {"name", "tool"} & set(obj)
-            and {"arguments", "args"} & set(obj)):
-        return _as_tool_calls(obj)
+            and ({"name", "tool", "function"} & set(obj))    # v6.6.1:
+            and ({"arguments", "args"} & set(obj))):         # "function"
+        return _as_tool_calls(obj)                            # como string
     return []
 
 
@@ -123,8 +123,16 @@ def _as_tool_calls(block: dict) -> list[dict]:
     for item in raw:
         if not isinstance(item, dict):
             continue
-        name = item.get("tool") or item.get("name") or item.get("function", {}).get("name")
-        args = item.get("args") or item.get("arguments") or item.get("function", {}).get("arguments") or {}
+        fn = item.get("function")
+        # v6.6.1: "function" pode ser STRING ("write_file") — formato
+        # emitido por modelos locais (achado de campo T0013); antes
+        # crashava com AttributeError em .get de str
+        name = (item.get("tool") or item.get("name")
+                or (fn.get("name") if isinstance(fn, dict) else None)
+                or (fn if isinstance(fn, str) else None))
+        args = (item.get("args") or item.get("arguments")
+                or (fn.get("arguments") if isinstance(fn, dict) else None)
+                or {})
         if isinstance(name, str) and name:
             if isinstance(args, str):
                 try:

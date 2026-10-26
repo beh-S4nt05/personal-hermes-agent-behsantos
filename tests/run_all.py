@@ -7787,6 +7787,7 @@ def T194_fluxo_leve_pipeline():
     from betterme.agent import Agent
 
     cfg = fresh()
+    _plan_orig = orc.plan
     # ── N0: planner NÃO é chamado (bomba no plan)
     ag = Agent(cfg)
     evs = []
@@ -7801,7 +7802,7 @@ def T194_fluxo_leve_pipeline():
                  if e.get("type") == "note"]
         assert final and any("fluxo leve" in n for n in notas)
     finally:
-        del orc.plan
+        orc.plan = _plan_orig
     # ── N2: 2 passos → 2 execuções focadas + consolidado com rastro
     corridas = []
 
@@ -7835,7 +7836,7 @@ def T194_fluxo_leve_pipeline():
         # (mock reprova? não — review mock devolve ok)
         assert any(e.get("type") == "done" for e in evs2)
     finally:
-        del orc.plan
+        orc.plan = _plan_orig
     # ── N1: 1 passo → ciclo clássico (1 execução)
     def _plan1(cfg, message, history=None):
         return {"rota": "executar", "tipo": "leitura",
@@ -7848,7 +7849,7 @@ def T194_fluxo_leve_pipeline():
                          on_event=lambda e: None)
         assert len(corridas) == 1
     finally:
-        del orc.plan
+        orc.plan = _plan_orig
     # ── kill-switch: fluxo_leve False → N2 desliga (1 execução única)
     cfg.update({"fluxo_leve": False})
     orc.plan = _plan2
@@ -7858,7 +7859,7 @@ def T194_fluxo_leve_pipeline():
                          on_event=lambda e: None)
         assert len(corridas) == 1
     finally:
-        del orc.plan
+        orc.plan = _plan_orig
         cfg.update({"fluxo_leve": True})
     # ── default do config: ligado
     assert '"fluxo_leve": True' in Path(
@@ -7868,6 +7869,234 @@ def T194_fluxo_leve_pipeline():
     assert "_ciclo_etapas" in src and "_executar_ciclo" in src
     assert src.count("_executar_ciclo(") >= 4     # def + 3 call sites
     assert "from . import fluxo as _flx" in src
+
+
+@case
+def T195_tool_call_em_texto_selfhealing():
+    """v6.6.1 (achado de campo T0013): modelo local imprimiu o tool
+    call como TEXTO ({"function": "write_file", "arguments": {...}} —
+    function como STRING) — nada era executado. Agora o agente
+    reconhece o formato e EXECUTA a ferramenta (self-healing); e o
+    parser antigo não crasha mais com AttributeError."""
+    from betterme.agent import (Agent, _bare_tool_call, _as_tool_calls,
+                                _json_blocks)
+
+    # ── formato EXATO do log do operador (function como string)
+    txt = ('{"function": "run_command", "arguments": '
+           '{"command": "echo selfhealing-ok"}}')
+    calls = _bare_tool_call(txt)
+    assert calls and calls[0]["function"]["name"] == "run_command", calls
+    assert calls[0]["function"]["arguments"]["command"] == "echo selfhealing-ok"
+    # ── formatos antigos continuam funcionando
+    assert _bare_tool_call('{"tool": "run_command", "args": {"command": "ls"}}')
+    c2 = _as_tool_calls({"function": {"name": "run_command",
+                                      "arguments": {"command": "ls"}}})
+    assert c2[0]["function"]["name"] == "run_command"
+    # ── cerca de código com function-string: antes AttributeError, agora ok
+    blk = _json_blocks("```json\n" + txt + "\n```")
+    assert blk and _as_tool_calls(blk[0])[0]["function"]["name"] == "run_command"
+    # ── integração: cliente que responde SÓ com o JSON cru → a
+    # ferramenta É EXECUTADA, não devolvida como texto
+    cfg = fresh(max_tool_calls=3)
+
+    class ClienteTexto:
+        simulated = False
+        n = 0
+
+        def chat_stream(self, model, messages, tools=None, options=None,
+                        cancel=None, keep_alive=None):
+            ClienteTexto.n += 1
+            if ClienteTexto.n == 1:
+                yield {"message": {"content": txt}}      # JSON cru no texto
+            else:
+                yield {"message": {"content":
+                                   "comando executado — saída real colada"}}
+
+    evs: list[dict] = []
+    final = Agent(cfg, client=ClienteTexto()).run(
+        [{"role": "user", "content": "rode o comando"}],
+        on_event=evs.append)
+    assert any(e["type"] == "tool_start" for e in evs), "não executou!"
+    assert "function" not in final and "saída real" in final
+
+
+@case
+def T196_portao_tool_call_texto():
+    """v6.6.1: PORTÃO ESTRUTURAL — resposta com tool call impresso como
+    texto é reprovada SEM gastar a revisão (0 tokens), refaz, e vale
+    para o ciclo clássico E para o consolidado das etapas."""
+    from betterme import orchestrator as orc
+    from betterme import fluxo as FL
+
+    # detector
+    assert FL.tem_tool_call_texto(
+        '{"function": "write_file", "arguments": {"path": "x.py"}}')
+    assert FL.tem_tool_call_texto('ok {"tool": "t", "args": {}} fim')
+    assert not FL.tem_tool_call_texto("disco 70% — evidência real")
+    assert not FL.tem_tool_call_texto("")
+    assert not FL.tem_tool_call_texto("```python\nx = 1\n```")
+
+    cfg = fresh()
+    _plan_orig = orc.plan
+    _review_orig = orc.review
+    JSON_TXT = ('{"function": "write_file", "arguments": '
+                '{"path": "x.py", "content": "print(1)"}}')
+    corridas: list[int] = []
+    reviews: list[int] = []
+
+    class AgTexto:
+        model_override = None
+
+        def run(self, msgs, on_event=None, cancel=None):
+            corridas.append(1)
+            return (JSON_TXT if len(corridas) == 1
+                    else "arquivo criado e executado — saída real: 1")
+
+    def _plan(cfg, message, history=None):
+        return {"rota": "executar", "tipo": "leitura",
+                "objetivo": "criar x.py", "passos": [],
+                "criterios": ["evidência real"]}
+
+    def _review(*a, **k):
+        reviews.append(1)
+        return {"veredito": "ok"}
+
+    orc.plan = _plan
+    orc.review = _review
+    try:
+        evs: list[dict] = []
+        final = orc.run_pipeline(AgTexto(), cfg, "crie o arquivo x.py", [],
+                                 on_event=evs.append)
+        notas = [str(e.get("message", "")) for e in evs
+                 if e.get("type") == "note"]
+        assert any("portão estrutural" in n for n in notas), notas
+        assert len(corridas) == 2            # reprovou e refez
+        assert len(reviews) == 1             # revisão SÓ na entrega boa
+        assert "saída real" in final
+    finally:
+        orc.plan = _plan_orig
+        orc.review = _review_orig
+    # ── mesmo portão no consolidado das etapas (nível 2)
+    corridas.clear()
+    reviews.clear()
+    evs2: list[dict] = []
+
+    class AgEtapas:
+        model_override = None
+
+        def run(self, msgs, on_event=None, cancel=None):
+            corridas.append(1)
+            return (JSON_TXT if len(corridas) <= 2
+                    else "etapa concluída — evidência real")
+
+    def _plan2(cfg, message, history=None):
+        return {"rota": "executar", "tipo": "leitura",
+                "objetivo": "criar e testar x.py",
+                "passos": ["criar arquivo", "testar arquivo"],
+                "criterios": ["evidência real"]}
+
+    orc.plan = _plan2
+    orc.review = _review
+    try:
+        final2 = orc.run_pipeline(AgEtapas(), cfg, "crie e teste x.py", [],
+                                  on_event=evs2.append)
+        notas2 = [str(e.get("message", "")) for e in evs2
+                  if e.get("type") == "note"]
+        assert any("decomposta em 2" in n for n in notas2)
+        assert any("portão estrutural" in n for n in notas2), notas2
+        assert len(corridas) == 3            # 2 etapas + 1 refazer
+        # o consolidado CONTÉM o JSON da etapa ruim (não se apaga
+        # evidência) → portão reprova as 2× estruturalmente: a revisão
+        # por modelo NUNCA é gasta (reviews == 0) e a entrega sai com
+        # RESSALVA honesta — jamais "aprovada" com lixo
+        assert len(reviews) == 0
+        assert any("ressalva" in n for n in notas2), notas2
+        assert "Etapa 1" in final2 and "evidência real" in final2
+    finally:
+        orc.plan = _plan_orig
+        orc.review = _review_orig
+
+
+@case
+def T197_escopo_sticky_sessao():
+    """v6.6.1 (achado de campo T0014): o followup "pode verificar?" não
+    citava o caminho e PERDIA o workspace do projeto (sandbox bloqueava
+    tudo). Agora a sessão lembra o último workspace (30 min); novo
+    início de projeto continua perguntando o caminho."""
+    from pathlib import Path
+    import betterme.tools as BT
+    from betterme import orchestrator as orc
+    _plan_orig = orc.plan
+
+    with orc._ULTIMO_PROJ_LOCK:
+        orc._ULTIMO_PROJETO.pop("s-t197", None)
+    cfg = fresh(creation_approval=False)
+    proj = Path.home() / f".betterme-t197-{os.getpid()}"
+    import shutil as _sh
+    _sh.rmtree(proj, ignore_errors=True)
+    proj.mkdir(parents=True, exist_ok=True)
+    capturados: list[str] = []
+
+    class _ScopeCtx:
+        def __init__(self, path):
+            self.path = path
+
+        def __enter__(self):
+            capturados.append(str(self.path))
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    _scope_orig = BT.task_scope
+    BT.task_scope = lambda path, cfg: _ScopeCtx(path)
+
+    class Ag:
+        model_override = None
+
+        def run(self, msgs, on_event=None, cancel=None):
+            return "feito — evidência real colada"
+
+    def _plan(cfg, message, history=None):
+        return {"rota": "executar", "tipo": "criacao",
+                "objetivo": "calculadora TS", "passos": [],
+                "criterios": ["evidência real"]}
+
+    orc.plan = _plan
+    try:
+        # 1. task COM caminho → escopo usado e memorizado
+        evs: list[dict] = []
+        orc.run_pipeline(Ag(), cfg, f"crie a calculadora em {proj}", [],
+                         on_event=evs.append, session_id="s-t197")
+        assert len(capturados) == 1, capturados
+        # 2. followup SEM caminho → retoma o MESMO workspace
+        evs2: list[dict] = []
+        orc.run_pipeline(Ag(), cfg,
+                         "pode verificar se o arquivo foi criado?", [],
+                         on_event=evs2.append, session_id="s-t197")
+        assert len(capturados) == 2, capturados
+        notas2 = [str(e.get("message", "")) for e in evs2
+                  if e.get("type") == "note"]
+        assert any("retomando workspace" in n for n in notas2), notas2
+        # 3. NOVO início de projeto sem caminho → pergunta (não usa sticky)
+        r3 = orc.run_pipeline(Ag(), cfg,
+                              "quero iniciar um projeto novo de app", [],
+                              on_event=lambda e: None, session_id="s-t197")
+        assert len(capturados) == 2
+        assert "caminho" in r3.lower() and "pasta" in r3.lower()
+        # 4. TTL expirado → sem sticky (executa no workspace padrão)
+        with orc._ULTIMO_PROJ_LOCK:
+            if "s-t197" in orc._ULTIMO_PROJETO:
+                orc._ULTIMO_PROJETO["s-t197"]["t"] = 0.0
+        orc.run_pipeline(Ag(), cfg, "verifique de novo por favor", [],
+                         on_event=lambda e: None, session_id="s-t197")
+        assert len(capturados) == 2
+    finally:
+        BT.task_scope = _scope_orig
+        orc.plan = _plan_orig
+        with orc._ULTIMO_PROJ_LOCK:
+            orc._ULTIMO_PROJETO.pop("s-t197", None)
+        _sh.rmtree(proj, ignore_errors=True)
 
 
 if __name__ == "__main__":
