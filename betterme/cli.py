@@ -841,6 +841,7 @@ def build_parser() -> argparse.ArgumentParser:
     pg = psub.add_parser("guia", help="onde conseguir cada chave grátis")
     pg.add_argument("provedor", nargs="?", default=None,
                     help="guia só deste provedor")
+    pg.set_defaults(acao="guia", fn=cmd_provider)
     pt.set_defaults(acao="test", fn=cmd_provider)
     po = psub.add_parser("off", help="volta ao Ollama local")
     po.set_defaults(acao="off", fn=cmd_provider)
